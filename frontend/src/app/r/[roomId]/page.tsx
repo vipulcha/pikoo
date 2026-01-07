@@ -1,12 +1,12 @@
 "use client";
 
-import { use, useState, useMemo } from "react";
+import { use, useState, useEffect } from "react";
 import { useTimer } from "@/lib/hooks/useTimer";
 import { Timer } from "@/components/Timer";
 import { Controls } from "@/components/Controls";
 import { ParticipantCount } from "@/components/ParticipantCount";
 import { ShareButton } from "@/components/ShareButton";
-import { PHASE_COLORS, RoomSettings } from "@/lib/types";
+import { RoomSettings } from "@/lib/types";
 import Link from "next/link";
 
 // Realistic planet/space images from Unsplash
@@ -21,6 +21,17 @@ const PLANET_IMAGES = [
   "https://images.unsplash.com/photo-1543722530-d2c3201371e7?w=1920&q=80", // Galaxy
 ];
 
+// Pre-generate deterministic star positions (no randomness during render)
+const STARS = [...Array(60)].map((_, i) => ({
+  id: i,
+  width: 1 + (i % 3),
+  left: (i * 17) % 100,
+  top: (i * 23) % 100,
+  opacity: 0.3 + ((i % 7) / 10),
+  delay: (i % 4),
+  duration: 2 + (i % 3),
+}));
+
 interface RoomPageProps {
   params: Promise<{ roomId: string }>;
 }
@@ -29,23 +40,11 @@ export default function RoomPage({ params }: RoomPageProps) {
   const { roomId } = use(params);
   const { room, remaining, isConnected, error, actions } = useTimer(roomId);
   const [showSettings, setShowSettings] = useState(false);
+  const [planetImage, setPlanetImage] = useState(PLANET_IMAGES[0]);
 
-  // Pick a random planet image once per session
-  const planetImage = useMemo(() => {
-    return PLANET_IMAGES[Math.floor(Math.random() * PLANET_IMAGES.length)];
-  }, []);
-
-  // Generate stars once
-  const stars = useMemo(() => {
-    return [...Array(60)].map((_, i) => ({
-      id: i,
-      width: Math.random() * 2 + 1,
-      left: Math.random() * 100,
-      top: Math.random() * 100,
-      opacity: Math.random() * 0.7 + 0.3,
-      delay: Math.random() * 3,
-      duration: Math.random() * 2 + 2,
-    }));
+  // Pick random planet on client only to avoid hydration mismatch
+  useEffect(() => {
+    setPlanetImage(PLANET_IMAGES[Math.floor(Math.random() * PLANET_IMAGES.length)]);
   }, []);
 
   // Loading state
@@ -54,7 +53,7 @@ export default function RoomPage({ params }: RoomPageProps) {
       <div className="min-h-screen bg-black flex items-center justify-center">
         {/* Stars in loading */}
         <div className="fixed inset-0 overflow-hidden pointer-events-none">
-          {stars.map((star) => (
+          {STARS.map((star) => (
             <div
               key={star.id}
               className="absolute rounded-full bg-white animate-twinkle"
@@ -79,7 +78,6 @@ export default function RoomPage({ params }: RoomPageProps) {
   }
 
   const { timer, settings, participants } = room;
-  const colors = PHASE_COLORS[timer.phase];
 
   const handleSettingChange = (key: keyof RoomSettings, value: number) => {
     actions.updateSettings({ [key]: value });
@@ -91,23 +89,18 @@ export default function RoomPage({ params }: RoomPageProps) {
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         {/* Planet image */}
         <div 
-          className="absolute inset-0 bg-cover bg-center opacity-40 scale-110"
+          className="absolute inset-0 bg-cover bg-center opacity-50 scale-110"
           style={{ 
             backgroundImage: `url(${planetImage})`,
             filter: 'blur(1px)',
           }}
         />
         
-        {/* Phase color overlay */}
-        <div 
-          className={`absolute inset-0 transition-colors duration-1000 ${colors.bg} opacity-30`}
-        />
-        
         {/* Dark gradient overlay for readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/80" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/70" />
         
         {/* Star field */}
-        {stars.map((star) => (
+        {STARS.map((star) => (
           <div
             key={star.id}
             className="absolute rounded-full bg-white animate-twinkle"
@@ -122,15 +115,6 @@ export default function RoomPage({ params }: RoomPageProps) {
             }}
           />
         ))}
-        
-        {/* Ambient glow based on phase */}
-        <div 
-          className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] rounded-full blur-3xl transition-colors duration-1000 ${
-            timer.phase === 'focus' ? 'bg-rose-500/10' : 
-            timer.phase === 'break' ? 'bg-emerald-500/10' : 
-            'bg-blue-500/10'
-          }`}
-        />
       </div>
 
       {/* Header */}

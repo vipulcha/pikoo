@@ -44,16 +44,6 @@ export function Timer({ remaining, phase, running, cycleCount }: TimerProps) {
 
       {/* Main timer display */}
       <div className="relative">
-        {/* Glow effect */}
-        <div 
-          className={`
-            absolute inset-0 blur-3xl opacity-30 rounded-full
-            ${phase === "focus" ? "bg-rose-500" : ""}
-            ${phase === "break" ? "bg-emerald-500" : ""}
-            ${phase === "long_break" ? "bg-blue-500" : ""}
-          `}
-        />
-        
         {/* Timer digits */}
         <div className="relative flex items-baseline font-mono drop-shadow-[0_0_30px_rgba(0,0,0,0.8)]">
           <span 
