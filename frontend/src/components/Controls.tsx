@@ -30,7 +30,7 @@ export function Controls({ running, phase, onStart, onPause, onReset, onSkip }: 
       <button
         onClick={onReset}
         className={`
-          p-4 rounded-full border border-white/10 transition-all duration-200
+          p-4 rounded-full border border-white/20 bg-black/30 backdrop-blur-sm transition-all duration-200 shadow-lg
           ${accentColor}
         `}
         title="Reset"
@@ -44,7 +44,7 @@ export function Controls({ running, phase, onStart, onPause, onReset, onSkip }: 
       <button
         onClick={running ? onPause : onStart}
         className={`
-          p-6 rounded-full transition-all duration-200 shadow-lg
+          p-6 rounded-full transition-all duration-200 shadow-2xl
           ${primaryColor}
         `}
         title={running ? "Pause" : "Start"}
@@ -64,7 +64,7 @@ export function Controls({ running, phase, onStart, onPause, onReset, onSkip }: 
       <button
         onClick={onSkip}
         className={`
-          p-4 rounded-full border border-white/10 transition-all duration-200
+          p-4 rounded-full border border-white/20 bg-black/30 backdrop-blur-sm transition-all duration-200 shadow-lg
           ${accentColor}
         `}
         title="Skip to next phase"

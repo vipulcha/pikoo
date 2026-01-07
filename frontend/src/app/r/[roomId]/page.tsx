@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useMemo } from "react";
 import { useTimer } from "@/lib/hooks/useTimer";
 import { Timer } from "@/components/Timer";
 import { Controls } from "@/components/Controls";
@@ -8,6 +8,18 @@ import { ParticipantCount } from "@/components/ParticipantCount";
 import { ShareButton } from "@/components/ShareButton";
 import { PHASE_COLORS, RoomSettings } from "@/lib/types";
 import Link from "next/link";
+
+// Realistic planet/space images from Unsplash
+const PLANET_IMAGES = [
+  "https://images.unsplash.com/photo-1614732414444-096e5f1122d5?w=1920&q=80", // Earth from space
+  "https://images.unsplash.com/photo-1630839437035-dac17da580d0?w=1920&q=80", // Mars surface
+  "https://images.unsplash.com/photo-1639921884918-8d28ab2e39a4?w=1920&q=80", // Jupiter
+  "https://images.unsplash.com/photo-1545156521-77bd85671d30?w=1920&q=80", // Saturn
+  "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=1920&q=80", // Earth horizon
+  "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920&q=80", // Earth night lights
+  "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=1920&q=80", // Nebula
+  "https://images.unsplash.com/photo-1543722530-d2c3201371e7?w=1920&q=80", // Galaxy
+];
 
 interface RoomPageProps {
   params: Promise<{ roomId: string }>;
@@ -18,11 +30,47 @@ export default function RoomPage({ params }: RoomPageProps) {
   const { room, remaining, isConnected, error, actions } = useTimer(roomId);
   const [showSettings, setShowSettings] = useState(false);
 
+  // Pick a random planet image once per session
+  const planetImage = useMemo(() => {
+    return PLANET_IMAGES[Math.floor(Math.random() * PLANET_IMAGES.length)];
+  }, []);
+
+  // Generate stars once
+  const stars = useMemo(() => {
+    return [...Array(60)].map((_, i) => ({
+      id: i,
+      width: Math.random() * 2 + 1,
+      left: Math.random() * 100,
+      top: Math.random() * 100,
+      opacity: Math.random() * 0.7 + 0.3,
+      delay: Math.random() * 3,
+      duration: Math.random() * 2 + 2,
+    }));
+  }, []);
+
   // Loading state
   if (!room) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        {/* Stars in loading */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          {stars.map((star) => (
+            <div
+              key={star.id}
+              className="absolute rounded-full bg-white animate-twinkle"
+              style={{
+                width: `${star.width}px`,
+                height: `${star.width}px`,
+                left: `${star.left}%`,
+                top: `${star.top}%`,
+                opacity: star.opacity,
+                animationDelay: `${star.delay}s`,
+                animationDuration: `${star.duration}s`,
+              }}
+            />
+          ))}
+        </div>
+        <div className="flex flex-col items-center gap-4 relative z-10">
           <div className="w-12 h-12 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
           <p className="text-white/60">Connecting to room...</p>
         </div>
@@ -38,22 +86,63 @@ export default function RoomPage({ params }: RoomPageProps) {
   };
 
   return (
-    <div 
-      className={`
-        min-h-screen bg-gradient-to-br ${colors.bg} ${colors.text}
-        flex flex-col transition-colors duration-700 relative
-      `}
-    >
+    <div className="min-h-screen bg-black text-white flex flex-col relative overflow-hidden">
+      {/* Space background with planet */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        {/* Planet image */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center opacity-40 scale-110"
+          style={{ 
+            backgroundImage: `url(${planetImage})`,
+            filter: 'blur(1px)',
+          }}
+        />
+        
+        {/* Phase color overlay */}
+        <div 
+          className={`absolute inset-0 transition-colors duration-1000 ${colors.bg} opacity-30`}
+        />
+        
+        {/* Dark gradient overlay for readability */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/80" />
+        
+        {/* Star field */}
+        {stars.map((star) => (
+          <div
+            key={star.id}
+            className="absolute rounded-full bg-white animate-twinkle"
+            style={{
+              width: `${star.width}px`,
+              height: `${star.width}px`,
+              left: `${star.left}%`,
+              top: `${star.top}%`,
+              opacity: star.opacity,
+              animationDelay: `${star.delay}s`,
+              animationDuration: `${star.duration}s`,
+            }}
+          />
+        ))}
+        
+        {/* Ambient glow based on phase */}
+        <div 
+          className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] rounded-full blur-3xl transition-colors duration-1000 ${
+            timer.phase === 'focus' ? 'bg-rose-500/10' : 
+            timer.phase === 'break' ? 'bg-emerald-500/10' : 
+            'bg-blue-500/10'
+          }`}
+        />
+      </div>
+
       {/* Header */}
       <header className="flex items-center justify-between p-4 sm:p-6 relative z-20">
         <Link 
           href="/"
-          className="flex items-center gap-2 text-white/60 hover:text-white transition-colors"
+          className="flex items-center gap-2 text-white/80 hover:text-white transition-colors drop-shadow-lg"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
           </svg>
-          <span className="font-medium">Pikoo</span>
+          <span className="font-bold text-lg">Pikoo</span>
         </Link>
 
         <div className="flex items-center gap-3">
@@ -89,7 +178,7 @@ export default function RoomPage({ params }: RoomPageProps) {
       {/* Settings Panel */}
       {showSettings && (
         <div className="absolute top-20 right-4 sm:right-6 z-40 w-80 animate-fade-in">
-          <div className="bg-black/50 backdrop-blur-[80px] border border-white/10 rounded-2xl p-5 shadow-2xl">
+          <div className="bg-black/70 backdrop-blur-xl border border-white/10 rounded-2xl p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-medium text-white">Timer Settings</h3>
               <button
@@ -176,13 +265,15 @@ export default function RoomPage({ params }: RoomPageProps) {
       )}
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 -mt-16">
-        <Timer
-          remaining={remaining}
-          phase={timer.phase}
-          running={timer.running}
-          cycleCount={timer.cycleCount}
-        />
+      <main className="flex-1 flex flex-col items-center justify-center px-4 -mt-16 relative z-10">
+        <div className="drop-shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+          <Timer
+            remaining={remaining}
+            phase={timer.phase}
+            running={timer.running}
+            cycleCount={timer.cycleCount}
+          />
+        </div>
 
         <div className="mt-12">
           <Controls
