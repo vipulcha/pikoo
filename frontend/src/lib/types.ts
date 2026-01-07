@@ -1,0 +1,66 @@
+// ============================================
+// Pikoo - Frontend Types (mirrors backend)
+// ============================================
+
+export type Phase = "focus" | "break" | "long_break";
+export type RoomMode = "collab" | "host";
+
+export interface RoomSettings {
+  focusSec: number;
+  breakSec: number;
+  longBreakSec: number;
+  longBreakEvery: number;
+  mode: RoomMode;
+}
+
+export interface TimerState {
+  running: boolean;
+  phase: Phase;
+  phaseEndsAt: number | null;
+  remainingSecWhenPaused: number;
+  cycleCount: number;
+}
+
+export interface RoomState {
+  id: string;
+  settings: RoomSettings;
+  timer: TimerState;
+  hostId: string | null;
+  createdAt: number;
+  participants: string[];
+}
+
+export const DEFAULT_SETTINGS: RoomSettings = {
+  focusSec: 1500,
+  breakSec: 300,
+  longBreakSec: 900,
+  longBreakEvery: 4,
+  mode: "collab",
+};
+
+export const SOCKET_EVENTS = {
+  JOIN_ROOM: "join_room",
+  LEAVE_ROOM: "leave_room",
+  TIMER_START: "timer_start",
+  TIMER_PAUSE: "timer_pause",
+  TIMER_RESET: "timer_reset",
+  TIMER_SKIP: "timer_skip",
+  UPDATE_SETTINGS: "update_settings",
+  ROOM_STATE: "room_state",
+  TIMER_UPDATE: "timer_update",
+  PARTICIPANTS_UPDATE: "participants_update",
+  ERROR: "error",
+} as const;
+
+export const PHASE_LABELS: Record<Phase, string> = {
+  focus: "Focus",
+  break: "Break",
+  long_break: "Long Break",
+};
+
+export const PHASE_COLORS: Record<Phase, { bg: string; text: string; accent: string }> = {
+  focus: { bg: "from-rose-950 to-slate-950", text: "text-rose-100", accent: "bg-rose-500" },
+  break: { bg: "from-emerald-950 to-slate-950", text: "text-emerald-100", accent: "bg-emerald-500" },
+  long_break: { bg: "from-blue-950 to-slate-950", text: "text-blue-100", accent: "bg-blue-500" },
+};
+
