@@ -6,7 +6,7 @@ import { Timer } from "@/components/Timer";
 import { Controls } from "@/components/Controls";
 import { ParticipantCount } from "@/components/ParticipantCount";
 import { ShareButton } from "@/components/ShareButton";
-import { NamePrompt, getSavedName } from "@/components/NamePrompt";
+import { NamePrompt, getSavedName, getUserId, clearSavedName } from "@/components/NamePrompt";
 import { ChatPanel } from "@/components/ChatPanel";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { RoomSettings } from "@/lib/types";
@@ -42,15 +42,18 @@ interface RoomPageProps {
 export default function RoomPage({ params }: RoomPageProps) {
   const { roomId } = use(params);
   const [userName, setUserName] = useState<string | null>(null);
+  const [uniqueId, setUniqueId] = useState<string>("");
   const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [nameError, setNameError] = useState<string | undefined>(undefined);
   const [showSettings, setShowSettings] = useState(false);
   const [planetImage, setPlanetImage] = useState(PLANET_IMAGES[0]);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const lastMessageCountRef = useRef(0);
 
-  // Check for saved name on mount
+  // Check for saved name and get uniqueId on mount
   useEffect(() => {
+    setUniqueId(getUserId());
     const savedName = getSavedName();
     if (savedName) {
       setUserName(savedName);
@@ -66,11 +69,26 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   const handleNameSubmit = (name: string) => {
     setUserName(name);
+    setNameError(undefined);
     setShowNamePrompt(false);
   };
 
-  // Only connect to room after we have a name
-  const { room, remaining, isConnected, error, actions } = useTimer(roomId, userName || "");
+  // Only connect to room after we have a name and uniqueId
+  const { room, remaining, isConnected, error, nameTakenError, actions } = useTimer(
+    roomId, 
+    userName || "", 
+    uniqueId
+  );
+
+  // Handle name taken error - show prompt again
+  useEffect(() => {
+    if (nameTakenError && error) {
+      clearSavedName();
+      setUserName(null);
+      setNameError(error);
+      setShowNamePrompt(true);
+    }
+  }, [nameTakenError, error]);
 
   // Track unread messages when chat is closed (must be before early returns)
   const messages = room?.messages;
@@ -117,6 +135,7 @@ export default function RoomPage({ params }: RoomPageProps) {
           onSubmit={handleNameSubmit}
           title="Join Room"
           subtitle="Enter your name to join this focus session"
+          errorMessage={nameError}
         />
       </div>
     );

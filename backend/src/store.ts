@@ -176,20 +176,48 @@ export async function skipPhase(roomId: string): Promise<TimerState | null> {
 // Participant Operations
 // ============================================
 
+export interface AddParticipantResult {
+  success: boolean;
+  error?: string;
+  participants: Participant[];
+}
+
 export async function addParticipant(
   roomId: string,
-  participantId: string,
+  socketId: string,
+  uniqueId: string,
   participantName: string
-): Promise<Participant[]> {
+): Promise<AddParticipantResult> {
   const room = await getRoom(roomId);
-  if (!room) return [];
+  if (!room) return { success: false, error: "Room not found", participants: [] };
 
-  const exists = room.participants.find(p => p.id === participantId);
-  if (!exists) {
-    room.participants.push({ id: participantId, name: participantName });
-    await saveRoom(room);
+  // Check if this socket is already connected (reconnection)
+  const existingSocket = room.participants.find(p => p.id === socketId);
+  if (existingSocket) {
+    return { success: true, participants: room.participants };
   }
-  return room.participants;
+
+  // Check if name is taken by a DIFFERENT user (different uniqueId)
+  const nameTaken = room.participants.find(
+    p => p.name.toLowerCase() === participantName.toLowerCase() && p.uniqueId !== uniqueId
+  );
+  if (nameTaken) {
+    return { 
+      success: false, 
+      error: "Name already taken in this room", 
+      participants: room.participants 
+    };
+  }
+
+  // Add the participant (same user can have multiple tabs)
+  room.participants.push({ 
+    id: socketId, 
+    uniqueId, 
+    name: participantName 
+  });
+  await saveRoom(room);
+  
+  return { success: true, participants: room.participants };
 }
 
 export async function removeParticipant(

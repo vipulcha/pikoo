@@ -22,7 +22,8 @@ export interface TimerState {
 }
 
 export interface Participant {
-  id: string;
+  id: string;       // socket id (unique per connection)
+  uniqueId: string; // persistent user id (same across tabs)
   name: string;
 }
 

@@ -25,6 +25,7 @@ import { ChatMessage } from "./types.js";
 interface JoinRoomPayload {
   roomId: string;
   name: string;
+  uniqueId: string;  // persistent user id from localStorage
 }
 
 interface SendMessagePayload {
@@ -42,7 +43,7 @@ export function setupSocketHandlers(io: Server): void {
     // Join Room
     // ========================================
     socket.on(SOCKET_EVENTS.JOIN_ROOM, async (payload: JoinRoomPayload) => {
-      const { roomId, name } = payload;
+      const { roomId, name, uniqueId } = payload;
       
       try {
         let room = await getRoom(roomId);
@@ -53,20 +54,30 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
+        // Try to add participant (validates name uniqueness)
+        const result = await addParticipant(roomId, socket.id, uniqueId, name || "Anonymous");
+        
+        if (!result.success) {
+          // Name is taken by another user
+          socket.emit(SOCKET_EVENTS.ERROR, { 
+            message: result.error || "Failed to join room",
+            code: "NAME_TAKEN"
+          });
+          return;
+        }
+
         // Join socket room
         socket.join(roomId);
         currentRoomId = roomId;
         currentUserName = name || "Anonymous";
 
-        // Add participant with name
-        const participants = await addParticipant(roomId, socket.id, currentUserName);
         room = await getRoom(roomId);
 
         // Send current state to joining client
         socket.emit(SOCKET_EVENTS.ROOM_STATE, room);
 
         // Broadcast updated participants to all in room
-        io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants });
+        io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants: result.participants });
 
         console.log(`👤 ${name || "Anonymous"} (${socket.id}) joined room ${roomId}`);
       } catch (err) {

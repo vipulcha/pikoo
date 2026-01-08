@@ -10,6 +10,7 @@ interface UseTimerReturn {
   remaining: number;
   isConnected: boolean;
   error: string | null;
+  nameTakenError: boolean;  // True when name is already taken in room
   actions: {
     start: () => void;
     pause: () => void;
@@ -20,11 +21,12 @@ interface UseTimerReturn {
   };
 }
 
-export function useTimer(roomId: string, userName: string): UseTimerReturn {
+export function useTimer(roomId: string, userName: string, uniqueId: string): UseTimerReturn {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [remaining, setRemaining] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nameTakenError, setNameTakenError] = useState(false);
   const socketRef = useRef<Socket | null>(null);
 
   // Calculate remaining time from timer state
@@ -56,7 +58,8 @@ export function useTimer(roomId: string, userName: string): UseTimerReturn {
     const handleConnect = () => {
       setIsConnected(true);
       setError(null);
-      socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name: userName });
+      setNameTakenError(false);
+      socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name: userName, uniqueId });
     };
 
     const handleDisconnect = () => {
@@ -93,9 +96,14 @@ export function useTimer(roomId: string, userName: string): UseTimerReturn {
       });
     };
 
-    const handleError = ({ message }: { message: string }) => {
-      setError(message);
-      setTimeout(() => setError(null), 3000);
+    const handleError = ({ message, code }: { message: string; code?: string }) => {
+      if (code === "NAME_TAKEN") {
+        setNameTakenError(true);
+        setError(message);
+      } else {
+        setError(message);
+        setTimeout(() => setError(null), 3000);
+      }
     };
 
     socket.on("connect", handleConnect);
@@ -121,7 +129,7 @@ export function useTimer(roomId: string, userName: string): UseTimerReturn {
       socket.off(SOCKET_EVENTS.ERROR, handleError);
       disconnectSocket();
     };
-  }, [roomId, userName, calculateRemaining]);
+  }, [roomId, userName, uniqueId, calculateRemaining]);
 
   // Timer control actions
   const actions = {
@@ -135,6 +143,6 @@ export function useTimer(roomId: string, userName: string): UseTimerReturn {
       socketRef.current?.emit(SOCKET_EVENTS.SEND_MESSAGE, { text }),
   };
 
-  return { room, remaining, isConnected, error, actions };
+  return { room, remaining, isConnected, error, nameTakenError, actions };
 }
 
