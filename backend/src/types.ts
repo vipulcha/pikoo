@@ -26,6 +26,14 @@ export interface Participant {
   name: string;                      // display name
 }
 
+export interface ChatMessage {
+  id: string;                        // unique message id
+  senderId: string;                  // socket id of sender
+  senderName: string;                // display name of sender
+  text: string;                      // message content
+  timestamp: number;                 // epoch ms
+}
+
 export interface RoomState {
   id: string;
   settings: RoomSettings;
@@ -33,6 +41,7 @@ export interface RoomState {
   hostId: string | null;             // socket id of host (if mode is "host")
   createdAt: number;
   participants: Participant[];       // participants with names
+  messages: ChatMessage[];           // chat messages (max 100)
 }
 
 // Default settings
@@ -77,11 +86,13 @@ export const SOCKET_EVENTS = {
   TIMER_RESET: "timer_reset",
   TIMER_SKIP: "timer_skip",
   UPDATE_SETTINGS: "update_settings",
+  SEND_MESSAGE: "send_message",
 
   // Server -> Client
   ROOM_STATE: "room_state",
   TIMER_UPDATE: "timer_update",
   PARTICIPANTS_UPDATE: "participants_update",
+  NEW_MESSAGE: "new_message",
   ERROR: "error",
 } as const;
 

@@ -1,12 +1,13 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useRef } from "react";
 import { useTimer } from "@/lib/hooks/useTimer";
 import { Timer } from "@/components/Timer";
 import { Controls } from "@/components/Controls";
 import { ParticipantCount } from "@/components/ParticipantCount";
 import { ShareButton } from "@/components/ShareButton";
 import { NamePrompt, getSavedName } from "@/components/NamePrompt";
+import { ChatPanel } from "@/components/ChatPanel";
 import { RoomSettings } from "@/lib/types";
 import Link from "next/link";
 
@@ -43,6 +44,9 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [planetImage, setPlanetImage] = useState(PLANET_IMAGES[0]);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const lastMessageCountRef = useRef(0);
 
   // Check for saved name on mount
   useEffect(() => {
@@ -66,6 +70,24 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   // Only connect to room after we have a name
   const { room, remaining, isConnected, error, actions } = useTimer(roomId, userName || "");
+
+  // Track unread messages when chat is closed (must be before early returns)
+  const messages = room?.messages;
+  useEffect(() => {
+    const currentCount = messages?.length || 0;
+    if (!isChatOpen && currentCount > lastMessageCountRef.current) {
+      setUnreadCount(prev => prev + (currentCount - lastMessageCountRef.current));
+    }
+    lastMessageCountRef.current = currentCount;
+  }, [messages?.length, isChatOpen]);
+
+  // Clear unread when opening chat
+  const handleToggleChat = () => {
+    if (!isChatOpen) {
+      setUnreadCount(0);
+    }
+    setIsChatOpen(!isChatOpen);
+  };
 
   // Show name prompt if needed
   if (showNamePrompt || !userName) {
@@ -322,6 +344,15 @@ export default function RoomPage({ params }: RoomPageProps) {
           />
         </div>
       </main>
+
+      {/* Chat Panel */}
+      <ChatPanel
+        messages={messages || []}
+        onSendMessage={actions.sendMessage}
+        isOpen={isChatOpen}
+        onToggle={handleToggleChat}
+        unreadCount={unreadCount}
+      />
     </div>
   );
 }

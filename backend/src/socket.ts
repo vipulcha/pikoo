@@ -18,11 +18,17 @@ import {
   addParticipant,
   removeParticipant,
   updateSettings,
+  addMessage,
 } from "./store.js";
+import { ChatMessage } from "./types.js";
 
 interface JoinRoomPayload {
   roomId: string;
   name: string;
+}
+
+interface SendMessagePayload {
+  text: string;
 }
 
 export function setupSocketHandlers(io: Server): void {
@@ -30,6 +36,7 @@ export function setupSocketHandlers(io: Server): void {
     console.log(`🔌 Client connected: ${socket.id}`);
     
     let currentRoomId: string | null = null;
+    let currentUserName: string = "Anonymous";
 
     // ========================================
     // Join Room
@@ -49,9 +56,10 @@ export function setupSocketHandlers(io: Server): void {
         // Join socket room
         socket.join(roomId);
         currentRoomId = roomId;
+        currentUserName = name || "Anonymous";
 
         // Add participant with name
-        const participants = await addParticipant(roomId, socket.id, name || "Anonymous");
+        const participants = await addParticipant(roomId, socket.id, currentUserName);
         room = await getRoom(roomId);
 
         // Send current state to joining client
@@ -180,6 +188,37 @@ export function setupSocketHandlers(io: Server): void {
         }
       } catch (err) {
         console.error("Error updating settings:", err);
+      }
+    });
+
+    // ========================================
+    // Chat Messages
+    // ========================================
+    socket.on(SOCKET_EVENTS.SEND_MESSAGE, async (payload: SendMessagePayload) => {
+      if (!currentRoomId) return;
+
+      try {
+        const { text } = payload;
+        
+        // Validate message
+        if (!text || text.trim().length === 0) return;
+        if (text.length > 500) return; // Max 500 chars
+
+        const message: ChatMessage = {
+          id: `${socket.id}-${Date.now()}`,
+          senderId: socket.id,
+          senderName: currentUserName,
+          text: text.trim(),
+          timestamp: Date.now(),
+        };
+
+        const savedMessage = await addMessage(currentRoomId, message);
+        if (savedMessage) {
+          // Broadcast to all in room including sender
+          io.to(currentRoomId).emit(SOCKET_EVENTS.NEW_MESSAGE, { message: savedMessage });
+        }
+      } catch (err) {
+        console.error("Error sending message:", err);
       }
     });
 

@@ -8,11 +8,14 @@ import {
   RoomSettings,
   TimerState,
   Participant,
+  ChatMessage,
   DEFAULT_SETTINGS,
   getInitialTimerState,
   getPhaseDuration,
   Phase,
 } from "./types.js";
+
+const MAX_MESSAGES = 100; // Keep last 100 messages per room
 
 const ROOM_TTL = 60 * 60 * 24; // 24 hours
 
@@ -62,6 +65,7 @@ export async function createRoom(
     hostId,
     createdAt: Date.now(),
     participants: [],
+    messages: [],
   };
 
   await saveRoom(room);
@@ -223,5 +227,33 @@ export async function updateSettings(
   
   await saveRoom(room);
   return room.settings;
+}
+
+// ============================================
+// Chat Operations
+// ============================================
+
+export async function addMessage(
+  roomId: string,
+  message: ChatMessage
+): Promise<ChatMessage | null> {
+  const room = await getRoom(roomId);
+  if (!room) return null;
+
+  // Initialize messages array if it doesn't exist (for older rooms)
+  if (!room.messages) {
+    room.messages = [];
+  }
+
+  // Add message
+  room.messages.push(message);
+
+  // Trim to max messages
+  if (room.messages.length > MAX_MESSAGES) {
+    room.messages = room.messages.slice(-MAX_MESSAGES);
+  }
+
+  await saveRoom(room);
+  return message;
 }
 

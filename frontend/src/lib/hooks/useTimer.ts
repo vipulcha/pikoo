@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Socket } from "socket.io-client";
-import { RoomState, RoomSettings, TimerState, Participant, SOCKET_EVENTS } from "../types";
+import { RoomState, RoomSettings, TimerState, Participant, ChatMessage, SOCKET_EVENTS } from "../types";
 import { connectSocket, disconnectSocket, getSocket } from "../socket";
 
 interface UseTimerReturn {
@@ -16,6 +16,7 @@ interface UseTimerReturn {
     reset: () => void;
     skip: () => void;
     updateSettings: (settings: Partial<RoomSettings>) => void;
+    sendMessage: (text: string) => void;
   };
 }
 
@@ -83,6 +84,15 @@ export function useTimer(roomId: string, userName: string): UseTimerReturn {
       });
     };
 
+    const handleNewMessage = ({ message }: { message: ChatMessage }) => {
+      setRoom((prev) => {
+        if (!prev) return prev;
+        // Initialize messages array if needed
+        const messages = prev.messages || [];
+        return { ...prev, messages: [...messages, message] };
+      });
+    };
+
     const handleError = ({ message }: { message: string }) => {
       setError(message);
       setTimeout(() => setError(null), 3000);
@@ -93,6 +103,7 @@ export function useTimer(roomId: string, userName: string): UseTimerReturn {
     socket.on(SOCKET_EVENTS.ROOM_STATE, handleRoomState);
     socket.on(SOCKET_EVENTS.TIMER_UPDATE, handleTimerUpdate);
     socket.on(SOCKET_EVENTS.PARTICIPANTS_UPDATE, handleParticipantsUpdate);
+    socket.on(SOCKET_EVENTS.NEW_MESSAGE, handleNewMessage);
     socket.on(SOCKET_EVENTS.ERROR, handleError);
 
     // If already connected, join room
@@ -106,6 +117,7 @@ export function useTimer(roomId: string, userName: string): UseTimerReturn {
       socket.off(SOCKET_EVENTS.ROOM_STATE, handleRoomState);
       socket.off(SOCKET_EVENTS.TIMER_UPDATE, handleTimerUpdate);
       socket.off(SOCKET_EVENTS.PARTICIPANTS_UPDATE, handleParticipantsUpdate);
+      socket.off(SOCKET_EVENTS.NEW_MESSAGE, handleNewMessage);
       socket.off(SOCKET_EVENTS.ERROR, handleError);
       disconnectSocket();
     };
@@ -119,6 +131,8 @@ export function useTimer(roomId: string, userName: string): UseTimerReturn {
     skip: () => socketRef.current?.emit(SOCKET_EVENTS.TIMER_SKIP),
     updateSettings: (settings: Partial<RoomSettings>) => 
       socketRef.current?.emit(SOCKET_EVENTS.UPDATE_SETTINGS, settings),
+    sendMessage: (text: string) =>
+      socketRef.current?.emit(SOCKET_EVENTS.SEND_MESSAGE, { text }),
   };
 
   return { room, remaining, isConnected, error, actions };

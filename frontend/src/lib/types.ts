@@ -26,6 +26,14 @@ export interface Participant {
   name: string;
 }
 
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  timestamp: number;
+}
+
 export interface RoomState {
   id: string;
   settings: RoomSettings;
@@ -33,6 +41,7 @@ export interface RoomState {
   hostId: string | null;
   createdAt: number;
   participants: Participant[];
+  messages: ChatMessage[];
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {
@@ -51,9 +60,11 @@ export const SOCKET_EVENTS = {
   TIMER_RESET: "timer_reset",
   TIMER_SKIP: "timer_skip",
   UPDATE_SETTINGS: "update_settings",
+  SEND_MESSAGE: "send_message",
   ROOM_STATE: "room_state",
   TIMER_UPDATE: "timer_update",
   PARTICIPANTS_UPDATE: "participants_update",
+  NEW_MESSAGE: "new_message",
   ERROR: "error",
 } as const;
 
