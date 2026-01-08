@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Socket } from "socket.io-client";
-import { RoomState, RoomSettings, TimerState, SOCKET_EVENTS } from "../types";
+import { RoomState, RoomSettings, TimerState, Participant, SOCKET_EVENTS } from "../types";
 import { connectSocket, disconnectSocket, getSocket } from "../socket";
 
 interface UseTimerReturn {
@@ -19,7 +19,7 @@ interface UseTimerReturn {
   };
 }
 
-export function useTimer(roomId: string): UseTimerReturn {
+export function useTimer(roomId: string, userName: string): UseTimerReturn {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [remaining, setRemaining] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
@@ -55,7 +55,7 @@ export function useTimer(roomId: string): UseTimerReturn {
     const handleConnect = () => {
       setIsConnected(true);
       setError(null);
-      socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId });
+      socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name: userName });
     };
 
     const handleDisconnect = () => {
@@ -76,7 +76,7 @@ export function useTimer(roomId: string): UseTimerReturn {
       });
     };
 
-    const handleParticipantsUpdate = ({ participants }: { participants: string[] }) => {
+    const handleParticipantsUpdate = ({ participants }: { participants: Participant[] }) => {
       setRoom((prev) => {
         if (!prev) return prev;
         return { ...prev, participants };
@@ -109,7 +109,7 @@ export function useTimer(roomId: string): UseTimerReturn {
       socket.off(SOCKET_EVENTS.ERROR, handleError);
       disconnectSocket();
     };
-  }, [roomId, calculateRemaining]);
+  }, [roomId, userName, calculateRemaining]);
 
   // Timer control actions
   const actions = {

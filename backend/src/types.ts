@@ -21,13 +21,18 @@ export interface TimerState {
   cycleCount: number;                // completed focus cycles
 }
 
+export interface Participant {
+  id: string;                        // socket id
+  name: string;                      // display name
+}
+
 export interface RoomState {
   id: string;
   settings: RoomSettings;
   timer: TimerState;
   hostId: string | null;             // socket id of host (if mode is "host")
   createdAt: number;
-  participants: string[];            // anonymous participant IDs
+  participants: Participant[];       // participants with names
 }
 
 // Default settings

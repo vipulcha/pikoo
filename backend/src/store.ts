@@ -7,6 +7,7 @@ import {
   RoomState,
   RoomSettings,
   TimerState,
+  Participant,
   DEFAULT_SETTINGS,
   getInitialTimerState,
   getPhaseDuration,
@@ -173,13 +174,15 @@ export async function skipPhase(roomId: string): Promise<TimerState | null> {
 
 export async function addParticipant(
   roomId: string,
-  participantId: string
-): Promise<string[]> {
+  participantId: string,
+  participantName: string
+): Promise<Participant[]> {
   const room = await getRoom(roomId);
   if (!room) return [];
 
-  if (!room.participants.includes(participantId)) {
-    room.participants.push(participantId);
+  const exists = room.participants.find(p => p.id === participantId);
+  if (!exists) {
+    room.participants.push({ id: participantId, name: participantName });
     await saveRoom(room);
   }
   return room.participants;
@@ -188,15 +191,15 @@ export async function addParticipant(
 export async function removeParticipant(
   roomId: string,
   participantId: string
-): Promise<string[]> {
+): Promise<Participant[]> {
   const room = await getRoom(roomId);
   if (!room) return [];
 
-  room.participants = room.participants.filter((p) => p !== participantId);
+  room.participants = room.participants.filter((p) => p.id !== participantId);
   
   // If host leaves in host mode, assign new host or clear
   if (room.hostId === participantId) {
-    room.hostId = room.participants[0] || null;
+    room.hostId = room.participants[0]?.id || null;
   }
 
   await saveRoom(room);

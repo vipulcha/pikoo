@@ -6,6 +6,7 @@ import { Timer } from "@/components/Timer";
 import { Controls } from "@/components/Controls";
 import { ParticipantCount } from "@/components/ParticipantCount";
 import { ShareButton } from "@/components/ShareButton";
+import { NamePrompt, getSavedName } from "@/components/NamePrompt";
 import { RoomSettings } from "@/lib/types";
 import Link from "next/link";
 
@@ -38,16 +39,67 @@ interface RoomPageProps {
 
 export default function RoomPage({ params }: RoomPageProps) {
   const { roomId } = use(params);
-  const { room, remaining, isConnected, error, actions } = useTimer(roomId);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [planetImage, setPlanetImage] = useState(PLANET_IMAGES[0]);
+
+  // Check for saved name on mount
+  useEffect(() => {
+    const savedName = getSavedName();
+    if (savedName) {
+      setUserName(savedName);
+    } else {
+      setShowNamePrompt(true);
+    }
+  }, []);
 
   // Pick random planet on client only to avoid hydration mismatch
   useEffect(() => {
     setPlanetImage(PLANET_IMAGES[Math.floor(Math.random() * PLANET_IMAGES.length)]);
   }, []);
 
-  // Loading state
+  const handleNameSubmit = (name: string) => {
+    setUserName(name);
+    setShowNamePrompt(false);
+  };
+
+  // Only connect to room after we have a name
+  const { room, remaining, isConnected, error, actions } = useTimer(roomId, userName || "");
+
+  // Show name prompt if needed
+  if (showNamePrompt || !userName) {
+    return (
+      <div className="min-h-screen bg-black">
+        {/* Stars background */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          {STARS.map((star) => (
+            <div
+              key={star.id}
+              className="absolute rounded-full bg-white animate-twinkle"
+              style={{
+                width: `${star.width}px`,
+                height: `${star.width}px`,
+                left: `${star.left}%`,
+                top: `${star.top}%`,
+                opacity: star.opacity,
+                animationDelay: `${star.delay}s`,
+                animationDuration: `${star.duration}s`,
+              }}
+            />
+          ))}
+        </div>
+        <NamePrompt
+          isOpen={true}
+          onSubmit={handleNameSubmit}
+          title="Join Room"
+          subtitle="Enter your name to join this focus session"
+        />
+      </div>
+    );
+  }
+
+  // Loading state (connecting to room)
   if (!room) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -130,7 +182,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         </Link>
 
         <div className="flex items-center gap-3">
-          <ParticipantCount count={participants.length} isConnected={isConnected} />
+          <ParticipantCount participants={participants} isConnected={isConnected} />
           <ShareButton roomId={roomId} />
           {/* Settings button */}
           <button

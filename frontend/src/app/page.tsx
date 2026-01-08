@@ -1,17 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createRoom } from "@/lib/api";
 import { RoomSettings, DEFAULT_SETTINGS } from "@/lib/types";
+import { NamePrompt, getSavedName } from "@/components/NamePrompt";
 
 export default function Home() {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [settings, setSettings] = useState<RoomSettings>(DEFAULT_SETTINGS);
 
   const handleCreateRoom = async () => {
+    // Check if user has a name saved
+    const savedName = getSavedName();
+    if (!savedName) {
+      setShowNamePrompt(true);
+      return;
+    }
+    
+    proceedToCreateRoom();
+  };
+
+  const handleNameSubmit = (name: string) => {
+    setShowNamePrompt(false);
+    proceedToCreateRoom();
+  };
+
+  const proceedToCreateRoom = async () => {
     setIsCreating(true);
     try {
       const { roomId } = await createRoom(settings);
@@ -284,6 +302,14 @@ export default function Home() {
         </div>
 
       </div>
+
+      {/* Name prompt modal */}
+      <NamePrompt
+        isOpen={showNamePrompt}
+        onSubmit={handleNameSubmit}
+        title="What's your name?"
+        subtitle="This will be shown to others in the room"
+      />
     </div>
   );
 }

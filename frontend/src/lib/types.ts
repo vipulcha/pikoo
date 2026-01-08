@@ -21,13 +21,18 @@ export interface TimerState {
   cycleCount: number;
 }
 
+export interface Participant {
+  id: string;
+  name: string;
+}
+
 export interface RoomState {
   id: string;
   settings: RoomSettings;
   timer: TimerState;
   hostId: string | null;
   createdAt: number;
-  participants: string[];
+  participants: Participant[];
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {

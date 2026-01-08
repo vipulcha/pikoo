@@ -22,6 +22,7 @@ import {
 
 interface JoinRoomPayload {
   roomId: string;
+  name: string;
 }
 
 export function setupSocketHandlers(io: Server): void {
@@ -34,7 +35,7 @@ export function setupSocketHandlers(io: Server): void {
     // Join Room
     // ========================================
     socket.on(SOCKET_EVENTS.JOIN_ROOM, async (payload: JoinRoomPayload) => {
-      const { roomId } = payload;
+      const { roomId, name } = payload;
       
       try {
         let room = await getRoom(roomId);
@@ -49,8 +50,8 @@ export function setupSocketHandlers(io: Server): void {
         socket.join(roomId);
         currentRoomId = roomId;
 
-        // Add participant
-        const participants = await addParticipant(roomId, socket.id);
+        // Add participant with name
+        const participants = await addParticipant(roomId, socket.id, name || "Anonymous");
         room = await getRoom(roomId);
 
         // Send current state to joining client
@@ -59,7 +60,7 @@ export function setupSocketHandlers(io: Server): void {
         // Broadcast updated participants to all in room
         io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants });
 
-        console.log(`👤 ${socket.id} joined room ${roomId}`);
+        console.log(`👤 ${name || "Anonymous"} (${socket.id}) joined room ${roomId}`);
       } catch (err) {
         console.error("Error joining room:", err);
         socket.emit(SOCKET_EVENTS.ERROR, { message: "Failed to join room" });
