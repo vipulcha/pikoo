@@ -174,6 +174,62 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   }, [room?.userTodos, uniqueId, pendingActiveFromWelcome, actions]);
 
+  // Update browser tab title with timer countdown
+  useEffect(() => {
+    const originalTitle = "Pikoo - Shared Team Timer";
+    
+    // If no room/timer yet, don't update title
+    if (!room?.timer) {
+      return;
+    }
+    
+    const { timer } = room;
+    
+    const formatTime = (seconds: number) => {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+    
+    const getPhaseLabel = (phase: Phase) => {
+      switch (phase) {
+        case "focus": return "Focus";
+        case "break": return "Break";
+        case "long_break": return "Break";
+        default: return "";
+      }
+    };
+    
+    const updateTitle = () => {
+      let remainingSec: number;
+      
+      if (timer.running && timer.phaseEndsAt) {
+        remainingSec = Math.max(0, Math.ceil((timer.phaseEndsAt - Date.now()) / 1000));
+      } else {
+        remainingSec = timer.remainingSecWhenPaused;
+      }
+      
+      const timeStr = formatTime(remainingSec);
+      const phaseLabel = getPhaseLabel(timer.phase);
+      document.title = `${timeStr} ${phaseLabel} - Pikoo`;
+    };
+    
+    // Update immediately
+    updateTitle();
+    
+    // If running, set up interval to update every second
+    let intervalId: NodeJS.Timeout | null = null;
+    if (timer.running) {
+      intervalId = setInterval(updateTitle, 1000);
+    }
+    
+    // Cleanup: clear interval and restore original title
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      document.title = originalTitle;
+    };
+  }, [room?.timer?.running, room?.timer?.phase, room?.timer?.phaseEndsAt, room?.timer?.remainingSecWhenPaused]);
+
   // Show name prompt only for errors (name taken) - otherwise WelcomePrompt handles it
   if (showNamePrompt && nameError) {
     return (
