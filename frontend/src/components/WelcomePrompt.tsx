@@ -5,32 +5,38 @@ import { useState, useRef, useEffect } from "react";
 interface WelcomePromptProps {
   isVisible: boolean;
   onAddTodo: (text: string) => void;
-  onDismiss: () => void;
-  userName: string;
+  onDismiss: (name: string) => void;
+  initialName?: string;
 }
 
 export function WelcomePrompt({
   isVisible,
   onAddTodo,
   onDismiss,
-  userName,
+  initialName = "",
 }: WelcomePromptProps) {
+  const [name, setName] = useState(initialName);
   const [todoText, setTodoText] = useState("");
   const [isAnimating, setIsAnimating] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const todoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isVisible) {
       setIsAnimating(true);
-      // Focus input after animation
-      setTimeout(() => inputRef.current?.focus(), 300);
+      // Focus name input after animation
+      setTimeout(() => nameInputRef.current?.focus(), 300);
     }
   }, [isVisible]);
+
+  useEffect(() => {
+    setName(initialName);
+  }, [initialName]);
 
   if (!isVisible) return null;
 
   const handleAddTodo = () => {
-    if (todoText.trim()) {
+    if (name.trim() && todoText.trim()) {
       onAddTodo(todoText.trim());
       setTodoText("");
       handleClose();
@@ -38,15 +44,24 @@ export function WelcomePrompt({
   };
 
   const handleClose = () => {
+    if (!name.trim()) return; // Name is required
     setIsAnimating(false);
-    setTimeout(onDismiss, 200);
+    setTimeout(() => onDismiss(name.trim()), 200);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && todoText.trim()) {
+  const handleNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && name.trim()) {
+      todoInputRef.current?.focus();
+    }
+  };
+
+  const handleTodoKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && todoText.trim() && name.trim()) {
       handleAddTodo();
     }
   };
+
+  const canProceed = name.trim().length > 0;
 
   return (
     <div
@@ -56,7 +71,7 @@ export function WelcomePrompt({
         ${isAnimating ? "opacity-100" : "opacity-0"}
       `}
     >
-      {/* Backdrop - no click to close, must use Skip button */}
+      {/* Backdrop - no click to close */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
       {/* Modal */}
@@ -74,30 +89,66 @@ export function WelcomePrompt({
             <span className="text-2xl">👋</span>
           </div>
           <h3 className="text-xl font-semibold text-white mb-2">
-            Welcome, {userName}!
+            Welcome to Pikoo!
           </h3>
           <p className="text-sm text-white/50 leading-relaxed">
-            Studies show that writing down your goal increases your chances of achieving it by <span className="text-emerald-400 font-medium">42%</span>.
+            Let&apos;s get you set up for a productive session.
           </p>
+        </div>
+
+        {/* Name input */}
+        <div className="mb-4">
+          <label className="block text-sm text-white/60 mb-2">
+            What should we call you?
+          </label>
+          <input
+            ref={nameInputRef}
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={handleNameKeyDown}
+            placeholder="Enter your name"
+            maxLength={30}
+            className="
+              w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl
+              text-white placeholder-white/30
+              focus:outline-none focus:border-blue-500/50 focus:bg-white/10
+              transition-all duration-200
+            "
+          />
+        </div>
+
+        {/* Divider with stat */}
+        <div className="relative my-5">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-white/10"></div>
+          </div>
+          <div className="relative flex justify-center">
+            <span className="px-3 bg-black/80 text-xs text-white/40">
+              Writing goals increases success by <span className="text-emerald-400">42%</span>
+            </span>
+          </div>
         </div>
 
         {/* Todo input */}
         <div className="mb-4">
           <label className="block text-sm text-white/60 mb-2">
-            What&apos;s your main task for today?
+            What&apos;s your main task for today? <span className="text-white/30">(optional)</span>
           </label>
           <input
-            ref={inputRef}
+            ref={todoInputRef}
             type="text"
             value={todoText}
             onChange={(e) => setTodoText(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onKeyDown={handleTodoKeyDown}
             placeholder="e.g., Finish the project proposal"
             maxLength={200}
+            disabled={!canProceed}
             className="
               w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl
               text-white placeholder-white/30
               focus:outline-none focus:border-emerald-500/50 focus:bg-white/10
+              disabled:opacity-50 disabled:cursor-not-allowed
               transition-all duration-200
             "
           />
@@ -109,9 +160,11 @@ export function WelcomePrompt({
             <button
               key={suggestion}
               onClick={() => setTodoText(suggestion)}
+              disabled={!canProceed}
               className="
                 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full
                 text-xs text-white/50 hover:text-white/80 hover:bg-white/10
+                disabled:opacity-30 disabled:cursor-not-allowed
                 transition-all duration-200
               "
             >
@@ -124,18 +177,20 @@ export function WelcomePrompt({
         <div className="flex gap-3">
           <button
             onClick={handleClose}
+            disabled={!canProceed}
             className="
               flex-1 py-3 px-4 rounded-xl
               bg-white/5 border border-white/10 text-white/60
               hover:bg-white/10 hover:text-white/80
+              disabled:opacity-40 disabled:cursor-not-allowed
               transition-all duration-200 text-sm font-medium
             "
           >
-            Skip for now
+            Skip goal for now
           </button>
           <button
             onClick={handleAddTodo}
-            disabled={!todoText.trim()}
+            disabled={!canProceed || !todoText.trim()}
             className="
               flex-1 py-3 px-4 rounded-xl
               bg-emerald-500/20 border border-emerald-500/30 text-emerald-300
@@ -150,10 +205,9 @@ export function WelcomePrompt({
 
         {/* Tip */}
         <p className="mt-4 text-xs text-white/30 text-center">
-          💡 You can always add more tasks from the sidebar
+          💡 Your name will be visible to others in the room
         </p>
       </div>
     </div>
   );
 }
-

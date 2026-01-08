@@ -101,6 +101,12 @@ export function getSavedName(): string | null {
   return localStorage.getItem(STORAGE_KEY);
 }
 
+// Helper to save name
+export function saveName(name: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORAGE_KEY, name);
+}
+
 // Helper to clear saved name (used when name is taken)
 export function clearSavedName(): void {
   if (typeof window === "undefined") return;

@@ -6,7 +6,7 @@ import { Timer } from "@/components/Timer";
 import { Controls } from "@/components/Controls";
 import { ParticipantCount } from "@/components/ParticipantCount";
 import { ShareButton } from "@/components/ShareButton";
-import { NamePrompt, getSavedName, getUserId, clearSavedName } from "@/components/NamePrompt";
+import { NamePrompt, getSavedName, saveName, getUserId, clearSavedName } from "@/components/NamePrompt";
 import { ChatPanel } from "@/components/ChatPanel";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { TodoList } from "@/components/TodoList";
@@ -66,9 +66,8 @@ export default function RoomPage({ params }: RoomPageProps) {
     const savedName = getSavedName();
     if (savedName) {
       setUserName(savedName);
-    } else {
-      setShowNamePrompt(true);
     }
+    // We'll show welcome prompt later, not name prompt
   }, []);
 
   // Pick random planet on client only to avoid hydration mismatch
@@ -133,21 +132,32 @@ export default function RoomPage({ params }: RoomPageProps) {
     prevPhaseRef.current = currentPhase;
   }, [room?.timer?.phase]);
 
-  // Show welcome prompt for first-time users with no todos
+  // Show welcome prompt for new users (no name) immediately, or users with no todos after room loads
   useEffect(() => {
-    if (!room || hasShownWelcome) return;
+    if (hasShownWelcome || !uniqueId) return;
     
-    const myTodos = room.userTodos?.[uniqueId];
-    const hasTodos = myTodos && myTodos.todos.length > 0;
+    const savedName = getSavedName();
     
-    // If user has no todos, show welcome prompt after a short delay
-    if (!hasTodos && uniqueId) {
-      const timer = setTimeout(() => {
-        setShowWelcomePrompt(true);
-        setHasShownWelcome(true);
-      }, 1000); // Wait 1 second after room loads
+    // If no saved name, show welcome prompt immediately
+    if (!savedName) {
+      setShowWelcomePrompt(true);
+      setHasShownWelcome(true);
+      return;
+    }
+    
+    // If we have a name but no todos, show after room loads
+    if (room) {
+      const myTodos = room.userTodos?.[uniqueId];
+      const hasTodos = myTodos && myTodos.todos.length > 0;
       
-      return () => clearTimeout(timer);
+      if (!hasTodos) {
+        const timer = setTimeout(() => {
+          setShowWelcomePrompt(true);
+          setHasShownWelcome(true);
+        }, 500);
+        
+        return () => clearTimeout(timer);
+      }
     }
   }, [room, uniqueId, hasShownWelcome]);
 
@@ -164,8 +174,8 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   }, [room?.userTodos, uniqueId, pendingActiveFromWelcome, actions]);
 
-  // Show name prompt if needed
-  if (showNamePrompt || !userName) {
+  // Show name prompt only for errors (name taken) - otherwise WelcomePrompt handles it
+  if (showNamePrompt && nameError) {
     return (
       <div className="min-h-screen bg-black">
         {/* Stars background */}
@@ -189,15 +199,15 @@ export default function RoomPage({ params }: RoomPageProps) {
         <NamePrompt
           isOpen={true}
           onSubmit={handleNameSubmit}
-          title="Join Room"
-          subtitle="Enter your name to join this focus session"
+          title="Choose a different name"
+          subtitle="That name is already taken in this room"
           errorMessage={nameError}
         />
       </div>
     );
   }
 
-  // Loading state (connecting to room)
+  // Loading state (connecting to room) - but show welcome prompt if no name
   if (!room) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -223,6 +233,23 @@ export default function RoomPage({ params }: RoomPageProps) {
           <div className="w-12 h-12 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
           <p className="text-white/60">Connecting to room...</p>
         </div>
+        
+        {/* Welcome Prompt for new users (shown during loading) */}
+        <WelcomePrompt
+          isVisible={showWelcomePrompt}
+          initialName={userName || ""}
+          onAddTodo={(text) => {
+            // Can't add todo yet since room isn't loaded, but save it for later
+            setPendingActiveFromWelcome(true);
+            // We'll add the todo after the name is set and room connects
+            setTimeout(() => actions.addTodo(text), 500);
+          }}
+          onDismiss={(name) => {
+            saveName(name);
+            setUserName(name);
+            setShowWelcomePrompt(false);
+          }}
+        />
       </div>
     );
   }
@@ -483,12 +510,17 @@ export default function RoomPage({ params }: RoomPageProps) {
       {/* Welcome Prompt for first-time users */}
       <WelcomePrompt
         isVisible={showWelcomePrompt}
-        userName={userName || "there"}
+        initialName={userName || ""}
         onAddTodo={(text) => {
           actions.addTodo(text);
           setPendingActiveFromWelcome(true); // Will auto-set as active once added
         }}
-        onDismiss={() => setShowWelcomePrompt(false)}
+        onDismiss={(name) => {
+          // Save the name when prompt is dismissed
+          saveName(name);
+          setUserName(name);
+          setShowWelcomePrompt(false);
+        }}
       />
     </div>
   );
