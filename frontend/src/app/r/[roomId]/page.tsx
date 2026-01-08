@@ -8,6 +8,7 @@ import { ParticipantCount } from "@/components/ParticipantCount";
 import { ShareButton } from "@/components/ShareButton";
 import { NamePrompt, getSavedName } from "@/components/NamePrompt";
 import { ChatPanel } from "@/components/ChatPanel";
+import { AudioPlayer } from "@/components/AudioPlayer";
 import { RoomSettings } from "@/lib/types";
 import Link from "next/link";
 
@@ -206,6 +207,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         <div className="flex items-center gap-3">
           <ParticipantCount participants={participants} isConnected={isConnected} />
           <ShareButton roomId={roomId} />
+          <AudioPlayer />
           {/* Settings button */}
           <button
             onClick={() => setShowSettings(!showSettings)}
