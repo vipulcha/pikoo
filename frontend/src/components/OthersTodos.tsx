@@ -13,20 +13,16 @@ export function OthersTodos({ userTodos, currentUserId, participants }: OthersTo
   const [isOpen, setIsOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
-  // Get other users' public todos (filter out current user and private lists)
-  const otherUsers = Object.values(userTodos).filter(
-    (ut) => ut.userId !== currentUserId && ut.isPublic && ut.todos.length > 0
-  );
-
   // Get currently active users (those who are in the room right now)
   const activeUserIds = new Set(participants.map(p => p.uniqueId));
+
+  // Get other users' public todos - only from users currently in the room
+  const otherUsers = Object.values(userTodos).filter(
+    (ut) => ut.userId !== currentUserId && ut.isPublic && ut.todos.length > 0 && activeUserIds.has(ut.userId)
+  );
   
-  // Sort: active users first, then by name
+  // Sort by name
   const sortedOtherUsers = [...otherUsers].sort((a, b) => {
-    const aActive = activeUserIds.has(a.userId);
-    const bActive = activeUserIds.has(b.userId);
-    if (aActive && !bActive) return -1;
-    if (!aActive && bActive) return 1;
     return a.userName.localeCompare(b.userName);
   });
 
@@ -80,7 +76,6 @@ export function OthersTodos({ userTodos, currentUserId, participants }: OthersTo
             <div className="flex overflow-x-auto border-b border-white/10 p-1 gap-1 scrollbar-none">
               {sortedOtherUsers.map((user) => {
                 const isSelected = selectedUser?.userId === user.userId;
-                const isActiveInRoom = activeUserIds.has(user.userId);
                 
                 return (
                   <button
@@ -95,9 +90,7 @@ export function OthersTodos({ userTodos, currentUserId, participants }: OthersTo
                       }
                     `}
                   >
-                    {isActiveInRoom && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    )}
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                     <span className="truncate max-w-[100px]">{user.userName}</span>
                     <span className="text-xs opacity-60">({user.todos.length})</span>
                   </button>
