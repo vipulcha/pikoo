@@ -6,6 +6,17 @@ import { createRoom } from "@/lib/api";
 import { RoomSettings, DEFAULT_SETTINGS } from "@/lib/types";
 import { NamePrompt, getSavedName } from "@/components/NamePrompt";
 
+// Pre-generate deterministic star positions to avoid hydration mismatch
+const STARS = [...Array(50)].map((_, i) => ({
+  id: i,
+  width: 1 + (i % 3),
+  left: (i * 17) % 100,
+  top: (i * 23) % 100,
+  opacity: 0.3 + ((i % 7) / 10),
+  delay: (i % 4),
+  duration: 2 + (i % 3),
+}));
+
 export default function Home() {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
@@ -49,18 +60,18 @@ export default function Home() {
         
         {/* Star field */}
         <div className="absolute inset-0">
-          {[...Array(50)].map((_, i) => (
+          {STARS.map((star) => (
             <div
-              key={i}
+              key={star.id}
               className="absolute rounded-full bg-white animate-twinkle"
               style={{
-                width: `${Math.random() * 2 + 1}px`,
-                height: `${Math.random() * 2 + 1}px`,
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                opacity: Math.random() * 0.7 + 0.3,
-                animationDelay: `${Math.random() * 3}s`,
-                animationDuration: `${Math.random() * 2 + 2}s`,
+                width: `${star.width}px`,
+                height: `${star.width}px`,
+                left: `${star.left}%`,
+                top: `${star.top}%`,
+                opacity: star.opacity,
+                animationDelay: `${star.delay}s`,
+                animationDuration: `${star.duration}s`,
               }}
             />
           ))}

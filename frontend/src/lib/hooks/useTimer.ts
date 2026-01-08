@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Socket } from "socket.io-client";
-import { RoomState, RoomSettings, TimerState, Participant, ChatMessage, SOCKET_EVENTS } from "../types";
+import { RoomState, RoomSettings, TimerState, Participant, ChatMessage, UserTodos, SOCKET_EVENTS } from "../types";
 import { connectSocket, disconnectSocket, getSocket } from "../socket";
 
 interface UseTimerReturn {
@@ -18,6 +18,12 @@ interface UseTimerReturn {
     skip: () => void;
     updateSettings: (settings: Partial<RoomSettings>) => void;
     sendMessage: (text: string) => void;
+    // Todo actions
+    addTodo: (text: string) => void;
+    updateTodo: (todoId: string, updates: { text?: string; completed?: boolean }) => void;
+    deleteTodo: (todoId: string) => void;
+    setActiveTodo: (todoId: string | null) => void;
+    setTodoVisibility: (isPublic: boolean) => void;
   };
 }
 
@@ -96,6 +102,13 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       });
     };
 
+    const handleTodosUpdate = ({ userTodos }: { userTodos: Record<string, UserTodos> }) => {
+      setRoom((prev) => {
+        if (!prev) return prev;
+        return { ...prev, userTodos };
+      });
+    };
+
     const handleError = ({ message, code }: { message: string; code?: string }) => {
       if (code === "NAME_TAKEN") {
         setNameTakenError(true);
@@ -112,6 +125,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     socket.on(SOCKET_EVENTS.TIMER_UPDATE, handleTimerUpdate);
     socket.on(SOCKET_EVENTS.PARTICIPANTS_UPDATE, handleParticipantsUpdate);
     socket.on(SOCKET_EVENTS.NEW_MESSAGE, handleNewMessage);
+    socket.on(SOCKET_EVENTS.TODOS_UPDATE, handleTodosUpdate);
     socket.on(SOCKET_EVENTS.ERROR, handleError);
 
     // If already connected, join room
@@ -126,6 +140,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       socket.off(SOCKET_EVENTS.TIMER_UPDATE, handleTimerUpdate);
       socket.off(SOCKET_EVENTS.PARTICIPANTS_UPDATE, handleParticipantsUpdate);
       socket.off(SOCKET_EVENTS.NEW_MESSAGE, handleNewMessage);
+      socket.off(SOCKET_EVENTS.TODOS_UPDATE, handleTodosUpdate);
       socket.off(SOCKET_EVENTS.ERROR, handleError);
       disconnectSocket();
     };
@@ -141,6 +156,17 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       socketRef.current?.emit(SOCKET_EVENTS.UPDATE_SETTINGS, settings),
     sendMessage: (text: string) =>
       socketRef.current?.emit(SOCKET_EVENTS.SEND_MESSAGE, { text }),
+    // Todo actions
+    addTodo: (text: string) =>
+      socketRef.current?.emit(SOCKET_EVENTS.TODO_ADD, { text }),
+    updateTodo: (todoId: string, updates: { text?: string; completed?: boolean }) =>
+      socketRef.current?.emit(SOCKET_EVENTS.TODO_UPDATE, { todoId, ...updates }),
+    deleteTodo: (todoId: string) =>
+      socketRef.current?.emit(SOCKET_EVENTS.TODO_DELETE, { todoId }),
+    setActiveTodo: (todoId: string | null) =>
+      socketRef.current?.emit(SOCKET_EVENTS.TODO_SET_ACTIVE, { todoId }),
+    setTodoVisibility: (isPublic: boolean) =>
+      socketRef.current?.emit(SOCKET_EVENTS.TODO_SET_VISIBILITY, { isPublic }),
   };
 
   return { room, remaining, isConnected, error, nameTakenError, actions };

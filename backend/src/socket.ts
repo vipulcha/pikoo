@@ -19,8 +19,14 @@ import {
   removeParticipant,
   updateSettings,
   addMessage,
+  ensureUserTodos,
+  addTodo,
+  updateTodo,
+  deleteTodo,
+  setActiveTodo,
+  setTodoVisibility,
 } from "./store.js";
-import { ChatMessage } from "./types.js";
+import { ChatMessage, UserTodos } from "./types.js";
 
 interface JoinRoomPayload {
   roomId: string;
@@ -32,12 +38,35 @@ interface SendMessagePayload {
   text: string;
 }
 
+interface TodoAddPayload {
+  text: string;
+}
+
+interface TodoUpdatePayload {
+  todoId: string;
+  text?: string;
+  completed?: boolean;
+}
+
+interface TodoDeletePayload {
+  todoId: string;
+}
+
+interface TodoSetActivePayload {
+  todoId: string | null;
+}
+
+interface TodoSetVisibilityPayload {
+  isPublic: boolean;
+}
+
 export function setupSocketHandlers(io: Server): void {
   io.on("connection", (socket: Socket) => {
     console.log(`🔌 Client connected: ${socket.id}`);
     
     let currentRoomId: string | null = null;
     let currentUserName: string = "Anonymous";
+    let currentUniqueId: string = "";
 
     // ========================================
     // Join Room
@@ -70,6 +99,10 @@ export function setupSocketHandlers(io: Server): void {
         socket.join(roomId);
         currentRoomId = roomId;
         currentUserName = name || "Anonymous";
+        currentUniqueId = uniqueId;
+
+        // Ensure user has a todo list entry
+        await ensureUserTodos(roomId, uniqueId, currentUserName);
 
         room = await getRoom(roomId);
 
@@ -230,6 +263,88 @@ export function setupSocketHandlers(io: Server): void {
         }
       } catch (err) {
         console.error("Error sending message:", err);
+      }
+    });
+
+    // ========================================
+    // Todo Operations
+    // ========================================
+    socket.on(SOCKET_EVENTS.TODO_ADD, async (payload: TodoAddPayload) => {
+      if (!currentRoomId || !currentUniqueId) return;
+
+      try {
+        const { text } = payload;
+        if (!text || text.trim().length === 0) return;
+        if (text.length > 200) return; // Max 200 chars per todo
+
+        const userTodos = await addTodo(currentRoomId, currentUniqueId, currentUserName, text);
+        if (userTodos) {
+          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
+        }
+      } catch (err) {
+        console.error("Error adding todo:", err);
+      }
+    });
+
+    socket.on(SOCKET_EVENTS.TODO_UPDATE, async (payload: TodoUpdatePayload) => {
+      if (!currentRoomId || !currentUniqueId) return;
+
+      try {
+        const { todoId, text, completed } = payload;
+        if (!todoId) return;
+
+        const userTodos = await updateTodo(currentRoomId, currentUniqueId, todoId, { text, completed });
+        if (userTodos) {
+          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
+        }
+      } catch (err) {
+        console.error("Error updating todo:", err);
+      }
+    });
+
+    socket.on(SOCKET_EVENTS.TODO_DELETE, async (payload: TodoDeletePayload) => {
+      if (!currentRoomId || !currentUniqueId) return;
+
+      try {
+        const { todoId } = payload;
+        if (!todoId) return;
+
+        const userTodos = await deleteTodo(currentRoomId, currentUniqueId, todoId);
+        if (userTodos) {
+          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
+        }
+      } catch (err) {
+        console.error("Error deleting todo:", err);
+      }
+    });
+
+    socket.on(SOCKET_EVENTS.TODO_SET_ACTIVE, async (payload: TodoSetActivePayload) => {
+      if (!currentRoomId || !currentUniqueId) return;
+
+      try {
+        const { todoId } = payload;
+
+        const userTodos = await setActiveTodo(currentRoomId, currentUniqueId, todoId);
+        if (userTodos) {
+          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
+        }
+      } catch (err) {
+        console.error("Error setting active todo:", err);
+      }
+    });
+
+    socket.on(SOCKET_EVENTS.TODO_SET_VISIBILITY, async (payload: TodoSetVisibilityPayload) => {
+      if (!currentRoomId || !currentUniqueId) return;
+
+      try {
+        const { isPublic } = payload;
+
+        const userTodos = await setTodoVisibility(currentRoomId, currentUniqueId, isPublic, currentUserName);
+        if (userTodos) {
+          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
+        }
+      } catch (err) {
+        console.error("Error setting todo visibility:", err);
       }
     });
 

@@ -35,6 +35,21 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+export interface TodoItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  createdAt: number;
+}
+
+export interface UserTodos {
+  userId: string;
+  userName: string;
+  todos: TodoItem[];
+  activeTodoId: string | null;
+  isPublic: boolean;
+}
+
 export interface RoomState {
   id: string;
   settings: RoomSettings;
@@ -43,6 +58,7 @@ export interface RoomState {
   createdAt: number;
   participants: Participant[];
   messages: ChatMessage[];
+  userTodos: Record<string, UserTodos>;
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {
@@ -62,10 +78,19 @@ export const SOCKET_EVENTS = {
   TIMER_SKIP: "timer_skip",
   UPDATE_SETTINGS: "update_settings",
   SEND_MESSAGE: "send_message",
+  
+  // Todo events
+  TODO_ADD: "todo_add",
+  TODO_UPDATE: "todo_update",
+  TODO_DELETE: "todo_delete",
+  TODO_SET_ACTIVE: "todo_set_active",
+  TODO_SET_VISIBILITY: "todo_set_visibility",
+  
   ROOM_STATE: "room_state",
   TIMER_UPDATE: "timer_update",
   PARTICIPANTS_UPDATE: "participants_update",
   NEW_MESSAGE: "new_message",
+  TODOS_UPDATE: "todos_update",
   ERROR: "error",
 } as const;
 

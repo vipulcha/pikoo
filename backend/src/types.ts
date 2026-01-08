@@ -35,6 +35,21 @@ export interface ChatMessage {
   timestamp: number;                 // epoch ms
 }
 
+export interface TodoItem {
+  id: string;                        // unique todo id
+  text: string;                      // todo content
+  completed: boolean;                // is it done?
+  createdAt: number;                 // when created
+}
+
+export interface UserTodos {
+  userId: string;                  // unique user id (uniqueId from participant)
+  userName: string;                  // display name
+  todos: TodoItem[];                 // their todo list
+  activeTodoId: string | null;       // which todo they're working on
+  isPublic: boolean;                 // share with others?
+}
+
 export interface RoomState {
   id: string;
   settings: RoomSettings;
@@ -43,6 +58,7 @@ export interface RoomState {
   createdAt: number;
   participants: Participant[];       // participants with names
   messages: ChatMessage[];           // chat messages (max 100)
+  userTodos: Record<string, UserTodos>; // todos by uniqueId
 }
 
 // Default settings
@@ -88,12 +104,20 @@ export const SOCKET_EVENTS = {
   TIMER_SKIP: "timer_skip",
   UPDATE_SETTINGS: "update_settings",
   SEND_MESSAGE: "send_message",
+  
+  // Todo events (Client -> Server)
+  TODO_ADD: "todo_add",
+  TODO_UPDATE: "todo_update",
+  TODO_DELETE: "todo_delete",
+  TODO_SET_ACTIVE: "todo_set_active",
+  TODO_SET_VISIBILITY: "todo_set_visibility",
 
   // Server -> Client
   ROOM_STATE: "room_state",
   TIMER_UPDATE: "timer_update",
   PARTICIPANTS_UPDATE: "participants_update",
   NEW_MESSAGE: "new_message",
+  TODOS_UPDATE: "todos_update",
   ERROR: "error",
 } as const;
 

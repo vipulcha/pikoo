@@ -9,6 +9,8 @@ import {
   TimerState,
   Participant,
   ChatMessage,
+  TodoItem,
+  UserTodos,
   DEFAULT_SETTINGS,
   getInitialTimerState,
   getPhaseDuration,
@@ -66,6 +68,7 @@ export async function createRoom(
     createdAt: Date.now(),
     participants: [],
     messages: [],
+    userTodos: {},
   };
 
   await saveRoom(room);
@@ -283,5 +286,177 @@ export async function addMessage(
 
   await saveRoom(room);
   return message;
+}
+
+// ============================================
+// Todo Operations
+// ============================================
+
+const MAX_TODOS_PER_USER = 50;
+
+export async function ensureUserTodos(
+  roomId: string,
+  userId: string,
+  userName: string
+): Promise<UserTodos | null> {
+  const room = await getRoom(roomId);
+  if (!room) return null;
+
+  // Initialize userTodos if needed (for older rooms)
+  if (!room.userTodos) {
+    room.userTodos = {};
+  }
+
+  // Create user's todo list if it doesn't exist
+  if (!room.userTodos[userId]) {
+    room.userTodos[userId] = {
+      userId,
+      userName,
+      todos: [],
+      activeTodoId: null,
+      isPublic: true, // Default to public
+    };
+    await saveRoom(room);
+  } else {
+    // Update userName in case it changed
+    room.userTodos[userId].userName = userName;
+    await saveRoom(room);
+  }
+
+  return room.userTodos[userId];
+}
+
+export async function addTodo(
+  roomId: string,
+  userId: string,
+  userName: string,
+  text: string
+): Promise<Record<string, UserTodos> | null> {
+  const room = await getRoom(roomId);
+  if (!room) return null;
+
+  // Initialize if needed
+  if (!room.userTodos) {
+    room.userTodos = {};
+  }
+  if (!room.userTodos[userId]) {
+    room.userTodos[userId] = {
+      userId,
+      userName,
+      todos: [],
+      activeTodoId: null,
+      isPublic: true,
+    };
+  }
+
+  const userTodos = room.userTodos[userId];
+  
+  // Check limit
+  if (userTodos.todos.length >= MAX_TODOS_PER_USER) {
+    return null;
+  }
+
+  const newTodo: TodoItem = {
+    id: `${userId}-${Date.now()}`,
+    text: text.trim(),
+    completed: false,
+    createdAt: Date.now(),
+  };
+
+  userTodos.todos.push(newTodo);
+  userTodos.userName = userName; // Keep name updated
+  
+  await saveRoom(room);
+  return room.userTodos;
+}
+
+export async function updateTodo(
+  roomId: string,
+  userId: string,
+  todoId: string,
+  updates: { text?: string; completed?: boolean }
+): Promise<Record<string, UserTodos> | null> {
+  const room = await getRoom(roomId);
+  if (!room || !room.userTodos?.[userId]) return null;
+
+  const userTodos = room.userTodos[userId];
+  const todo = userTodos.todos.find(t => t.id === todoId);
+  
+  if (!todo) return null;
+
+  if (updates.text !== undefined) {
+    todo.text = updates.text.trim();
+  }
+  if (updates.completed !== undefined) {
+    todo.completed = updates.completed;
+  }
+
+  await saveRoom(room);
+  return room.userTodos;
+}
+
+export async function deleteTodo(
+  roomId: string,
+  userId: string,
+  todoId: string
+): Promise<Record<string, UserTodos> | null> {
+  const room = await getRoom(roomId);
+  if (!room || !room.userTodos?.[userId]) return null;
+
+  const userTodos = room.userTodos[userId];
+  userTodos.todos = userTodos.todos.filter(t => t.id !== todoId);
+  
+  // Clear active if it was deleted
+  if (userTodos.activeTodoId === todoId) {
+    userTodos.activeTodoId = null;
+  }
+
+  await saveRoom(room);
+  return room.userTodos;
+}
+
+export async function setActiveTodo(
+  roomId: string,
+  userId: string,
+  todoId: string | null
+): Promise<Record<string, UserTodos> | null> {
+  const room = await getRoom(roomId);
+  if (!room || !room.userTodos?.[userId]) return null;
+
+  room.userTodos[userId].activeTodoId = todoId;
+  
+  await saveRoom(room);
+  return room.userTodos;
+}
+
+export async function setTodoVisibility(
+  roomId: string,
+  userId: string,
+  isPublic: boolean,
+  userName?: string
+): Promise<Record<string, UserTodos> | null> {
+  const room = await getRoom(roomId);
+  if (!room) return null;
+
+  // Initialize userTodos if needed
+  if (!room.userTodos) {
+    room.userTodos = {};
+  }
+  
+  // Initialize user's todos if they don't exist
+  if (!room.userTodos[userId]) {
+    room.userTodos[userId] = {
+      userId,
+      userName: userName || "Anonymous",
+      todos: [],
+      activeTodoId: null,
+      isPublic: isPublic,
+    };
+  } else {
+    room.userTodos[userId].isPublic = isPublic;
+  }
+  
+  await saveRoom(room);
+  return room.userTodos;
 }
 
