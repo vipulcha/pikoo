@@ -211,6 +211,13 @@ export async function updateSettings(
   if (!room) return null;
 
   room.settings = { ...room.settings, ...settings };
+  
+  // If timer is paused and we changed a duration setting, update the timer
+  if (!room.timer.running) {
+    const newDuration = getPhaseDuration(room.timer.phase, room.settings);
+    room.timer.remainingSecWhenPaused = newDuration;
+  }
+  
   await saveRoom(room);
   return room.settings;
 }

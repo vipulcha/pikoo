@@ -172,7 +172,10 @@ export function setupSocketHandlers(io: Server): void {
         const settings = await updateSettings(currentRoomId, payload);
         if (settings) {
           const updatedRoom = await getRoom(currentRoomId);
+          // Send full room state so timer gets updated too
           io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
+          // Also send timer update explicitly
+          io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer: updatedRoom?.timer });
         }
       } catch (err) {
         console.error("Error updating settings:", err);
