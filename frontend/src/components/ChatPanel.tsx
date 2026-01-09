@@ -61,7 +61,7 @@ export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, hasUnread
             onClick={onToggle}
             className="relative px-4 py-2.5 rounded-xl shadow-2xl transition-all duration-300 bg-white/10 backdrop-blur-sm border border-white/10 text-white/80 hover:bg-white/20 text-sm font-medium"
           >
-            Talk to Room Mates!
+            Talk to Study Mates!
             
             {/* Unread indicator */}
             {hasUnread && (
