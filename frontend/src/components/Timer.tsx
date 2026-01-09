@@ -47,10 +47,7 @@ export function Timer({ remaining, phase, running, cycleCount }: TimerProps) {
         {/* Timer digits */}
         <div className="relative flex items-baseline font-mono drop-shadow-[0_0_30px_rgba(0,0,0,0.8)]">
           <span 
-            className={`
-              text-[12rem] sm:text-[16rem] font-extralight tracking-tighter leading-none
-              ${running ? "animate-pulse" : ""}
-            `}
+            className="text-[12rem] sm:text-[16rem] font-extralight tracking-tighter leading-none"
             style={{ fontFeatureSettings: '"tnum"', textShadow: '0 0 60px rgba(0,0,0,0.5)' }}
           >
             {minutes}
@@ -58,7 +55,7 @@ export function Timer({ remaining, phase, running, cycleCount }: TimerProps) {
           <span 
             className={`
               text-[8rem] sm:text-[10rem] font-extralight mx-2 sm:mx-4
-              ${running ? "animate-blink" : "opacity-60"}
+              ${running ? "opacity-100" : "opacity-60"}
             `}
           >
             :
