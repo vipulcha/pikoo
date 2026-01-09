@@ -17,6 +17,7 @@ import {
   skipPhase,
   addParticipant,
   removeParticipant,
+  updateParticipantName,
   updateSettings,
   addMessage,
   ensureUserTodos,
@@ -58,6 +59,10 @@ interface TodoSetActivePayload {
 
 interface TodoSetVisibilityPayload {
   isPublic: boolean;
+}
+
+interface UpdateNamePayload {
+  name: string;
 }
 
 export function setupSocketHandlers(io: Server): void {
@@ -116,6 +121,54 @@ export function setupSocketHandlers(io: Server): void {
       } catch (err) {
         console.error("Error joining room:", err);
         socket.emit(SOCKET_EVENTS.ERROR, { message: "Failed to join room" });
+      }
+    });
+
+    // ========================================
+    // Update Name (without reconnecting)
+    // ========================================
+    socket.on(SOCKET_EVENTS.UPDATE_NAME, async (payload: UpdateNamePayload) => {
+      if (!currentRoomId || !currentUniqueId) return;
+      
+      const { name } = payload;
+      if (!name || name.trim().length === 0) return;
+      
+      try {
+        const result = await updateParticipantName(
+          currentRoomId,
+          socket.id,
+          currentUniqueId,
+          name.trim()
+        );
+        
+        if (!result.success) {
+          socket.emit(SOCKET_EVENTS.ERROR, { 
+            message: result.error || "Failed to update name",
+            code: "NAME_TAKEN"
+          });
+          return;
+        }
+        
+        // Update local state
+        currentUserName = name.trim();
+        
+        // Broadcast updated participants to all in room
+        io.to(currentRoomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { 
+          participants: result.participants 
+        });
+        
+        // Also broadcast updated todos (since userName changed there too)
+        const room = await getRoom(currentRoomId);
+        if (room) {
+          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { 
+            userTodos: room.userTodos 
+          });
+        }
+        
+        console.log(`📝 ${socket.id} changed name to "${name.trim()}" in room ${currentRoomId}`);
+      } catch (err) {
+        console.error("Error updating name:", err);
+        socket.emit(SOCKET_EVENTS.ERROR, { message: "Failed to update name" });
       }
     });
 

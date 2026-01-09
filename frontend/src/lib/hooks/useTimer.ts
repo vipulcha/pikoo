@@ -36,6 +36,8 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
   const [nameTakenError, setNameTakenError] = useState(false);
   const [newMessageReceived, setNewMessageReceived] = useState(0);
   const socketRef = useRef<Socket | null>(null);
+  const userNameRef = useRef(userName);
+  const hasJoinedRef = useRef(false);
 
   // Calculate remaining time from timer state
   const calculateRemaining = useCallback((timer: TimerState): number => {
@@ -67,7 +69,9 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       setIsConnected(true);
       setError(null);
       setNameTakenError(false);
-      socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name: userName, uniqueId });
+      // Use ref to get current userName (avoids dependency on userName)
+      socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name: userNameRef.current, uniqueId });
+      hasJoinedRef.current = true;
     };
 
     const handleDisconnect = () => {
@@ -147,8 +151,20 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       socket.off(SOCKET_EVENTS.TODOS_UPDATE, handleTodosUpdate);
       socket.off(SOCKET_EVENTS.ERROR, handleError);
       disconnectSocket();
+      hasJoinedRef.current = false;
     };
-  }, [roomId, userName, uniqueId, calculateRemaining]);
+  }, [roomId, uniqueId, calculateRemaining]); // Note: userName removed - we use UPDATE_NAME instead
+
+  // Send UPDATE_NAME when userName changes (after initial join)
+  useEffect(() => {
+    // Update the ref
+    userNameRef.current = userName;
+    
+    // Only send update if we've already joined the room
+    if (hasJoinedRef.current && socketRef.current && userName) {
+      socketRef.current.emit(SOCKET_EVENTS.UPDATE_NAME, { name: userName });
+    }
+  }, [userName]);
 
   // Helper to update user's todos optimistically
   const updateMyTodosOptimistically = useCallback((
@@ -158,7 +174,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       if (!prev) return prev;
       const currentUserTodos = prev.userTodos[uniqueId] || {
         odId: uniqueId,
-        userName: userName,
+        userName: userNameRef.current, // Use ref to get current userName
         todos: [],
         activeTodoId: null,
         isPublic: true,
@@ -172,7 +188,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
         },
       };
     });
-  }, [uniqueId, userName]);
+  }, [uniqueId]); // userName removed - we use userNameRef
 
   // Timer control actions
   const actions = {

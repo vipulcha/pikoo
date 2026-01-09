@@ -72,6 +72,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
 export const SOCKET_EVENTS = {
   JOIN_ROOM: "join_room",
   LEAVE_ROOM: "leave_room",
+  UPDATE_NAME: "update_name",
   TIMER_START: "timer_start",
   TIMER_PAUSE: "timer_pause",
   TIMER_RESET: "timer_reset",

@@ -241,6 +241,41 @@ export async function removeParticipant(
   return room.participants;
 }
 
+export async function updateParticipantName(
+  roomId: string,
+  socketId: string,
+  uniqueId: string,
+  newName: string
+): Promise<{ success: boolean; error?: string; participants: Participant[] }> {
+  const room = await getRoom(roomId);
+  if (!room) return { success: false, error: "Room not found", participants: [] };
+
+  // Check if new name is taken by a DIFFERENT user
+  const nameTaken = room.participants.find(
+    p => p.name.toLowerCase() === newName.toLowerCase() && p.uniqueId !== uniqueId
+  );
+  if (nameTaken) {
+    return { 
+      success: false, 
+      error: "Name already taken in this room", 
+      participants: room.participants 
+    };
+  }
+
+  // Update name for all connections of this user (same uniqueId)
+  room.participants = room.participants.map(p => 
+    p.uniqueId === uniqueId ? { ...p, name: newName } : p
+  );
+
+  // Also update the userName in userTodos
+  if (room.userTodos[uniqueId]) {
+    room.userTodos[uniqueId].userName = newName;
+  }
+
+  await saveRoom(room);
+  return { success: true, participants: room.participants };
+}
+
 export async function updateSettings(
   roomId: string,
   settings: Partial<RoomSettings>

@@ -58,7 +58,6 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [showWelcomePrompt, setShowWelcomePrompt] = useState(false);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
   const [pendingActiveFromWelcome, setPendingActiveFromWelcome] = useState(false);
-  const [pendingTodoFromWelcome, setPendingTodoFromWelcome] = useState<string | null>(null);
   const prevPhaseRef = useRef<Phase | null>(null);
 
   // Check for saved name and get uniqueId on mount
@@ -175,16 +174,6 @@ export default function RoomPage({ params }: RoomPageProps) {
       }
     }
   }, [room, uniqueId, hasShownWelcome]);
-
-  // Add pending todo after socket reconnects (from welcome prompt)
-  useEffect(() => {
-    if (!pendingTodoFromWelcome || !isConnected || !room) return;
-    
-    // Socket is connected and room is loaded, now safe to add the todo
-    actions.addTodo(pendingTodoFromWelcome);
-    setPendingTodoFromWelcome(null);
-    setPendingActiveFromWelcome(true);
-  }, [pendingTodoFromWelcome, isConnected, room, actions]);
 
   // Auto-set the first todo as active when added from welcome prompt
   useEffect(() => {
@@ -320,10 +309,12 @@ export default function RoomPage({ params }: RoomPageProps) {
           isVisible={showWelcomePrompt}
           initialName={userName || ""}
           onAddTodo={(text) => {
-            // Store todo for after socket connects with new name
-            setPendingTodoFromWelcome(text);
+            // Add todo directly - no reconnection happens now!
+            actions.addTodo(text);
+            setPendingActiveFromWelcome(true);
           }}
           onDismiss={(name) => {
+            // Save the name - UPDATE_NAME event will be sent (no reconnection)
             saveName(name);
             setUserName(name);
             setShowWelcomePrompt(false);
@@ -591,11 +582,12 @@ export default function RoomPage({ params }: RoomPageProps) {
         isVisible={showWelcomePrompt}
         initialName={userName || ""}
         onAddTodo={(text) => {
-          // Don't add todo immediately - store it for after socket reconnects
-          setPendingTodoFromWelcome(text);
+          // Add todo directly - no reconnection happens now!
+          actions.addTodo(text);
+          setPendingActiveFromWelcome(true);
         }}
         onDismiss={(name) => {
-          // Save the name first - this will trigger socket reconnection
+          // Save the name - UPDATE_NAME event will be sent (no reconnection)
           saveName(name);
           setUserName(name);
           setShowWelcomePrompt(false);
