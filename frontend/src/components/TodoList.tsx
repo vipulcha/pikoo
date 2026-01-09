@@ -57,8 +57,8 @@ export function TodoList({
     // Then incomplete todos
     if (a.completed && !b.completed) return 1;
     if (!a.completed && b.completed) return -1;
-    // Then by creation time (newest first)
-    return b.createdAt - a.createdAt;
+    // Then by creation time (oldest first, so new tasks appear at bottom)
+    return a.createdAt - b.createdAt;
   });
 
   const completedCount = todos.filter(t => t.completed).length;

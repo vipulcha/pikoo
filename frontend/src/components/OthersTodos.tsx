@@ -110,7 +110,8 @@ export function OthersTodos({ userTodos, currentUserId, participants }: OthersTo
                       if (b.id === selectedUser.activeTodoId) return 1;
                       if (a.completed && !b.completed) return 1;
                       if (!a.completed && b.completed) return -1;
-                      return b.createdAt - a.createdAt;
+                      // Oldest first (so new tasks appear at bottom)
+                      return a.createdAt - b.createdAt;
                     })
                     .map((todo) => {
                       const isActive = todo.id === selectedUser.activeTodoId;
