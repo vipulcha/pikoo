@@ -14,7 +14,7 @@ import { OthersTodos } from "@/components/OthersTodos";
 import { SessionPrompt } from "@/components/SessionPrompt";
 import { WelcomePrompt } from "@/components/WelcomePrompt";
 import { RoomSettings, Phase } from "@/lib/types";
-import { notifyFocusEnd, notifyBreakEnd, requestNotificationPermission } from "@/lib/audio";
+import { notifyFocusEnd, notifyBreakEnd, requestNotificationPermission, getNotificationPermission } from "@/lib/audio";
 import Link from "next/link";
 
 // Realistic planet/space images from Unsplash
@@ -58,6 +58,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [showWelcomePrompt, setShowWelcomePrompt] = useState(false);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
   const [pendingActiveFromWelcome, setPendingActiveFromWelcome] = useState(false);
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
   const prevPhaseRef = useRef<Phase | null>(null);
   const hasAutoSkippedRef = useRef(false);
 
@@ -364,8 +365,27 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   // Request notification permissions when starting the timer
   const handleStart = async () => {
-    // Request notification permission on first start (best time to ask - user is engaged)
-    await requestNotificationPermission();
+    const permission = getNotificationPermission();
+    
+    // If permission hasn't been decided yet, show explanation first
+    if (permission === "default") {
+      setShowNotificationPrompt(true);
+      return;
+    }
+    
+    // Permission already granted or denied, just start
+    actions.start();
+  };
+
+  // Handle notification permission after user sees explanation
+  const handleNotificationResponse = async (allow: boolean) => {
+    setShowNotificationPrompt(false);
+    
+    if (allow) {
+      await requestNotificationPermission();
+    }
+    
+    // Start the timer regardless of their choice
     actions.start();
   };
 
@@ -673,6 +693,49 @@ export default function RoomPage({ params }: RoomPageProps) {
           setShowWelcomePrompt(false);
         }}
       />
+
+      {/* Notification Permission Prompt */}
+      {showNotificationPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => handleNotificationResponse(false)}
+          />
+          <div className="relative bg-slate-900/95 border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center">
+              {/* Bell Icon */}
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center">
+                <svg className="w-8 h-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+              </div>
+              
+              <h3 className="text-xl font-semibold text-white mb-2">
+                Stay in the loop! 🔔
+              </h3>
+              
+              <p className="text-white/70 text-sm mb-6">
+                Enable notifications to get alerted when your <span className="text-rose-400 font-medium">focus session</span> or <span className="text-emerald-400 font-medium">break</span> ends — even if you&apos;re in another tab.
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => handleNotificationResponse(false)}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-sm font-medium transition-colors"
+                >
+                  Maybe later
+                </button>
+                <button
+                  onClick={() => handleNotificationResponse(true)}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white text-sm font-medium transition-all shadow-lg shadow-amber-500/25"
+                >
+                  Enable
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
