@@ -225,20 +225,51 @@ export async function addParticipant(
 
 export async function removeParticipant(
   roomId: string,
-  participantId: string
+  participantId: string,
+  retries = 3
 ): Promise<Participant[]> {
-  const room = await getRoom(roomId);
-  if (!room) return [];
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const room = await getRoom(roomId);
+    if (!room) return [];
 
-  room.participants = room.participants.filter((p) => p.id !== participantId);
-  
-  // If host leaves in host mode, assign new host or clear
-  if (room.hostId === participantId) {
-    room.hostId = room.participants[0]?.id || null;
+    const beforeCount = room.participants.length;
+    room.participants = room.participants.filter((p) => p.id !== participantId);
+    const afterCount = room.participants.length;
+    
+    // If participant wasn't found, they're already removed
+    if (beforeCount === afterCount) {
+      console.log(`[removeParticipant] Participant ${participantId.slice(-6)} already removed from ${roomId}`);
+      return room.participants;
+    }
+    
+    // If host leaves in host mode, assign new host or clear
+    if (room.hostId === participantId) {
+      room.hostId = room.participants[0]?.id || null;
+    }
+
+    await saveRoom(room);
+    
+    // Verify the save worked by re-reading
+    const verifyRoom = await getRoom(roomId);
+    if (verifyRoom) {
+      const stillExists = verifyRoom.participants.find(p => p.id === participantId);
+      if (!stillExists) {
+        console.log(`[removeParticipant] Successfully removed ${participantId.slice(-6)}, now ${verifyRoom.participants.length} participants`);
+        return verifyRoom.participants;
+      } else {
+        console.log(`[removeParticipant] Race condition detected! Participant ${participantId.slice(-6)} still exists, retry ${attempt + 1}/${retries}`);
+        // Small delay before retry
+        await new Promise(resolve => setTimeout(resolve, 50 * (attempt + 1)));
+      }
+    } else {
+      return [];
+    }
   }
-
-  await saveRoom(room);
-  return room.participants;
+  
+  // Final attempt - just return current state
+  console.log(`[removeParticipant] Failed after ${retries} retries for ${participantId.slice(-6)}`);
+  const finalRoom = await getRoom(roomId);
+  return finalRoom?.participants || [];
 }
 
 export async function updateParticipantName(

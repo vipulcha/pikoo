@@ -65,6 +65,35 @@ interface UpdateNamePayload {
   name: string;
 }
 
+// Helper to clean up stale participants (not actually connected)
+async function cleanupStaleParticipants(io: Server, roomId: string): Promise<void> {
+  try {
+    const room = await getRoom(roomId);
+    if (!room) return;
+    
+    const socketsInRoom = await io.in(roomId).fetchSockets();
+    const connectedSocketIds = new Set(socketsInRoom.map(s => s.id));
+    
+    const staleParticipants = room.participants.filter(p => !connectedSocketIds.has(p.id));
+    
+    if (staleParticipants.length > 0) {
+      console.log(`[CLEANUP] Found ${staleParticipants.length} stale participants in ${roomId}:`, 
+        staleParticipants.map(p => `${p.name}(${p.id.slice(-6)})`));
+      
+      room.participants = room.participants.filter(p => connectedSocketIds.has(p.id));
+      
+      const { saveRoom } = await import("./store.js");
+      await saveRoom(room);
+      
+      // Broadcast updated participants
+      io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants: room.participants });
+      console.log(`[CLEANUP] Removed stale participants, now ${room.participants.length} remaining`);
+    }
+  } catch (err) {
+    console.error("[CLEANUP] Error cleaning up stale participants:", err);
+  }
+}
+
 export function setupSocketHandlers(io: Server): void {
   io.on("connection", (socket: Socket) => {
     console.log(`🔌 Client connected: ${socket.id}`);
@@ -111,12 +140,18 @@ export function setupSocketHandlers(io: Server): void {
 
         room = await getRoom(roomId);
 
+        // Clean up any stale participants before sending state
+        await cleanupStaleParticipants(io, roomId);
+        
+        // Re-fetch room after cleanup
+        room = await getRoom(roomId);
+
         // Send current state to joining client
         console.log(`[JOIN_ROOM] Sending ROOM_STATE to ${socket.id}, userTodos for ${uniqueId}:`, room?.userTodos?.[uniqueId]?.todos?.length || 0);
         socket.emit(SOCKET_EVENTS.ROOM_STATE, room);
 
         // Broadcast updated participants to all in room
-        io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants: result.participants });
+        io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants: room?.participants || [] });
 
         console.log(`👤 ${name || "Anonymous"} (${socket.id}) joined room ${roomId}`);
       } catch (err) {
@@ -420,16 +455,20 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Disconnect
     // ========================================
-    socket.on("disconnect", async () => {
-      console.log(`🔌 Client disconnected: ${socket.id}`);
+    socket.on("disconnect", async (reason) => {
+      console.log(`🔌 Client disconnected: ${socket.id}, reason: ${reason}, roomId: ${currentRoomId}, user: ${currentUserName}`);
 
       if (currentRoomId) {
         try {
+          console.log(`[DISCONNECT] Removing participant ${socket.id} from room ${currentRoomId}`);
           const participants = await removeParticipant(currentRoomId, socket.id);
+          console.log(`[DISCONNECT] After removal, participants:`, participants.map(p => `${p.name}(${p.id.slice(-6)})`));
           io.to(currentRoomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants });
         } catch (err) {
           console.error("Error removing participant:", err);
         }
+      } else {
+        console.log(`[DISCONNECT] No room to leave for ${socket.id}`);
       }
     });
   });
