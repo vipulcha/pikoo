@@ -176,15 +176,19 @@ export default function RoomPage({ params }: RoomPageProps) {
   }, [room, uniqueId, hasShownWelcome]);
 
   // Auto-set the first todo as active when added from welcome prompt
+  // Wait for the REAL ID from server (not temp_xxx) to avoid race condition
   useEffect(() => {
     if (!pendingActiveFromWelcome || !room) return;
     
     const myTodos = room.userTodos?.[uniqueId];
     if (myTodos && myTodos.todos.length > 0) {
-      // Set the first (and likely only) todo as active
       const firstTodo = myTodos.todos[0];
-      actions.setActiveTodo(firstTodo.id);
-      setPendingActiveFromWelcome(false);
+      // Only set active if it's a real ID from server (not temp from optimistic update)
+      // This prevents race condition between TODO_ADD and TODO_SET_ACTIVE
+      if (!firstTodo.id.startsWith('temp_')) {
+        actions.setActiveTodo(firstTodo.id);
+        setPendingActiveFromWelcome(false);
+      }
     }
   }, [room?.userTodos, uniqueId, pendingActiveFromWelcome, actions]);
 
