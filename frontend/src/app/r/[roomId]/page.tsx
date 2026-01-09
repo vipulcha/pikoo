@@ -53,8 +53,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [planetImage, setPlanetImage] = useState(PLANET_IMAGES[0]);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const lastMessageCountRef = useRef(0);
+  const [lastReadMessageId, setLastReadMessageId] = useState<string | null>(null);
   const [showSessionPrompt, setShowSessionPrompt] = useState(false);
   const [showWelcomePrompt, setShowWelcomePrompt] = useState(false);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
@@ -99,23 +98,26 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   }, [nameTakenError, error]);
 
-  // Track unread messages when chat is closed (must be before early returns)
-  const messages = room?.messages;
-  useEffect(() => {
-    const currentCount = messages?.length || 0;
-    if (!isChatOpen && currentCount > lastMessageCountRef.current) {
-      setUnreadCount(prev => prev + (currentCount - lastMessageCountRef.current));
-    }
-    lastMessageCountRef.current = currentCount;
-  }, [messages?.length, isChatOpen]);
+  // Calculate if there are unread messages
+  const messages = room?.messages || [];
+  const latestMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
+  const hasUnreadMessages = latestMessageId !== null && latestMessageId !== lastReadMessageId;
 
-  // Clear unread when opening chat
+  // Mark messages as read when opening chat
   const handleToggleChat = () => {
-    if (!isChatOpen) {
-      setUnreadCount(0);
+    if (!isChatOpen && latestMessageId) {
+      // Opening chat - mark all messages as read
+      setLastReadMessageId(latestMessageId);
     }
     setIsChatOpen(!isChatOpen);
   };
+  
+  // Also mark as read when new messages arrive while chat is open
+  useEffect(() => {
+    if (isChatOpen && latestMessageId && latestMessageId !== lastReadMessageId) {
+      setLastReadMessageId(latestMessageId);
+    }
+  }, [isChatOpen, latestMessageId, lastReadMessageId]);
 
   // Detect phase transitions - show prompt and play notification sounds
   useEffect(() => {
@@ -551,11 +553,11 @@ export default function RoomPage({ params }: RoomPageProps) {
 
       {/* Chat Panel */}
       <ChatPanel
-        messages={messages || []}
+        messages={messages}
         onSendMessage={actions.sendMessage}
         isOpen={isChatOpen}
         onToggle={handleToggleChat}
-        unreadCount={unreadCount}
+        hasUnread={hasUnreadMessages}
       />
 
       {/* Others' Todos Panel */}

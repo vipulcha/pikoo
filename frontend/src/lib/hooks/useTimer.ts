@@ -11,6 +11,7 @@ interface UseTimerReturn {
   isConnected: boolean;
   error: string | null;
   nameTakenError: boolean;  // True when name is already taken in room
+  newMessageReceived: number;  // Increments each time a new message is received (for tracking unread)
   actions: {
     start: () => void;
     pause: () => void;
@@ -33,6 +34,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nameTakenError, setNameTakenError] = useState(false);
+  const [newMessageReceived, setNewMessageReceived] = useState(0);
   const socketRef = useRef<Socket | null>(null);
 
   // Calculate remaining time from timer state
@@ -100,6 +102,8 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
         const messages = prev.messages || [];
         return { ...prev, messages: [...messages, message] };
       });
+      // Signal that a new message was received (for unread tracking)
+      setNewMessageReceived(prev => prev + 1);
     };
 
     const handleTodosUpdate = ({ userTodos }: { userTodos: Record<string, UserTodos> }) => {
@@ -169,6 +173,6 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       socketRef.current?.emit(SOCKET_EVENTS.TODO_SET_VISIBILITY, { isPublic }),
   };
 
-  return { room, remaining, isConnected, error, nameTakenError, actions };
+  return { room, remaining, isConnected, error, nameTakenError, newMessageReceived, actions };
 }
 

@@ -8,10 +8,10 @@ interface ChatPanelProps {
   onSendMessage: (text: string) => void;
   isOpen: boolean;
   onToggle: () => void;
-  unreadCount: number;
+  hasUnread: boolean;
 }
 
-export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, unreadCount }: ChatPanelProps) {
+export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, hasUnread }: ChatPanelProps) {
   const [inputText, setInputText] = useState("");
   const [isMounted, setIsMounted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -56,17 +56,19 @@ export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, unreadCou
     <>
       {/* Toggle Button - only show when chat is closed */}
       {!isOpen && (
-        <button
-          onClick={onToggle}
-          className="fixed right-4 bottom-4 z-40 px-4 py-2.5 rounded-xl shadow-2xl transition-all duration-300 bg-white/10 backdrop-blur-sm border border-white/10 text-white/80 hover:bg-white/20 text-sm font-medium"
-        >
-          Talk to Room Mates!
-          
-          {/* Unread indicator */}
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-pulse" />
-          )}
-        </button>
+        <div className="fixed right-4 bottom-4 z-40">
+          <button
+            onClick={onToggle}
+            className="relative px-4 py-2.5 rounded-xl shadow-2xl transition-all duration-300 bg-white/10 backdrop-blur-sm border border-white/10 text-white/80 hover:bg-white/20 text-sm font-medium"
+          >
+            Talk to Room Mates!
+            
+            {/* Unread indicator */}
+            {hasUnread && (
+              <span className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-rose-500 rounded-full animate-pulse shadow-lg shadow-rose-500/50" />
+            )}
+          </button>
+        </div>
       )}
 
       {/* Chat Panel Drawer */}
