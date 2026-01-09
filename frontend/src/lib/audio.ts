@@ -128,3 +128,73 @@ export function getSoundFileUrl(soundId: string): string {
   return `/sounds/${soundId}.mp3`;
 }
 
+// ============================================
+// Notification Sounds (Generated)
+// ============================================
+
+// Play a pleasant chime notification when focus session ends
+export function playFocusEndSound(): void {
+  const ctx = getAudioContext();
+  
+  if (ctx.state === "suspended") {
+    ctx.resume();
+  }
+  
+  const now = ctx.currentTime;
+  
+  // Create a pleasant three-note ascending chime (focus complete = achievement!)
+  const frequencies = [523.25, 659.25, 783.99]; // C5, E5, G5 (major chord)
+  
+  frequencies.forEach((freq, index) => {
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    
+    oscillator.type = "sine";
+    oscillator.frequency.value = freq;
+    
+    // Soft attack and decay
+    const startTime = now + index * 0.15;
+    gainNode.gain.setValueAtTime(0, startTime);
+    gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.05);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.8);
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    
+    oscillator.start(startTime);
+    oscillator.stop(startTime + 0.8);
+  });
+}
+
+// Play a gentle notification when break ends (time to focus)
+export function playBreakEndSound(): void {
+  const ctx = getAudioContext();
+  
+  if (ctx.state === "suspended") {
+    ctx.resume();
+  }
+  
+  const now = ctx.currentTime;
+  
+  // Two soft descending tones (gentle reminder to return to work)
+  const frequencies = [659.25, 523.25]; // E5, C5
+  
+  frequencies.forEach((freq, index) => {
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    
+    oscillator.type = "triangle"; // Softer than sine
+    oscillator.frequency.value = freq;
+    
+    const startTime = now + index * 0.2;
+    gainNode.gain.setValueAtTime(0, startTime);
+    gainNode.gain.linearRampToValueAtTime(0.25, startTime + 0.05);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.6);
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    
+    oscillator.start(startTime);
+    oscillator.stop(startTime + 0.6);
+  });
+}

@@ -14,6 +14,7 @@ import { OthersTodos } from "@/components/OthersTodos";
 import { SessionPrompt } from "@/components/SessionPrompt";
 import { WelcomePrompt } from "@/components/WelcomePrompt";
 import { RoomSettings, Phase } from "@/lib/types";
+import { playFocusEndSound, playBreakEndSound } from "@/lib/audio";
 import Link from "next/link";
 
 // Realistic planet/space images from Unsplash
@@ -116,17 +117,28 @@ export default function RoomPage({ params }: RoomPageProps) {
     setIsChatOpen(!isChatOpen);
   };
 
-  // Detect new focus session and show prompt
+  // Detect phase transitions - show prompt and play notification sounds
   useEffect(() => {
     if (!room?.timer) return;
     
     const currentPhase = room.timer.phase;
     const prevPhase = prevPhaseRef.current;
     
-    // Show prompt when transitioning TO focus phase (from break or long_break)
-    if (currentPhase === "focus" && prevPhase && prevPhase !== "focus") {
-      // Small delay to let the phase change feel natural
-      setTimeout(() => setShowSessionPrompt(true), 500);
+    // Only trigger on actual phase changes (not initial load)
+    if (prevPhase && prevPhase !== currentPhase) {
+      // Play notification sounds based on what phase just ended
+      if (prevPhase === "focus") {
+        // Focus session ended → break time! (celebratory chime)
+        playFocusEndSound();
+      } else if (prevPhase === "break" || prevPhase === "long_break") {
+        // Break ended → back to focus (gentle reminder)
+        playBreakEndSound();
+      }
+      
+      // Show prompt when transitioning TO focus phase
+      if (currentPhase === "focus") {
+        setTimeout(() => setShowSessionPrompt(true), 500);
+      }
     }
     
     prevPhaseRef.current = currentPhase;

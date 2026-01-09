@@ -30,7 +30,7 @@ export function OthersTodos({ userTodos, currentUserId, participants }: OthersTo
     ? userTodos[selectedUserId] 
     : sortedOtherUsers[0] || null;
 
-  const totalOtherTodos = otherUsers.reduce((sum, u) => sum + u.todos.length, 0);
+  const totalOtherTodos = otherUsers.reduce((sum, u) => sum + u.todos.filter(t => !t.completed).length, 0);
 
   if (otherUsers.length === 0) {
     return null; // Don't show if no one else has public todos
@@ -92,7 +92,7 @@ export function OthersTodos({ userTodos, currentUserId, participants }: OthersTo
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                     <span className="truncate max-w-[100px]">{user.userName}</span>
-                    <span className="text-xs opacity-60">({user.todos.length})</span>
+                    <span className="text-xs opacity-60">({user.todos.filter(t => !t.completed).length})</span>
                   </button>
                 );
               })}
@@ -101,63 +101,67 @@ export function OthersTodos({ userTodos, currentUserId, participants }: OthersTo
             {/* Todo list */}
             {selectedUser && (
               <div className="p-3 max-h-64 overflow-y-auto">
-                {/* Active task indicator */}
-                {selectedUser.activeTodoId && (
-                  <div className="mb-3 px-2 py-1 bg-rose-500/10 border border-rose-500/20 rounded-lg">
-                    <div className="flex items-center gap-1.5 text-xs text-rose-400/80 mb-1">
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z" />
-                      </svg>
-                      <span>Currently working on</span>
-                    </div>
-                    <p className="text-sm text-white/90">
-                      {selectedUser.todos.find(t => t.id === selectedUser.activeTodoId)?.text}
-                    </p>
-                  </div>
-                )}
-
-                {/* All todos */}
+                {/* All todos - sorted same as owner sees them */}
                 <div className="space-y-1.5">
-                  {selectedUser.todos
-                    .filter(t => t.id !== selectedUser.activeTodoId) // Don't show active again
+                  {[...selectedUser.todos]
                     .sort((a, b) => {
+                      // Same sorting as TodoList: active first, then incomplete, then completed
+                      if (a.id === selectedUser.activeTodoId) return -1;
+                      if (b.id === selectedUser.activeTodoId) return 1;
                       if (a.completed && !b.completed) return 1;
                       if (!a.completed && b.completed) return -1;
                       return b.createdAt - a.createdAt;
                     })
-                    .map((todo) => (
-                      <div
-                        key={todo.id}
-                        className={`
-                          flex items-start gap-2 p-2 rounded-lg bg-white/5
-                          ${todo.completed ? "opacity-50" : ""}
-                        `}
-                      >
+                    .map((todo) => {
+                      const isActive = todo.id === selectedUser.activeTodoId;
+                      return (
                         <div
+                          key={todo.id}
                           className={`
-                            mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center
-                            ${todo.completed 
-                              ? "bg-emerald-500/30 border-emerald-500/50 text-emerald-400" 
-                              : "border-white/20"
+                            flex items-start gap-2 p-2 rounded-lg
+                            ${isActive 
+                              ? "bg-rose-500/15 border border-rose-500/30" 
+                              : "bg-white/5 border border-transparent"
                             }
+                            ${todo.completed ? "opacity-50" : ""}
                           `}
                         >
-                          {todo.completed && (
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
+                          <div
+                            className={`
+                              mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center
+                              ${todo.completed 
+                                ? "bg-emerald-500/30 border-emerald-500/50 text-emerald-400" 
+                                : "border-white/20"
+                              }
+                            `}
+                          >
+                            {todo.completed && (
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            {isActive && (
+                              <div className="flex items-center gap-1 text-xs text-rose-400/80 mb-0.5">
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z" />
+                                </svg>
+                                <span>Working on</span>
+                              </div>
+                            )}
+                            <p
+                              className={`
+                                text-sm leading-snug break-words
+                                ${todo.completed ? "line-through text-white/40" : "text-white/70"}
+                              `}
+                            >
+                              {todo.text}
+                            </p>
+                          </div>
                         </div>
-                        <p
-                          className={`
-                            text-sm leading-snug break-words
-                            ${todo.completed ? "line-through text-white/40" : "text-white/70"}
-                          `}
-                        >
-                          {todo.text}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
 
                 {selectedUser.todos.length === 0 && (
