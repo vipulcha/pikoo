@@ -14,7 +14,7 @@ import { OthersTodos } from "@/components/OthersTodos";
 import { SessionPrompt } from "@/components/SessionPrompt";
 import { WelcomePrompt } from "@/components/WelcomePrompt";
 import { RoomSettings, Phase } from "@/lib/types";
-import { playFocusEndSound, playBreakEndSound } from "@/lib/audio";
+import { notifyFocusEnd, notifyBreakEnd, requestNotificationPermission } from "@/lib/audio";
 import Link from "next/link";
 
 // Realistic planet/space images from Unsplash
@@ -59,6 +59,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
   const [pendingActiveFromWelcome, setPendingActiveFromWelcome] = useState(false);
   const prevPhaseRef = useRef<Phase | null>(null);
+  const hasAutoSkippedRef = useRef(false);
 
   // Check for saved name and get uniqueId on mount
   useEffect(() => {
@@ -128,13 +129,13 @@ export default function RoomPage({ params }: RoomPageProps) {
     
     // Only trigger on actual phase changes (not initial load)
     if (prevPhase && prevPhase !== currentPhase) {
-      // Play notification sounds based on what phase just ended
+      // Send notification based on what phase just ended
       if (prevPhase === "focus") {
-        // Focus session ended → break time! (celebratory chime)
-        playFocusEndSound();
+        // Focus session ended → break time! (celebratory notification)
+        notifyFocusEnd();
       } else if (prevPhase === "break" || prevPhase === "long_break") {
         // Break ended → back to focus (gentle reminder)
-        playBreakEndSound();
+        notifyBreakEnd();
       }
       
       // Show prompt when transitioning TO focus phase
@@ -144,7 +145,31 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
     
     prevPhaseRef.current = currentPhase;
+    // Reset auto-skip flag when phase changes (so next phase can auto-skip too)
+    hasAutoSkippedRef.current = false;
   }, [room?.timer?.phase]);
+
+  // Auto-transition to next phase when timer reaches 0
+  useEffect(() => {
+    if (!room?.timer) return;
+    
+    const { running, phaseEndsAt } = room.timer;
+    
+    // Only auto-skip if timer is running
+    if (!running || !phaseEndsAt) {
+      return;
+    }
+    
+    // Check if timer has reached 0
+    const now = Date.now();
+    const remainingMs = phaseEndsAt - now;
+    
+    if (remainingMs <= 0 && !hasAutoSkippedRef.current) {
+      // Timer has ended! Auto-transition to next phase
+      hasAutoSkippedRef.current = true;
+      actions.skip();
+    }
+  }, [remaining, room?.timer, actions]);
 
   // Show welcome prompt for new users (no name) immediately, or users with no todos after room loads
   useEffect(() => {
@@ -337,6 +362,13 @@ export default function RoomPage({ params }: RoomPageProps) {
     actions.updateSettings({ [key]: value });
   };
 
+  // Request notification permissions when starting the timer
+  const handleStart = async () => {
+    // Request notification permission on first start (best time to ask - user is engaged)
+    await requestNotificationPermission();
+    actions.start();
+  };
+
   return (
     <div className="min-h-screen bg-black text-white flex flex-col relative overflow-hidden">
       {/* Space background with planet */}
@@ -437,13 +469,24 @@ export default function RoomPage({ params }: RoomPageProps) {
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
-                    min="5"
+                    min="1"
                     max="60"
                     value={settings.focusSec / 60}
                     onChange={(e) => handleSettingChange("focusSec", Number(e.target.value) * 60)}
                     className="flex-1 accent-rose-500"
                   />
-                  <span className="w-12 text-right font-mono text-sm">{settings.focusSec / 60}m</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="60"
+                    value={settings.focusSec / 60}
+                    onChange={(e) => {
+                      const val = Math.max(1, Math.min(60, Number(e.target.value) || 1));
+                      handleSettingChange("focusSec", val * 60);
+                    }}
+                    className="w-14 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-rose-500/50"
+                  />
+                  <span className="text-white/60 text-sm">m</span>
                 </div>
               </div>
 
@@ -459,7 +502,18 @@ export default function RoomPage({ params }: RoomPageProps) {
                     onChange={(e) => handleSettingChange("breakSec", Number(e.target.value) * 60)}
                     className="flex-1 accent-emerald-500"
                   />
-                  <span className="w-12 text-right font-mono text-sm">{settings.breakSec / 60}m</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="30"
+                    value={settings.breakSec / 60}
+                    onChange={(e) => {
+                      const val = Math.max(1, Math.min(30, Number(e.target.value) || 1));
+                      handleSettingChange("breakSec", val * 60);
+                    }}
+                    className="w-14 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-emerald-500/50"
+                  />
+                  <span className="text-white/60 text-sm">m</span>
                 </div>
               </div>
 
@@ -469,13 +523,24 @@ export default function RoomPage({ params }: RoomPageProps) {
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
-                    min="5"
+                    min="1"
                     max="45"
                     value={settings.longBreakSec / 60}
                     onChange={(e) => handleSettingChange("longBreakSec", Number(e.target.value) * 60)}
                     className="flex-1 accent-blue-500"
                   />
-                  <span className="w-12 text-right font-mono text-sm">{settings.longBreakSec / 60}m</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="45"
+                    value={settings.longBreakSec / 60}
+                    onChange={(e) => {
+                      const val = Math.max(1, Math.min(45, Number(e.target.value) || 1));
+                      handleSettingChange("longBreakSec", val * 60);
+                    }}
+                    className="w-14 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-blue-500/50"
+                  />
+                  <span className="text-white/60 text-sm">m</span>
                 </div>
               </div>
 
@@ -491,7 +556,18 @@ export default function RoomPage({ params }: RoomPageProps) {
                     onChange={(e) => handleSettingChange("longBreakEvery", Number(e.target.value))}
                     className="flex-1 accent-purple-500"
                   />
-                  <span className="w-12 text-right font-mono text-sm">{settings.longBreakEvery}x</span>
+                  <input
+                    type="number"
+                    min="2"
+                    max="8"
+                    value={settings.longBreakEvery}
+                    onChange={(e) => {
+                      const val = Math.max(2, Math.min(8, Number(e.target.value) || 2));
+                      handleSettingChange("longBreakEvery", val);
+                    }}
+                    className="w-14 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-purple-500/50"
+                  />
+                  <span className="text-white/60 text-sm">x</span>
                 </div>
               </div>
             </div>
@@ -534,7 +610,7 @@ export default function RoomPage({ params }: RoomPageProps) {
             <Controls
               running={timer.running}
               phase={timer.phase}
-              onStart={actions.start}
+              onStart={handleStart}
               onPause={actions.pause}
               onReset={actions.reset}
               onSkip={actions.skip}

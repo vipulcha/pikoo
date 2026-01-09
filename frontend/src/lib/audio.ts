@@ -87,7 +87,7 @@ export function stopNoise(): void {
     try {
       noiseNode.stop();
       noiseNode.disconnect();
-    } catch (e) {
+    } catch {
       // Ignore errors if already stopped
     }
     noiseNode = null;
@@ -129,72 +129,135 @@ export function getSoundFileUrl(soundId: string): string {
 }
 
 // ============================================
+// Browser Notifications (works in background tabs)
+// ============================================
+
+// Check if notifications are supported and get permission status
+export function getNotificationPermission(): NotificationPermission | "unsupported" {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return "unsupported";
+  }
+  return Notification.permission;
+}
+
+// Request notification permission
+export async function requestNotificationPermission(): Promise<NotificationPermission | "unsupported"> {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return "unsupported";
+  }
+  
+  if (Notification.permission === "granted") {
+    return "granted";
+  }
+  
+  if (Notification.permission !== "denied") {
+    const permission = await Notification.requestPermission();
+    return permission;
+  }
+  
+  return Notification.permission;
+}
+
+// Show a browser notification (works even in background tabs)
+function showNotification(title: string, body: string, tag: string): void {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return;
+  }
+  
+  if (Notification.permission === "granted") {
+    const notification = new Notification(title, {
+      body,
+      tag, // Prevents duplicate notifications
+      icon: "/favicon.ico",
+      requireInteraction: false,
+      silent: false, // Allow system sound
+    });
+    
+    // Auto-close after 5 seconds
+    setTimeout(() => notification.close(), 5000);
+    
+    // Focus the tab when clicked
+    notification.onclick = () => {
+      window.focus();
+      notification.close();
+    };
+  }
+}
+
+// ============================================
 // Notification Sounds (Generated)
 // ============================================
 
-// Play a pleasant chime notification when focus session ends
-export function playFocusEndSound(): void {
+// Helper to ensure AudioContext is ready before playing
+async function ensureAudioContextReady(): Promise<AudioContext> {
   const ctx = getAudioContext();
   
   if (ctx.state === "suspended") {
-    ctx.resume();
+    try {
+      await ctx.resume();
+    } catch (e) {
+      console.warn("Failed to resume AudioContext:", e);
+    }
   }
   
-  const now = ctx.currentTime;
-  
-  // Create a pleasant three-note ascending chime (focus complete = achievement!)
-  const frequencies = [523.25, 659.25, 783.99]; // C5, E5, G5 (major chord)
-  
-  frequencies.forEach((freq, index) => {
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    
-    oscillator.type = "sine";
-    oscillator.frequency.value = freq;
-    
-    // Soft attack and decay
-    const startTime = now + index * 0.15;
-    gainNode.gain.setValueAtTime(0, startTime);
-    gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.05);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.8);
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-    
-    oscillator.start(startTime);
-    oscillator.stop(startTime + 0.8);
-  });
+  return ctx;
 }
 
-// Play a gentle notification when break ends (time to focus)
-export function playBreakEndSound(): void {
-  const ctx = getAudioContext();
-  
-  if (ctx.state === "suspended") {
-    ctx.resume();
+// Play audio chime (only works when tab is active)
+async function playChime(frequencies: number[], type: OscillatorType = "sine", spacing: number = 0.15): Promise<void> {
+  try {
+    const ctx = await ensureAudioContextReady();
+    const now = ctx.currentTime;
+    
+    frequencies.forEach((freq, index) => {
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.type = type;
+      oscillator.frequency.value = freq;
+      
+      const startTime = now + index * spacing;
+      gainNode.gain.setValueAtTime(0, startTime);
+      gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.05);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.8);
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      oscillator.start(startTime);
+      oscillator.stop(startTime + 0.8);
+    });
+  } catch (e) {
+    console.warn("Failed to play chime:", e);
   }
-  
-  const now = ctx.currentTime;
-  
-  // Two soft descending tones (gentle reminder to return to work)
-  const frequencies = [659.25, 523.25]; // E5, C5
-  
-  frequencies.forEach((freq, index) => {
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    
-    oscillator.type = "triangle"; // Softer than sine
-    oscillator.frequency.value = freq;
-    
-    const startTime = now + index * 0.2;
-    gainNode.gain.setValueAtTime(0, startTime);
-    gainNode.gain.linearRampToValueAtTime(0.25, startTime + 0.05);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.6);
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-    
-    oscillator.start(startTime);
-    oscillator.stop(startTime + 0.6);
-  });
 }
+
+// Notify when focus session ends (break time!)
+export async function notifyFocusEnd(): Promise<void> {
+  // Show browser notification (works in background)
+  showNotification(
+    "Focus session complete! 🎉",
+    "Great work! Time for a well-deserved break.",
+    "pikoo-focus-end"
+  );
+  
+  // Also try to play audio chime (only works if tab is active)
+  await playChime([523.25, 659.25, 783.99], "sine", 0.15); // C5, E5, G5 ascending
+}
+
+// Notify when break ends (time to focus)
+export async function notifyBreakEnd(): Promise<void> {
+  // Show browser notification (works in background)
+  showNotification(
+    "Break is over! 💪",
+    "Ready to get back to work?",
+    "pikoo-break-end"
+  );
+  
+  // Also try to play audio chime (only works if tab is active)
+  await playChime([659.25, 523.25], "triangle", 0.2); // E5, C5 descending
+}
+
+// Legacy function names for backwards compatibility
+export const playFocusEndSound = notifyFocusEnd;
+export const playBreakEndSound = notifyBreakEnd;
