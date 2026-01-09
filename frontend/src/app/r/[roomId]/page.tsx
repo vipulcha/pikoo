@@ -58,6 +58,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [showWelcomePrompt, setShowWelcomePrompt] = useState(false);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
   const [pendingActiveFromWelcome, setPendingActiveFromWelcome] = useState(false);
+  const [pendingTodoFromWelcome, setPendingTodoFromWelcome] = useState<string | null>(null);
   const prevPhaseRef = useRef<Phase | null>(null);
 
   // Check for saved name and get uniqueId on mount
@@ -174,6 +175,16 @@ export default function RoomPage({ params }: RoomPageProps) {
       }
     }
   }, [room, uniqueId, hasShownWelcome]);
+
+  // Add pending todo after socket reconnects (from welcome prompt)
+  useEffect(() => {
+    if (!pendingTodoFromWelcome || !isConnected || !room) return;
+    
+    // Socket is connected and room is loaded, now safe to add the todo
+    actions.addTodo(pendingTodoFromWelcome);
+    setPendingTodoFromWelcome(null);
+    setPendingActiveFromWelcome(true);
+  }, [pendingTodoFromWelcome, isConnected, room, actions]);
 
   // Auto-set the first todo as active when added from welcome prompt
   useEffect(() => {
@@ -309,10 +320,8 @@ export default function RoomPage({ params }: RoomPageProps) {
           isVisible={showWelcomePrompt}
           initialName={userName || ""}
           onAddTodo={(text) => {
-            // Can't add todo yet since room isn't loaded, but save it for later
-            setPendingActiveFromWelcome(true);
-            // We'll add the todo after the name is set and room connects
-            setTimeout(() => actions.addTodo(text), 500);
+            // Store todo for after socket connects with new name
+            setPendingTodoFromWelcome(text);
           }}
           onDismiss={(name) => {
             saveName(name);
@@ -582,11 +591,11 @@ export default function RoomPage({ params }: RoomPageProps) {
         isVisible={showWelcomePrompt}
         initialName={userName || ""}
         onAddTodo={(text) => {
-          actions.addTodo(text);
-          setPendingActiveFromWelcome(true); // Will auto-set as active once added
+          // Don't add todo immediately - store it for after socket reconnects
+          setPendingTodoFromWelcome(text);
         }}
         onDismiss={(name) => {
-          // Save the name when prompt is dismissed
+          // Save the name first - this will trigger socket reconnection
           saveName(name);
           setUserName(name);
           setShowWelcomePrompt(false);
