@@ -150,6 +150,30 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     };
   }, [roomId, userName, uniqueId, calculateRemaining]);
 
+  // Helper to update user's todos optimistically
+  const updateMyTodosOptimistically = useCallback((
+    updater: (currentTodos: UserTodos) => UserTodos
+  ) => {
+    setRoom((prev) => {
+      if (!prev) return prev;
+      const currentUserTodos = prev.userTodos[uniqueId] || {
+        odId: uniqueId,
+        userName: userName,
+        todos: [],
+        activeTodoId: null,
+        isPublic: true,
+      };
+      const updatedUserTodos = updater(currentUserTodos);
+      return {
+        ...prev,
+        userTodos: {
+          ...prev.userTodos,
+          [uniqueId]: updatedUserTodos,
+        },
+      };
+    });
+  }, [uniqueId, userName]);
+
   // Timer control actions
   const actions = {
     start: () => socketRef.current?.emit(SOCKET_EVENTS.TIMER_START),
@@ -160,17 +184,67 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       socketRef.current?.emit(SOCKET_EVENTS.UPDATE_SETTINGS, settings),
     sendMessage: (text: string) =>
       socketRef.current?.emit(SOCKET_EVENTS.SEND_MESSAGE, { text }),
-    // Todo actions
-    addTodo: (text: string) =>
-      socketRef.current?.emit(SOCKET_EVENTS.TODO_ADD, { text }),
-    updateTodo: (todoId: string, updates: { text?: string; completed?: boolean }) =>
-      socketRef.current?.emit(SOCKET_EVENTS.TODO_UPDATE, { todoId, ...updates }),
-    deleteTodo: (todoId: string) =>
-      socketRef.current?.emit(SOCKET_EVENTS.TODO_DELETE, { todoId }),
-    setActiveTodo: (todoId: string | null) =>
-      socketRef.current?.emit(SOCKET_EVENTS.TODO_SET_ACTIVE, { todoId }),
-    setTodoVisibility: (isPublic: boolean) =>
-      socketRef.current?.emit(SOCKET_EVENTS.TODO_SET_VISIBILITY, { isPublic }),
+    
+    // Todo actions with OPTIMISTIC UPDATES
+    addTodo: (text: string) => {
+      // Optimistic: add todo locally immediately
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      updateMyTodosOptimistically((current) => ({
+        ...current,
+        todos: [...current.todos, {
+          id: tempId,
+          text,
+          completed: false,
+          createdAt: Date.now(),
+        }],
+      }));
+      // Then emit to server (server will broadcast real state)
+      socketRef.current?.emit(SOCKET_EVENTS.TODO_ADD, { text });
+    },
+    
+    updateTodo: (todoId: string, updates: { text?: string; completed?: boolean }) => {
+      // Optimistic: update todo locally immediately
+      updateMyTodosOptimistically((current) => ({
+        ...current,
+        todos: current.todos.map((t) =>
+          t.id === todoId ? { ...t, ...updates } : t
+        ),
+      }));
+      // Then emit to server
+      socketRef.current?.emit(SOCKET_EVENTS.TODO_UPDATE, { todoId, ...updates });
+    },
+    
+    deleteTodo: (todoId: string) => {
+      // Optimistic: remove todo locally immediately
+      updateMyTodosOptimistically((current) => ({
+        ...current,
+        todos: current.todos.filter((t) => t.id !== todoId),
+        // Clear active if deleting the active todo
+        activeTodoId: current.activeTodoId === todoId ? null : current.activeTodoId,
+      }));
+      // Then emit to server
+      socketRef.current?.emit(SOCKET_EVENTS.TODO_DELETE, { todoId });
+    },
+    
+    setActiveTodo: (todoId: string | null) => {
+      // Optimistic: set active todo locally immediately
+      updateMyTodosOptimistically((current) => ({
+        ...current,
+        activeTodoId: todoId,
+      }));
+      // Then emit to server
+      socketRef.current?.emit(SOCKET_EVENTS.TODO_SET_ACTIVE, { todoId });
+    },
+    
+    setTodoVisibility: (isPublic: boolean) => {
+      // Optimistic: update visibility locally immediately
+      updateMyTodosOptimistically((current) => ({
+        ...current,
+        isPublic,
+      }));
+      // Then emit to server
+      socketRef.current?.emit(SOCKET_EVENTS.TODO_SET_VISIBILITY, { isPublic });
+    },
   };
 
   return { room, remaining, isConnected, error, nameTakenError, newMessageReceived, actions };
