@@ -118,7 +118,50 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
           console.log("[TODOS_UPDATE] prev is null, ignoring");
           return prev;
         }
-        console.log("[TODOS_UPDATE] Updating room.userTodos");
+        
+        // Smart merge: preserve our optimistic (temp_) todos that server doesn't know about yet
+        const myUniqueId = uniqueId;
+        const myLocalTodos = prev.userTodos?.[myUniqueId];
+        const myServerTodos = userTodos[myUniqueId];
+        
+        if (myLocalTodos && myServerTodos) {
+          // Get our pending (temp_) todos
+          const pendingTodos = myLocalTodos.todos.filter(t => t.id.startsWith('temp_'));
+          const serverTodoTexts = new Set(myServerTodos.todos.map(t => t.text));
+          
+          if (pendingTodos.length > 0) {
+            // Only keep pending todos that DON'T have a matching text on server
+            // (if server has a todo with same text, it's the real version of our temp)
+            const unconfirmedPending = pendingTodos.filter(t => !serverTodoTexts.has(t.text));
+            
+            if (unconfirmedPending.length > 0) {
+              console.log("[TODOS_UPDATE] Preserving unconfirmed pending todos:", unconfirmedPending.map(t => t.id));
+              
+              // Merge: server todos + unconfirmed pending todos
+              const mergedTodos = [...myServerTodos.todos, ...unconfirmedPending];
+              
+              return {
+                ...prev,
+                userTodos: {
+                  ...userTodos,
+                  [myUniqueId]: {
+                    ...myServerTodos,
+                    todos: mergedTodos,
+                    // Keep local activeTodoId if it's a temp_ id that's still pending
+                    activeTodoId: myLocalTodos.activeTodoId?.startsWith('temp_') && 
+                                  unconfirmedPending.some(t => t.id === myLocalTodos.activeTodoId)
+                      ? myLocalTodos.activeTodoId 
+                      : myServerTodos.activeTodoId,
+                  },
+                },
+              };
+            }
+            
+            console.log("[TODOS_UPDATE] All pending todos confirmed by server");
+          }
+        }
+        
+        console.log("[TODOS_UPDATE] Using server data directly");
         return { ...prev, userTodos };
       });
     };
