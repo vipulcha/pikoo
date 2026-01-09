@@ -112,6 +112,7 @@ export function setupSocketHandlers(io: Server): void {
         room = await getRoom(roomId);
 
         // Send current state to joining client
+        console.log(`[JOIN_ROOM] Sending ROOM_STATE to ${socket.id}, userTodos for ${uniqueId}:`, room?.userTodos?.[uniqueId]?.todos?.length || 0);
         socket.emit(SOCKET_EVENTS.ROOM_STATE, room);
 
         // Broadcast updated participants to all in room
@@ -128,9 +129,14 @@ export function setupSocketHandlers(io: Server): void {
     // Update Name (without reconnecting)
     // ========================================
     socket.on(SOCKET_EVENTS.UPDATE_NAME, async (payload: UpdateNamePayload) => {
-      if (!currentRoomId || !currentUniqueId) return;
+      console.log(`[UPDATE_NAME] Received from ${socket.id}, currentRoomId=${currentRoomId}, currentUniqueId=${currentUniqueId}`);
+      if (!currentRoomId || !currentUniqueId) {
+        console.log("[UPDATE_NAME] Missing roomId or uniqueId, ignoring");
+        return;
+      }
       
       const { name } = payload;
+      console.log(`[UPDATE_NAME] New name: "${name}"`);
       if (!name || name.trim().length === 0) return;
       
       try {
@@ -142,6 +148,7 @@ export function setupSocketHandlers(io: Server): void {
         );
         
         if (!result.success) {
+          console.log(`[UPDATE_NAME] Failed: ${result.error}`);
           socket.emit(SOCKET_EVENTS.ERROR, { 
             message: result.error || "Failed to update name",
             code: "NAME_TAKEN"
@@ -160,6 +167,7 @@ export function setupSocketHandlers(io: Server): void {
         // Also broadcast updated todos (since userName changed there too)
         const room = await getRoom(currentRoomId);
         if (room) {
+          console.log(`[UPDATE_NAME] Broadcasting TODOS_UPDATE, todos for ${currentUniqueId}:`, room.userTodos[currentUniqueId]?.todos?.length || 0);
           io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { 
             userTodos: room.userTodos 
           });
@@ -323,16 +331,24 @@ export function setupSocketHandlers(io: Server): void {
     // Todo Operations
     // ========================================
     socket.on(SOCKET_EVENTS.TODO_ADD, async (payload: TodoAddPayload) => {
-      if (!currentRoomId || !currentUniqueId) return;
+      console.log(`[TODO_ADD] Received from ${socket.id}, currentRoomId=${currentRoomId}, currentUniqueId=${currentUniqueId}`);
+      if (!currentRoomId || !currentUniqueId) {
+        console.log("[TODO_ADD] Missing roomId or uniqueId, ignoring");
+        return;
+      }
 
       try {
         const { text } = payload;
+        console.log(`[TODO_ADD] Adding todo: "${text}" for user ${currentUserName}`);
         if (!text || text.trim().length === 0) return;
         if (text.length > 200) return; // Max 200 chars per todo
 
         const userTodos = await addTodo(currentRoomId, currentUniqueId, currentUserName, text);
         if (userTodos) {
+          console.log(`[TODO_ADD] Broadcasting TODOS_UPDATE, todos count for ${currentUniqueId}:`, userTodos[currentUniqueId]?.todos?.length);
           io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
+        } else {
+          console.log("[TODO_ADD] addTodo returned null");
         }
       } catch (err) {
         console.error("Error adding todo:", err);

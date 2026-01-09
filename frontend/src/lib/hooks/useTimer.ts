@@ -79,6 +79,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     };
 
     const handleRoomState = (state: RoomState) => {
+      console.log("[ROOM_STATE] Received full room state, userTodos:", JSON.stringify(state.userTodos, null, 2));
       setRoom(state);
       setRemaining(calculateRemaining(state.timer));
     };
@@ -111,8 +112,13 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     };
 
     const handleTodosUpdate = ({ userTodos }: { userTodos: Record<string, UserTodos> }) => {
+      console.log("[TODOS_UPDATE] Received:", JSON.stringify(userTodos, null, 2));
       setRoom((prev) => {
-        if (!prev) return prev;
+        if (!prev) {
+          console.log("[TODOS_UPDATE] prev is null, ignoring");
+          return prev;
+        }
+        console.log("[TODOS_UPDATE] Updating room.userTodos");
         return { ...prev, userTodos };
       });
     };
@@ -162,6 +168,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     
     // Only send update if we've already joined the room
     if (hasJoinedRef.current && socketRef.current && userName) {
+      console.log("[UPDATE_NAME] Emitting UPDATE_NAME with name:", userName);
       socketRef.current.emit(SOCKET_EVENTS.UPDATE_NAME, { name: userName });
     }
   }, [userName]);
@@ -203,18 +210,24 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     
     // Todo actions with OPTIMISTIC UPDATES
     addTodo: (text: string) => {
+      console.log("[TODO_ADD] Adding todo:", text);
       // Optimistic: add todo locally immediately
       const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      updateMyTodosOptimistically((current) => ({
-        ...current,
-        todos: [...current.todos, {
-          id: tempId,
-          text,
-          completed: false,
-          createdAt: Date.now(),
-        }],
-      }));
+      console.log("[TODO_ADD] Optimistic update with tempId:", tempId);
+      updateMyTodosOptimistically((current) => {
+        console.log("[TODO_ADD] Current todos before update:", current.todos.length);
+        return {
+          ...current,
+          todos: [...current.todos, {
+            id: tempId,
+            text,
+            completed: false,
+            createdAt: Date.now(),
+          }],
+        };
+      });
       // Then emit to server (server will broadcast real state)
+      console.log("[TODO_ADD] Emitting TODO_ADD to server");
       socketRef.current?.emit(SOCKET_EVENTS.TODO_ADD, { text });
     },
     
