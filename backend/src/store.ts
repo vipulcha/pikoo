@@ -455,6 +455,10 @@ export async function updateTodo(
   }
   if (updates.completed !== undefined) {
     todo.completed = updates.completed;
+    // If the active todo is being marked as completed, clear the active todo
+    if (updates.completed && userTodos.activeTodoId === todoId) {
+      userTodos.activeTodoId = null;
+    }
   }
 
   await saveRoom(room);

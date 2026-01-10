@@ -323,12 +323,23 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     
     updateTodo: (todoId: string, updates: { text?: string; completed?: boolean }) => {
       // Optimistic: update todo locally immediately
-      updateMyTodosOptimistically((current) => ({
-        ...current,
-        todos: current.todos.map((t) =>
+      updateMyTodosOptimistically((current) => {
+        const updatedTodos = current.todos.map((t) =>
           t.id === todoId ? { ...t, ...updates } : t
-        ),
-      }));
+        );
+        
+        // If the active todo is being marked as completed, clear the active todo
+        let updatedActiveTodoId = current.activeTodoId;
+        if (updates.completed && current.activeTodoId === todoId) {
+          updatedActiveTodoId = null;
+        }
+        
+        return {
+          ...current,
+          todos: updatedTodos,
+          activeTodoId: updatedActiveTodoId,
+        };
+      });
       // Then emit to server
       socketRef.current?.emit(SOCKET_EVENTS.TODO_UPDATE, { todoId, ...updates });
     },
