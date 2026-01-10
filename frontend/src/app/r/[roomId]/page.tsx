@@ -62,7 +62,6 @@ export default function RoomPage({ params }: RoomPageProps) {
   const prevPhaseRef = useRef<Phase | null>(null);
   const hasAutoSkippedRef = useRef(false);
   const processedTransitionRef = useRef<string | null>(null); // Track processed transitions to avoid duplicates
-  const lastPhaseChangeTimeRef = useRef<number>(0); // Track when phase last changed to prevent immediate auto-skip
 
   // Check for saved name and get uniqueId on mount
   useEffect(() => {
@@ -176,56 +175,34 @@ export default function RoomPage({ params }: RoomPageProps) {
       prevPhaseRef.current = currentPhase;
       // Reset auto-skip flag when phase changes (so next phase can auto-skip too)
       hasAutoSkippedRef.current = false;
-      // Record when phase changed to prevent immediate auto-skip
-      lastPhaseChangeTimeRef.current = Date.now();
-      console.log(`[PHASE_CHANGE] Phase changed to ${currentPhase} at ${lastPhaseChangeTimeRef.current}`);
+      console.log(`[PHASE_CHANGE] Phase changed to ${currentPhase}`);
     }
   }, [room?.timer?.phase]);
 
   // Auto-transition to next phase when timer reaches 0
+  // Simple rule: If timer is running and reaches 0, skip to next phase
   useEffect(() => {
     if (!room?.timer) return;
     
-    const { running, phaseEndsAt, phase } = room.timer;
+    const { running, phaseEndsAt } = room.timer;
     
-    // Only auto-skip if timer is running
+    // Only auto-skip if timer is actually running
     if (!running || !phaseEndsAt) {
-      return;
-    }
-    
-    // Prevent auto-skip if phase just changed (within last 3 seconds)
-    // This prevents immediately skipping a newly started phase
-    const timeSincePhaseChange = Date.now() - lastPhaseChangeTimeRef.current;
-    if (timeSincePhaseChange < 3000) {
-      console.log(`[AUTO_SKIP] Preventing auto-skip - phase changed ${timeSincePhaseChange}ms ago`);
+      hasAutoSkippedRef.current = false; // Reset flag when timer stops
       return;
     }
     
     // Check if timer has reached 0
     const now = Date.now();
     const remainingMs = phaseEndsAt - now;
-    const remainingSec = Math.ceil(remainingMs / 1000);
     
-    // Additional safety: Don't auto-skip if remaining time is suspiciously high
-    // (indicates phase just started and phaseEndsAt might be incorrectly set)
-    if (room.settings) {
-      const expectedDuration = phase === "focus" ? room.settings.focusSec :
-                              phase === "break" ? room.settings.breakSec :
-                              room.settings.longBreakSec;
-      
-      if (remainingSec >= expectedDuration - 1) {
-        console.log(`[AUTO_SKIP] Preventing auto-skip - remaining time (${remainingSec}s) is too high for phase ${phase} (expected: ${expectedDuration}s)`);
-        return;
-      }
-    }
-    
-    if (remainingMs <= 0 && !hasAutoSkippedRef.current) {
-      // Timer has ended! Auto-transition to next phase
-      console.log(`[AUTO_SKIP] Auto-skipping phase ${phase} - timer reached 0 (remaining: ${remainingSec}s)`);
+    // Auto-skip when timer reaches 0 (within 1 second tolerance for network latency)
+    if (remainingMs <= 1000 && !hasAutoSkippedRef.current) {
+      console.log(`[AUTO_SKIP] Timer reached 0, auto-skipping to next phase`);
       hasAutoSkippedRef.current = true;
       actions.skip();
     }
-  }, [remaining, room?.timer, room?.settings, actions]);
+  }, [remaining, room?.timer?.running, room?.timer?.phaseEndsAt, actions]);
 
   // Safety: Close session prompt if we're not in focus phase
   useEffect(() => {
