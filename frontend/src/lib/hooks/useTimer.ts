@@ -38,6 +38,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
   const socketRef = useRef<Socket | null>(null);
   const userNameRef = useRef(userName);
   const hasJoinedRef = useRef(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Calculate remaining time from timer state
   const calculateRemaining = useCallback((timer: TimerState): number => {
@@ -49,15 +50,61 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     return remaining;
   }, []);
 
-  // Update remaining time every second when running
+  // Update remaining time every 100ms when running
   useEffect(() => {
-    if (!room?.timer.running) return;
+    if (!room?.timer.running) {
+      // Clear interval if timer stops
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+
+    // Clear any existing interval before creating a new one
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
 
     const interval = setInterval(() => {
+      if (!room?.timer) {
+        clearInterval(interval);
+        intervalRef.current = null;
+        return;
+      }
+
+      const { running, phaseEndsAt } = room.timer;
+      
+      // Stop interval if timer is no longer running
+      if (!running || !phaseEndsAt) {
+        clearInterval(interval);
+        intervalRef.current = null;
+        return;
+      }
+
+      // Check if timer has reached 0
+      const now = Date.now();
+      if (phaseEndsAt <= now) {
+        // Timer has reached 0, stop updating remaining
+        clearInterval(interval);
+        intervalRef.current = null;
+        // Set remaining to 0 one final time
+        setRemaining(0);
+        return;
+      }
+
+      // Update remaining time
       setRemaining(calculateRemaining(room.timer));
     }, 100); // Update frequently for smooth countdown
 
-    return () => clearInterval(interval);
+    intervalRef.current = interval;
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
   }, [room?.timer, calculateRemaining]);
 
   // Socket connection and event handlers

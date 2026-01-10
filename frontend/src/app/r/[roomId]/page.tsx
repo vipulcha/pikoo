@@ -197,7 +197,7 @@ export default function RoomPage({ params }: RoomPageProps) {
     const remainingMs = phaseEndsAt - now;
     
     // Auto-skip when timer reaches 0 (within 1 second tolerance for network latency)
-    if (remainingMs <= 1000 && !hasAutoSkippedRef.current) {
+    if (remainingMs <= 1000 && remainingMs >= -1000 && !hasAutoSkippedRef.current) {
       console.log(`[AUTO_SKIP] Timer reached 0, auto-skipping to next phase`);
       hasAutoSkippedRef.current = true;
       actions.skip();
