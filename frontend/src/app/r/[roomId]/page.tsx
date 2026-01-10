@@ -188,7 +188,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   }, [room?.timer?.phase]);
 
   // Auto-transition to next phase when timer reaches 0
-  // Simple rule: If timer is running and reaches 0, skip to next phase
+  // CRITICAL: Only auto-skip if timer has been running and counting down for a meaningful duration
   useEffect(() => {
     if (!room?.timer) return;
     
@@ -200,13 +200,14 @@ export default function RoomPage({ params }: RoomPageProps) {
     const remainingMs = phaseEndsAt ? phaseEndsAt - now : Infinity;
     
     // Detect when timer actually starts (transitions from false to true)
-    // Only record phase if phaseEndsAt is in the future (not stale)
-    if (!prevRunning && running && phaseEndsAt && remainingMs > 0) {
-      // Timer just started - phaseEndsAt is in the future, so this is valid
+    // CRITICAL: Only record if phaseEndsAt is in the future AND has meaningful duration
+    // This ensures we never track timers that start at 0 or are stale
+    if (!prevRunning && running && phaseEndsAt && remainingMs > 5000) {
+      // Timer just started - phaseEndsAt is at least 5 seconds in the future
       timerStartPhaseRef.current = phase;
       timerStartTimeRef.current = Date.now();
       hasAutoSkippedRef.current = false;
-      console.log(`[AUTO_SKIP] Timer started for phase: ${phase}`);
+      console.log(`[AUTO_SKIP] Timer started for phase: ${phase}, remaining: ${Math.ceil(remainingMs / 1000)}s`);
     }
     
     // Update prevRunningRef for next render
@@ -229,10 +230,10 @@ export default function RoomPage({ params }: RoomPageProps) {
     if (timerStartPhaseRef.current === null) {
       // Timer is running but we haven't tracked the start phase yet
       // This means either:
-      // 1. Stale data where phaseEndsAt is in the past (we didn't record it above)
-      // 2. Timer was already running when we joined
-      // In either case, don't auto-skip
-      console.log(`[AUTO_SKIP] Timer is running but start phase not tracked - ignoring`);
+      // 1. Stale data where phaseEndsAt is in the past or too close to 0
+      // 2. Timer was already running when we joined (but we can't verify it's valid)
+      // In either case, don't auto-skip - user must manually skip
+      console.log(`[AUTO_SKIP] Timer is running but start phase not tracked - ignoring (remaining: ${Math.ceil(remainingMs / 1000)}s)`);
       return;
     }
     
@@ -241,28 +242,23 @@ export default function RoomPage({ params }: RoomPageProps) {
       return;
     }
     
-    // Auto-skip when timer reaches 0
-    // BUT: Prevent auto-skip if:
-    // 1. Phase just changed (within last 2 seconds) - prevents immediate cascading skips
-    // 2. Timer just started (within last 2 seconds) - ensures timer actually ran
-    const timeSincePhaseChange = Date.now() - phaseChangeTimeRef.current;
+    // CRITICAL: Only auto-skip if timer has been running for at least 5 seconds
+    // This ensures the timer actually counted down and wasn't just started at 0
     const timeSinceTimerStart = timerStartTimeRef.current > 0 ? Date.now() - timerStartTimeRef.current : Infinity;
+    const MIN_RUNTIME_MS = 5000; // Must run for at least 5 seconds
     
     if (remainingMs <= 0 && !hasAutoSkippedRef.current) {
-      if (timeSincePhaseChange <= 2000) {
-        console.log(`[AUTO_SKIP] Preventing auto-skip - phase changed ${timeSincePhaseChange}ms ago (too recent)`);
-        return;
-      }
       if (timerStartTimeRef.current === 0) {
         console.log(`[AUTO_SKIP] Preventing auto-skip - timer start time not tracked`);
         return;
       }
-      if (timeSinceTimerStart <= 2000) {
-        console.log(`[AUTO_SKIP] Preventing auto-skip - timer started ${timeSinceTimerStart}ms ago (too recent)`);
+      
+      if (timeSinceTimerStart < MIN_RUNTIME_MS) {
+        console.log(`[AUTO_SKIP] Preventing auto-skip - timer only ran for ${Math.ceil(timeSinceTimerStart / 1000)}s (need at least ${MIN_RUNTIME_MS / 1000}s)`);
         return;
       }
       
-      console.log(`[AUTO_SKIP] Timer reached 0, auto-skipping phase ${phase} to next phase`);
+      console.log(`[AUTO_SKIP] Timer reached 0, auto-skipping phase ${phase} to next phase (ran for ${Math.ceil(timeSinceTimerStart / 1000)}s)`);
       hasAutoSkippedRef.current = true;
       actions.skip();
     }
