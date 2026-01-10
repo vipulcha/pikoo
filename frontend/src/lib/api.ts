@@ -30,3 +30,18 @@ export async function getRoomState(roomId: string): Promise<RoomState | null> {
   return res.json();
 }
 
+export async function getRoomDebug(roomId: string): Promise<{
+  roomId: string;
+  storedParticipants: Array<{ id: string; name: string; uniqueId: string }>;
+  connectedSockets: string[];
+  staleParticipants: Array<{ id: string; name: string }>;
+}> {
+  const res = await fetch(`${BACKEND_URL}/rooms/${roomId}/debug`);
+  
+  if (!res.ok) {
+    throw new Error("Failed to get room debug info");
+  }
+  
+  return res.json();
+}
+

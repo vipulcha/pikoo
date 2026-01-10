@@ -71,10 +71,18 @@ async function cleanupStaleParticipants(io: Server, roomId: string): Promise<voi
     const room = await getRoom(roomId);
     if (!room) return;
     
+    const beforeCount = room.participants.length;
+    const beforeParticipants = room.participants.map(p => `${p.name}(${p.id.slice(-6)})`);
+    
     const socketsInRoom = await io.in(roomId).fetchSockets();
     const connectedSocketIds = new Set(socketsInRoom.map(s => s.id));
     
     const staleParticipants = room.participants.filter(p => !connectedSocketIds.has(p.id));
+    
+    // Always log cleanup attempt for debugging
+    console.log(`[CLEANUP] Checking room ${roomId}: ${beforeCount} participants stored, ${connectedSocketIds.size} sockets connected`);
+    console.log(`[CLEANUP] Stored participants:`, beforeParticipants);
+    console.log(`[CLEANUP] Connected socket IDs:`, Array.from(connectedSocketIds).map(id => id.slice(-6)));
     
     if (staleParticipants.length > 0) {
       console.log(`[CLEANUP] Found ${staleParticipants.length} stale participants in ${roomId}:`, 
@@ -88,6 +96,8 @@ async function cleanupStaleParticipants(io: Server, roomId: string): Promise<voi
       // Broadcast updated participants
       io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants: room.participants });
       console.log(`[CLEANUP] Removed stale participants, now ${room.participants.length} remaining`);
+    } else {
+      console.log(`[CLEANUP] No stale participants found in ${roomId}`);
     }
   } catch (err) {
     console.error("[CLEANUP] Error cleaning up stale participants:", err);
@@ -456,19 +466,26 @@ export function setupSocketHandlers(io: Server): void {
     // Disconnect
     // ========================================
     socket.on("disconnect", async (reason) => {
-      console.log(`🔌 Client disconnected: ${socket.id}, reason: ${reason}, roomId: ${currentRoomId}, user: ${currentUserName}`);
+      console.log(`🔌 Client disconnected: ${socket.id}, reason: ${reason}, roomId: ${currentRoomId}, user: ${currentUserName}, uniqueId: ${currentUniqueId}`);
 
       if (currentRoomId) {
         try {
-          console.log(`[DISCONNECT] Removing participant ${socket.id} from room ${currentRoomId}`);
+          // Get room state before removal for debugging
+          const roomBefore = await getRoom(currentRoomId);
+          const participantsBefore = roomBefore?.participants || [];
+          console.log(`[DISCONNECT] Before removal - room has ${participantsBefore.length} participants:`, 
+            participantsBefore.map(p => `${p.name}(${p.id.slice(-6)}, uniqueId: ${p.uniqueId.slice(-8)})`));
+          
+          console.log(`[DISCONNECT] Removing participant ${socket.id} (${currentUserName}) from room ${currentRoomId}`);
           const participants = await removeParticipant(currentRoomId, socket.id);
-          console.log(`[DISCONNECT] After removal, participants:`, participants.map(p => `${p.name}(${p.id.slice(-6)})`));
+          console.log(`[DISCONNECT] After removal, ${participants.length} participants remaining:`, 
+            participants.map(p => `${p.name}(${p.id.slice(-6)})`));
           io.to(currentRoomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants });
         } catch (err) {
-          console.error("Error removing participant:", err);
+          console.error("[DISCONNECT] Error removing participant:", err);
         }
       } else {
-        console.log(`[DISCONNECT] No room to leave for ${socket.id}`);
+        console.log(`[DISCONNECT] No room to leave for ${socket.id} (${currentUserName})`);
       }
     });
   });
