@@ -74,7 +74,7 @@ export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, hasUnread
       {/* Chat Panel Drawer */}
       <div 
         className={`
-          fixed right-0 top-0 h-full w-80 sm:w-96 z-30
+          fixed right-0 top-18 h-[calc(100vh-4rem)] w-80 sm:w-96 z-30
           bg-black/80 backdrop-blur-xl border-l border-white/10
           transform transition-transform duration-300 ease-out
           ${isOpen ? "translate-x-0" : "translate-x-full"}
