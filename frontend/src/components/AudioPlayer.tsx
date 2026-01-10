@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { 
   SOUND_OPTIONS, 
   SoundId, 
@@ -142,37 +143,39 @@ export function AudioPlayer() {
   if (!isMounted) return null;
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      {/* Toggle Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`
-          px-3 py-1.5 rounded-full transition-all duration-200 relative flex items-center gap-1.5
-          text-sm font-medium
-          ${isOpen || isPlaying
-            ? "bg-white/20 text-white" 
-            : "bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10"
-          }
-        `}
-      >
-        {isLoading ? (
-          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-        ) : (
-          <>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V4.5A2.25 2.25 0 0016.5 2.25H6A2.25 2.25 0 003.75 4.5v15A2.25 2.25 0 006 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.954" />
-            </svg>
-            <span>Music</span>
-            {isPlaying && (
-              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
-            )}
-          </>
-        )}
-      </button>
+    <>
+      <div className="relative" ref={dropdownRef}>
+        {/* Toggle Button */}
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className={`
+            px-3 py-1.5 rounded-full transition-all duration-200 relative flex items-center gap-1.5
+            text-sm font-medium
+            ${isOpen || isPlaying
+              ? "bg-white/20 text-white" 
+              : "bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10"
+            }
+          `}
+        >
+          {isLoading ? (
+            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V4.5A2.25 2.25 0 0016.5 2.25H6A2.25 2.25 0 003.75 4.5v15A2.25 2.25 0 006 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.954" />
+              </svg>
+              <span>Music</span>
+              {isPlaying && (
+                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
+              )}
+            </>
+          )}
+        </button>
+      </div>
 
-      {/* Dropdown */}
-      {isOpen && (
-        <div className="absolute top-full right-0 mt-2 w-64 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-3 animate-fade-in z-50">
+      {/* Dropdown - Rendered via portal to document.body to ensure it's above chat */}
+      {isOpen && isMounted && typeof document !== "undefined" && createPortal(
+        <div className="fixed top-20 right-4 sm:right-6 w-64 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-3 animate-fade-in" style={{ zIndex: 100 }}>
           <p className="text-xs text-white/50 uppercase tracking-wider mb-2 px-1">Ambient Sounds</p>
           
           {/* Sound Options */}
@@ -229,9 +232,10 @@ export function AudioPlayer() {
               </p>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 
