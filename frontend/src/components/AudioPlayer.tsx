@@ -22,6 +22,7 @@ export function AudioPlayer() {
   const [isMounted, setIsMounted] = useState(false);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const buttonRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Load saved preferences on mount
@@ -42,15 +43,28 @@ export function AudioPlayer() {
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      // Check if click is outside both button and dropdown
+      const clickedButton = buttonRef.current?.contains(target);
+      const clickedDropdown = dropdownRef.current?.contains(target);
+      
+      // Only close if click is outside both button and dropdown
+      if (!clickedButton && !clickedDropdown) {
         setIsOpen(false);
       }
     };
     
     if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
+      // Use a small delay to ensure portal is mounted and ref is set
+      const timeout = setTimeout(() => {
+        document.addEventListener("mousedown", handleClickOutside);
+      }, 0);
+      
+      return () => {
+        clearTimeout(timeout);
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
     }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
   // Stop all audio
@@ -144,7 +158,7 @@ export function AudioPlayer() {
 
   return (
     <>
-      <div className="relative" ref={dropdownRef}>
+      <div className="relative" ref={buttonRef}>
         {/* Toggle Button */}
         <button
           onClick={() => setIsOpen(!isOpen)}
@@ -175,7 +189,12 @@ export function AudioPlayer() {
 
       {/* Dropdown - Rendered via portal to document.body to ensure it's above chat */}
       {isOpen && isMounted && typeof document !== "undefined" && createPortal(
-        <div className="fixed top-20 right-4 sm:right-6 w-64 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-3 animate-fade-in" style={{ zIndex: 100 }}>
+        <div 
+          ref={dropdownRef} 
+          onClick={(e) => e.stopPropagation()}
+          className="fixed top-20 right-4 sm:right-6 w-64 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-3 animate-fade-in" 
+          style={{ zIndex: 100 }}
+        >
           <p className="text-xs text-white/50 uppercase tracking-wider mb-2 px-1">Ambient Sounds</p>
           
           {/* Sound Options */}
@@ -183,7 +202,10 @@ export function AudioPlayer() {
             {SOUND_OPTIONS.map((option) => (
               <button
                 key={option.id}
-                onClick={() => handleSelectSound(option.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSelectSound(option.id);
+                }}
                 disabled={isLoading}
                 className={`
                   w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left
