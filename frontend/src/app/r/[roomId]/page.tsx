@@ -61,6 +61,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
   const prevPhaseRef = useRef<Phase | null>(null);
   const hasAutoSkippedRef = useRef(false);
+  const processedTransitionRef = useRef<string | null>(null); // Track processed transitions to avoid duplicates
 
   // Check for saved name and get uniqueId on mount
   useEffect(() => {
@@ -128,8 +129,15 @@ export default function RoomPage({ params }: RoomPageProps) {
     const currentPhase = room.timer.phase;
     const prevPhase = prevPhaseRef.current;
     
+    // Create a unique transition key to prevent duplicate processing
+    const transitionKey = prevPhase && currentPhase ? `${prevPhase}->${currentPhase}` : null;
+    
     // Only trigger on actual phase changes (not initial load)
-    if (prevPhase && prevPhase !== currentPhase) {
+    // Also check if we've already processed this exact transition (handles out-of-order updates)
+    if (prevPhase && prevPhase !== currentPhase && processedTransitionRef.current !== transitionKey) {
+      // Mark this transition as processed
+      processedTransitionRef.current = transitionKey || null;
+      
       // Send notification based on what phase just ended
       if (prevPhase === "focus") {
         // Focus session ended → break time! (celebratory notification)
@@ -142,18 +150,32 @@ export default function RoomPage({ params }: RoomPageProps) {
       // Show prompt ONLY when transitioning FROM break/long_break TO focus
       // Never show when transitioning TO break or long_break
       if (currentPhase === "focus" && (prevPhase === "break" || prevPhase === "long_break")) {
-        setTimeout(() => setShowSessionPrompt(true), 500);
+        console.log(`[PHASE_TRANSITION] Showing session prompt: ${prevPhase} → ${currentPhase}`);
+        setTimeout(() => {
+          // Double-check we're still in focus phase before showing (defense against race conditions)
+          const roomCheck = room?.timer?.phase;
+          if (roomCheck === "focus") {
+            setShowSessionPrompt(true);
+          } else {
+            console.log(`[PHASE_TRANSITION] Aborted showing prompt - phase changed to ${roomCheck}`);
+          }
+        }, 500);
       } else {
-        // Explicitly hide prompt if transitioning to break
+        // Explicitly hide prompt if transitioning to break or if we're already in break
         if (currentPhase === "break" || currentPhase === "long_break") {
+          console.log(`[PHASE_TRANSITION] Hiding session prompt - transitioning to ${currentPhase}`);
           setShowSessionPrompt(false);
         }
       }
     }
     
-    prevPhaseRef.current = currentPhase;
-    // Reset auto-skip flag when phase changes (so next phase can auto-skip too)
-    hasAutoSkippedRef.current = false;
+    // Update prevPhaseRef at the end, but only if phase actually changed
+    // This prevents duplicate processing if multiple updates arrive with same phase
+    if (prevPhase !== currentPhase) {
+      prevPhaseRef.current = currentPhase;
+      // Reset auto-skip flag when phase changes (so next phase can auto-skip too)
+      hasAutoSkippedRef.current = false;
+    }
   }, [room?.timer?.phase]);
 
   // Auto-transition to next phase when timer reaches 0
@@ -177,6 +199,14 @@ export default function RoomPage({ params }: RoomPageProps) {
       actions.skip();
     }
   }, [remaining, room?.timer, actions]);
+
+  // Safety: Close session prompt if we're not in focus phase
+  useEffect(() => {
+    if (showSessionPrompt && room?.timer?.phase !== "focus") {
+      console.log(`[SAFETY] Closing session prompt - current phase is ${room?.timer?.phase}, not focus`);
+      setShowSessionPrompt(false);
+    }
+  }, [showSessionPrompt, room?.timer?.phase]);
 
   // Show welcome prompt for new users (no name) immediately, or users with no todos after room loads
   useEffect(() => {
@@ -673,9 +703,9 @@ export default function RoomPage({ params }: RoomPageProps) {
         participants={participants}
       />
 
-      {/* Session Start Prompt */}
+      {/* Session Start Prompt - Only show for focus phase */}
       <SessionPrompt
-        isVisible={showSessionPrompt}
+        isVisible={showSessionPrompt && room?.timer?.phase === "focus"}
         userTodos={myTodos}
         onSelectTodo={(todoId) => {
           if (todoId) actions.setActiveTodo(todoId);
