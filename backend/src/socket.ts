@@ -77,18 +77,41 @@ async function cleanupStaleParticipants(io: Server, roomId: string): Promise<voi
     const socketsInRoom = await io.in(roomId).fetchSockets();
     const connectedSocketIds = new Set(socketsInRoom.map(s => s.id));
     
-    const staleParticipants = room.participants.filter(p => !connectedSocketIds.has(p.id));
+    // Double-check: Verify each participant's socket is actually disconnected before removing
+    // This prevents race conditions where socket.join() hasn't fully propagated
+    const verifiedStaleParticipants = room.participants.filter(p => {
+      const isInRoom = connectedSocketIds.has(p.id);
+      if (isInRoom) {
+        // Socket is in room, definitely active
+        return false;
+      }
+      
+      // Socket not in room - verify it's actually disconnected
+      // Check if socket exists in the namespace and is disconnected
+      const socket = io.sockets.sockets.get(p.id);
+      if (socket && socket.connected) {
+        // Socket exists and is connected but not in room - might be a race condition
+        // Don't remove it, it might be joining
+        console.log(`[CLEANUP] WARNING: Participant ${p.name}(${p.id.slice(-6)}) socket is connected but not in room - skipping removal (race condition)`);
+        return false;
+      }
+      
+      // Socket doesn't exist or is disconnected - safe to remove
+      return true;
+    });
     
     // Always log cleanup attempt for debugging
     console.log(`[CLEANUP] Checking room ${roomId}: ${beforeCount} participants stored, ${connectedSocketIds.size} sockets connected`);
     console.log(`[CLEANUP] Stored participants:`, beforeParticipants);
     console.log(`[CLEANUP] Connected socket IDs:`, Array.from(connectedSocketIds).map(id => id.slice(-6)));
     
-    if (staleParticipants.length > 0) {
-      console.log(`[CLEANUP] Found ${staleParticipants.length} stale participants in ${roomId}:`, 
-        staleParticipants.map(p => `${p.name}(${p.id.slice(-6)})`));
+    if (verifiedStaleParticipants.length > 0) {
+      console.log(`[CLEANUP] Found ${verifiedStaleParticipants.length} verified stale participants in ${roomId}:`, 
+        verifiedStaleParticipants.map(p => `${p.name}(${p.id.slice(-6)})`));
       
-      room.participants = room.participants.filter(p => connectedSocketIds.has(p.id));
+      // Only remove verified stale participants
+      const staleSocketIds = new Set(verifiedStaleParticipants.map(p => p.id));
+      room.participants = room.participants.filter(p => !staleSocketIds.has(p.id));
       
       const { saveRoom } = await import("./store.js");
       await saveRoom(room);

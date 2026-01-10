@@ -63,6 +63,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   const hasAutoSkippedRef = useRef(false);
   const timerStartPhaseRef = useRef<Phase | null>(null); // Track which phase the timer was started for
   const prevRunningRef = useRef<boolean>(false); // Track previous running state to detect timer start
+  const phaseChangeTimeRef = useRef<number>(0); // Track when phase last changed
   const processedTransitionRef = useRef<string | null>(null); // Track processed transitions to avoid duplicates
 
   // Check for saved name and get uniqueId on mount
@@ -179,6 +180,7 @@ export default function RoomPage({ params }: RoomPageProps) {
       hasAutoSkippedRef.current = false;
       timerStartPhaseRef.current = null;
       prevRunningRef.current = false; // Reset running state tracking
+      phaseChangeTimeRef.current = Date.now(); // Record when phase changed
       console.log(`[PHASE_CHANGE] Phase changed to ${currentPhase}`);
     }
   }, [room?.timer?.phase]);
@@ -236,10 +238,15 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
     
     // Auto-skip when timer reaches 0
-    if (remainingMs <= 0 && !hasAutoSkippedRef.current) {
+    // BUT: Prevent auto-skip if phase just changed (within last 1 second)
+    // This prevents immediate cascading skips when a new phase starts with timer already at 0
+    const timeSincePhaseChange = Date.now() - phaseChangeTimeRef.current;
+    if (remainingMs <= 0 && !hasAutoSkippedRef.current && timeSincePhaseChange > 1000) {
       console.log(`[AUTO_SKIP] Timer reached 0, auto-skipping phase ${phase} to next phase`);
       hasAutoSkippedRef.current = true;
       actions.skip();
+    } else if (remainingMs <= 0 && timeSincePhaseChange <= 1000) {
+      console.log(`[AUTO_SKIP] Preventing auto-skip - phase changed ${timeSincePhaseChange}ms ago (too recent)`);
     }
   }, [remaining, room?.timer?.running, room?.timer?.phaseEndsAt, room?.timer?.phase, actions]);
 
