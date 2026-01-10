@@ -44,4 +44,3 @@ export async function getRoomDebug(roomId: string): Promise<{
   
   return res.json();
 }
-
