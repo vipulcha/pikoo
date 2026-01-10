@@ -62,6 +62,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   const prevPhaseRef = useRef<Phase | null>(null);
   const hasAutoSkippedRef = useRef(false);
   const timerStartPhaseRef = useRef<Phase | null>(null); // Track which phase the timer was started for
+  const timerStartTimeRef = useRef<number>(0); // Track when timer actually started (for this phase)
   const prevRunningRef = useRef<boolean>(false); // Track previous running state to detect timer start
   const phaseChangeTimeRef = useRef<number>(0); // Track when phase last changed
   const processedTransitionRef = useRef<string | null>(null); // Track processed transitions to avoid duplicates
@@ -179,6 +180,7 @@ export default function RoomPage({ params }: RoomPageProps) {
       // Clear auto-skip tracking when phase changes (timer needs to be restarted for new phase)
       hasAutoSkippedRef.current = false;
       timerStartPhaseRef.current = null;
+      timerStartTimeRef.current = 0;
       prevRunningRef.current = false; // Reset running state tracking
       phaseChangeTimeRef.current = Date.now(); // Record when phase changed
       console.log(`[PHASE_CHANGE] Phase changed to ${currentPhase}`);
@@ -202,6 +204,7 @@ export default function RoomPage({ params }: RoomPageProps) {
     if (!prevRunning && running && phaseEndsAt && remainingMs > 0) {
       // Timer just started - phaseEndsAt is in the future, so this is valid
       timerStartPhaseRef.current = phase;
+      timerStartTimeRef.current = Date.now();
       hasAutoSkippedRef.current = false;
       console.log(`[AUTO_SKIP] Timer started for phase: ${phase}`);
     }
@@ -216,6 +219,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         // Timer just stopped
         hasAutoSkippedRef.current = false;
         timerStartPhaseRef.current = null;
+        timerStartTimeRef.current = 0;
       }
       return;
     }
@@ -238,15 +242,29 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
     
     // Auto-skip when timer reaches 0
-    // BUT: Prevent auto-skip if phase just changed (within last 1 second)
-    // This prevents immediate cascading skips when a new phase starts with timer already at 0
+    // BUT: Prevent auto-skip if:
+    // 1. Phase just changed (within last 2 seconds) - prevents immediate cascading skips
+    // 2. Timer just started (within last 2 seconds) - ensures timer actually ran
     const timeSincePhaseChange = Date.now() - phaseChangeTimeRef.current;
-    if (remainingMs <= 0 && !hasAutoSkippedRef.current && timeSincePhaseChange > 1000) {
+    const timeSinceTimerStart = timerStartTimeRef.current > 0 ? Date.now() - timerStartTimeRef.current : Infinity;
+    
+    if (remainingMs <= 0 && !hasAutoSkippedRef.current) {
+      if (timeSincePhaseChange <= 2000) {
+        console.log(`[AUTO_SKIP] Preventing auto-skip - phase changed ${timeSincePhaseChange}ms ago (too recent)`);
+        return;
+      }
+      if (timerStartTimeRef.current === 0) {
+        console.log(`[AUTO_SKIP] Preventing auto-skip - timer start time not tracked`);
+        return;
+      }
+      if (timeSinceTimerStart <= 2000) {
+        console.log(`[AUTO_SKIP] Preventing auto-skip - timer started ${timeSinceTimerStart}ms ago (too recent)`);
+        return;
+      }
+      
       console.log(`[AUTO_SKIP] Timer reached 0, auto-skipping phase ${phase} to next phase`);
       hasAutoSkippedRef.current = true;
       actions.skip();
-    } else if (remainingMs <= 0 && timeSincePhaseChange <= 1000) {
-      console.log(`[AUTO_SKIP] Preventing auto-skip - phase changed ${timeSincePhaseChange}ms ago (too recent)`);
     }
   }, [remaining, room?.timer?.running, room?.timer?.phaseEndsAt, room?.timer?.phase, actions]);
 
