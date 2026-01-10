@@ -139,9 +139,15 @@ export default function RoomPage({ params }: RoomPageProps) {
         notifyBreakEnd();
       }
       
-      // Show prompt when transitioning TO focus phase
-      if (currentPhase === "focus") {
+      // Show prompt ONLY when transitioning FROM break/long_break TO focus
+      // Never show when transitioning TO break or long_break
+      if (currentPhase === "focus" && (prevPhase === "break" || prevPhase === "long_break")) {
         setTimeout(() => setShowSessionPrompt(true), 500);
+      } else {
+        // Explicitly hide prompt if transitioning to break
+        if (currentPhase === "break" || currentPhase === "long_break") {
+          setShowSessionPrompt(false);
+        }
       }
     }
     
