@@ -8,6 +8,7 @@ interface TodoListProps {
   onAddTodo: (text: string) => void;
   onUpdateTodo: (todoId: string, updates: { text?: string; completed?: boolean }) => void;
   onDeleteTodo: (todoId: string) => void;
+  onReorderTodos?: (todoIds: string[]) => void;
   onSetActiveTodo: (todoId: string | null) => void;
   onSetVisibility: (isPublic: boolean) => void;
 }
@@ -17,6 +18,7 @@ export function TodoList({
   onAddTodo,
   onUpdateTodo,
   onDeleteTodo,
+  onReorderTodos,
   onSetActiveTodo,
   onSetVisibility,
 }: TodoListProps) {
@@ -49,17 +51,22 @@ export function TodoList({
     }
   };
 
-  // Sort: active first, then incomplete, then completed
-  const sortedTodos = [...todos].sort((a, b) => {
-    // Active todo always first
-    if (a.id === activeTodoId) return -1;
-    if (b.id === activeTodoId) return 1;
-    // Then incomplete todos
-    if (a.completed && !b.completed) return 1;
-    if (!a.completed && b.completed) return -1;
-    // Then by creation time (oldest first, so new tasks appear at bottom)
-    return a.createdAt - b.createdAt;
-  });
+  const handleMoveUp = (index: number) => {
+    if (index === 0 || !onReorderTodos) return;
+    const newOrder = [...todos];
+    [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
+    onReorderTodos(newOrder.map(t => t.id));
+  };
+
+  const handleMoveDown = (index: number) => {
+    if (index === todos.length - 1 || !onReorderTodos) return;
+    const newOrder = [...todos];
+    [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+    onReorderTodos(newOrder.map(t => t.id));
+  };
+
+  // Don't auto-sort - preserve user's order
+  const displayTodos = todos;
 
   const completedCount = todos.filter(t => t.completed).length;
 
@@ -92,8 +99,8 @@ export function TodoList({
             onClick={() => onSetVisibility(!isPublic)}
             className={`
               p-1.5 rounded-lg transition-all duration-200
-              ${isPublic 
-                ? "text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-500/10" 
+              ${isPublic
+                ? "text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-500/10"
                 : "text-white/40 hover:text-white/60 hover:bg-white/5"
               }
             `}
@@ -166,20 +173,26 @@ export function TodoList({
               scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent
             "
           >
-            {sortedTodos.length === 0 ? (
+            {displayTodos.length === 0 ? (
               <div className="text-center py-6 text-white/30 text-sm">
                 No tasks yet. Add one above!
               </div>
             ) : (
               <div className="space-y-1.5">
-                {sortedTodos.map((todo) => (
+                {displayTodos.map((todo, index) => (
                   <TodoItemRow
                     key={todo.id}
                     todo={todo}
+                    index={index}
+                    totalCount={displayTodos.length}
                     isActive={todo.id === activeTodoId}
                     onToggleComplete={() => handleToggleComplete(todo)}
                     onSetActive={() => handleSetActive(todo.id)}
                     onDelete={() => onDeleteTodo(todo.id)}
+                    onUpdateText={(text) => onUpdateTodo(todo.id, { text })}
+                    onMoveUp={() => handleMoveUp(index)}
+                    onMoveDown={() => handleMoveDown(index)}
+                    canReorder={!!onReorderTodos}
                   />
                 ))}
               </div>
@@ -200,27 +213,76 @@ export function TodoList({
 
 interface TodoItemRowProps {
   todo: TodoItem;
+  index: number;
+  totalCount: number;
   isActive: boolean;
   onToggleComplete: () => void;
   onSetActive: () => void;
   onDelete: () => void;
+  onUpdateText: (text: string) => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canReorder: boolean;
 }
 
 function TodoItemRow({
   todo,
+  index,
+  totalCount,
   isActive,
   onToggleComplete,
   onSetActive,
   onDelete,
+  onUpdateText,
+  onMoveUp,
+  onMoveDown,
+  canReorder,
 }: TodoItemRowProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(todo.text);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus input when entering edit mode
+  useEffect(() => {
+    if (isEditing && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleStartEdit = () => {
+    setEditText(todo.text);
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = () => {
+    const trimmed = editText.trim();
+    if (trimmed && trimmed !== todo.text) {
+      onUpdateText(trimmed);
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditText(todo.text);
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSaveEdit();
+    } else if (e.key === "Escape") {
+      handleCancelEdit();
+    }
+  };
 
   return (
     <div
       className={`
         group flex items-start gap-2 p-2 rounded-lg transition-all duration-200
-        ${isActive 
-          ? "bg-rose-500/15 border border-rose-500/30" 
+        ${isActive
+          ? "bg-rose-500/15 border border-rose-500/30"
           : "bg-white/5 border border-transparent hover:bg-white/8 hover:border-white/10"
         }
       `}
@@ -233,8 +295,8 @@ function TodoItemRow({
         className={`
           mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center
           transition-all duration-200
-          ${todo.completed 
-            ? "bg-emerald-500/30 border-emerald-500/50 text-emerald-400" 
+          ${todo.completed
+            ? "bg-emerald-500/30 border-emerald-500/50 text-emerald-400"
             : "border-white/30 hover:border-white/50"
           }
         `}
@@ -248,32 +310,86 @@ function TodoItemRow({
 
       {/* Todo text & actions */}
       <div className="flex-1 min-w-0">
-        <p
-          className={`
-            text-sm leading-snug break-words
-            ${todo.completed 
-              ? "line-through text-white/30" 
-              : "text-white/80"
-            }
-          `}
-        >
-          {todo.text}
-        </p>
+        {isEditing ? (
+          <input
+            ref={editInputRef}
+            type="text"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            onBlur={handleSaveEdit}
+            onKeyDown={handleKeyDown}
+            maxLength={200}
+            className="
+              w-full px-2 py-0.5 bg-white/10 border border-white/20 rounded
+              text-sm text-white focus:outline-none focus:border-white/40
+            "
+          />
+        ) : (
+          <p
+            onDoubleClick={handleStartEdit}
+            className={`
+              text-sm leading-snug break-words cursor-text
+              ${todo.completed
+                ? "line-through text-white/30"
+                : "text-white/80"
+              }
+            `}
+          >
+            {todo.text}
+          </p>
+        )}
       </div>
 
       {/* Action buttons */}
       <div className={`
-        flex items-center gap-1 flex-shrink-0 transition-opacity duration-150
-        ${isHovered ? "opacity-100" : "opacity-0"}
+        flex items-center gap-0.5 flex-shrink-0 transition-opacity duration-150
+        ${isHovered && !isEditing ? "opacity-100" : "opacity-0"}
       `}>
+        {/* Move up/down buttons */}
+        {canReorder && (
+          <>
+            <button
+              onClick={onMoveUp}
+              disabled={index === 0}
+              className="p-1 rounded text-white/40 hover:text-white/70 disabled:opacity-20 disabled:cursor-not-allowed transition-colors duration-150"
+              title="Move up"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+              </svg>
+            </button>
+            <button
+              onClick={onMoveDown}
+              disabled={index === totalCount - 1}
+              className="p-1 rounded text-white/40 hover:text-white/70 disabled:opacity-20 disabled:cursor-not-allowed transition-colors duration-150"
+              title="Move down"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </>
+        )}
+
+        {/* Edit button */}
+        <button
+          onClick={handleStartEdit}
+          className="p-1 rounded text-white/40 hover:text-white/70 transition-colors duration-150"
+          title="Edit task"
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+          </svg>
+        </button>
+
         {/* Focus/Active button */}
         {!todo.completed && (
           <button
             onClick={onSetActive}
             className={`
               p-1 rounded transition-colors duration-150
-              ${isActive 
-                ? "text-rose-400 hover:text-rose-300" 
+              ${isActive
+                ? "text-rose-400 hover:text-rose-300"
                 : "text-white/40 hover:text-white/70"
               }
             `}
@@ -300,4 +416,3 @@ function TodoItemRow({
     </div>
   );
 }
-

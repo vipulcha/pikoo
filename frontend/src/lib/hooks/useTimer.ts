@@ -16,13 +16,14 @@ interface UseTimerReturn {
     start: () => void;
     pause: () => void;
     reset: () => void;
-    skip: () => void;
+    skip: (source?: "auto" | "manual") => void;
     updateSettings: (settings: Partial<RoomSettings>) => void;
     sendMessage: (text: string) => void;
     // Todo actions
     addTodo: (text: string) => void;
     updateTodo: (todoId: string, updates: { text?: string; completed?: boolean }) => void;
     deleteTodo: (todoId: string) => void;
+    reorderTodos: (todoIds: string[]) => void;
     setActiveTodo: (todoId: string | null) => void;
     setTodoVisibility: (isPublic: boolean) => void;
   };
@@ -74,7 +75,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       }
 
       const { running, phaseEndsAt } = room.timer;
-      
+
       // Stop interval if timer is no longer running
       if (!running || !phaseEndsAt) {
         clearInterval(interval);
@@ -165,28 +166,28 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
           console.log("[TODOS_UPDATE] prev is null, ignoring");
           return prev;
         }
-        
+
         // Smart merge: preserve our optimistic (temp_) todos that server doesn't know about yet
         const myUniqueId = uniqueId;
         const myLocalTodos = prev.userTodos?.[myUniqueId];
         const myServerTodos = userTodos[myUniqueId];
-        
+
         if (myLocalTodos && myServerTodos) {
           // Get our pending (temp_) todos
           const pendingTodos = myLocalTodos.todos.filter(t => t.id.startsWith('temp_'));
           const serverTodoTexts = new Set(myServerTodos.todos.map(t => t.text));
-          
+
           if (pendingTodos.length > 0) {
             // Only keep pending todos that DON'T have a matching text on server
             // (if server has a todo with same text, it's the real version of our temp)
             const unconfirmedPending = pendingTodos.filter(t => !serverTodoTexts.has(t.text));
-            
+
             if (unconfirmedPending.length > 0) {
               console.log("[TODOS_UPDATE] Preserving unconfirmed pending todos:", unconfirmedPending.map(t => t.id));
-              
+
               // Merge: server todos + unconfirmed pending todos
               const mergedTodos = [...myServerTodos.todos, ...unconfirmedPending];
-              
+
               return {
                 ...prev,
                 userTodos: {
@@ -195,19 +196,19 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
                     ...myServerTodos,
                     todos: mergedTodos,
                     // Keep local activeTodoId if it's a temp_ id that's still pending
-                    activeTodoId: myLocalTodos.activeTodoId?.startsWith('temp_') && 
-                                  unconfirmedPending.some(t => t.id === myLocalTodos.activeTodoId)
-                      ? myLocalTodos.activeTodoId 
+                    activeTodoId: myLocalTodos.activeTodoId?.startsWith('temp_') &&
+                      unconfirmedPending.some(t => t.id === myLocalTodos.activeTodoId)
+                      ? myLocalTodos.activeTodoId
                       : myServerTodos.activeTodoId,
                   },
                 },
               };
             }
-            
+
             console.log("[TODOS_UPDATE] All pending todos confirmed by server");
           }
         }
-        
+
         console.log("[TODOS_UPDATE] Using server data directly");
         return { ...prev, userTodos };
       });
@@ -255,7 +256,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
   useEffect(() => {
     // Update the ref
     userNameRef.current = userName;
-    
+
     // Only send update if we've already joined the room
     if (hasJoinedRef.current && socketRef.current && userName) {
       console.log("[UPDATE_NAME] Emitting UPDATE_NAME with name:", userName);
@@ -292,12 +293,13 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     start: () => socketRef.current?.emit(SOCKET_EVENTS.TIMER_START),
     pause: () => socketRef.current?.emit(SOCKET_EVENTS.TIMER_PAUSE),
     reset: () => socketRef.current?.emit(SOCKET_EVENTS.TIMER_RESET),
-    skip: () => socketRef.current?.emit(SOCKET_EVENTS.TIMER_SKIP),
-    updateSettings: (settings: Partial<RoomSettings>) => 
+    skip: (source: "auto" | "manual" = "manual") =>
+      socketRef.current?.emit(SOCKET_EVENTS.TIMER_SKIP, { source }),
+    updateSettings: (settings: Partial<RoomSettings>) =>
       socketRef.current?.emit(SOCKET_EVENTS.UPDATE_SETTINGS, settings),
     sendMessage: (text: string) =>
       socketRef.current?.emit(SOCKET_EVENTS.SEND_MESSAGE, { text }),
-    
+
     // Todo actions with OPTIMISTIC UPDATES
     addTodo: (text: string) => {
       console.log("[TODO_ADD] Adding todo:", text);
@@ -320,20 +322,20 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       console.log("[TODO_ADD] Emitting TODO_ADD to server");
       socketRef.current?.emit(SOCKET_EVENTS.TODO_ADD, { text });
     },
-    
+
     updateTodo: (todoId: string, updates: { text?: string; completed?: boolean }) => {
       // Optimistic: update todo locally immediately
       updateMyTodosOptimistically((current) => {
         const updatedTodos = current.todos.map((t) =>
           t.id === todoId ? { ...t, ...updates } : t
         );
-        
+
         // If the active todo is being marked as completed, clear the active todo
         let updatedActiveTodoId = current.activeTodoId;
         if (updates.completed && current.activeTodoId === todoId) {
           updatedActiveTodoId = null;
         }
-        
+
         return {
           ...current,
           todos: updatedTodos,
@@ -343,7 +345,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       // Then emit to server
       socketRef.current?.emit(SOCKET_EVENTS.TODO_UPDATE, { todoId, ...updates });
     },
-    
+
     deleteTodo: (todoId: string) => {
       // Optimistic: remove todo locally immediately
       updateMyTodosOptimistically((current) => ({
@@ -355,7 +357,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       // Then emit to server
       socketRef.current?.emit(SOCKET_EVENTS.TODO_DELETE, { todoId });
     },
-    
+
     setActiveTodo: (todoId: string | null) => {
       // Optimistic: set active todo locally immediately
       updateMyTodosOptimistically((current) => ({
@@ -365,7 +367,26 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       // Then emit to server
       socketRef.current?.emit(SOCKET_EVENTS.TODO_SET_ACTIVE, { todoId });
     },
-    
+
+    reorderTodos: (todoIds: string[]) => {
+      // Optimistic: reorder todos locally immediately
+      updateMyTodosOptimistically((current) => {
+        const todosMap = new Map(current.todos.map(t => [t.id, t]));
+        const reordered = todoIds
+          .map(id => todosMap.get(id))
+          .filter((t): t is typeof current.todos[0] => t !== undefined);
+        // Append any remaining todos not in the new order
+        for (const todo of current.todos) {
+          if (!todoIds.includes(todo.id)) {
+            reordered.push(todo);
+          }
+        }
+        return { ...current, todos: reordered };
+      });
+      // Then emit to server
+      socketRef.current?.emit(SOCKET_EVENTS.TODO_REORDER, { todoIds });
+    },
+
     setTodoVisibility: (isPublic: boolean) => {
       // Optimistic: update visibility locally immediately
       updateMyTodosOptimistically((current) => ({
@@ -379,4 +400,3 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
 
   return { room, remaining, isConnected, error, nameTakenError, newMessageReceived, actions };
 }
-

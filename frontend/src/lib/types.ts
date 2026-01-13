@@ -79,14 +79,15 @@ export const SOCKET_EVENTS = {
   TIMER_SKIP: "timer_skip",
   UPDATE_SETTINGS: "update_settings",
   SEND_MESSAGE: "send_message",
-  
+
   // Todo events
   TODO_ADD: "todo_add",
   TODO_UPDATE: "todo_update",
   TODO_DELETE: "todo_delete",
+  TODO_REORDER: "todo_reorder",
   TODO_SET_ACTIVE: "todo_set_active",
   TODO_SET_VISIBILITY: "todo_set_visibility",
-  
+
   ROOM_STATE: "room_state",
   TIMER_UPDATE: "timer_update",
   PARTICIPANTS_UPDATE: "participants_update",

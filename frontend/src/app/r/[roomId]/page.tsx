@@ -90,8 +90,8 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   // Only connect to room after we have a name and uniqueId
   const { room, remaining, isConnected, error, nameTakenError, actions } = useTimer(
-    roomId, 
-    userName || "", 
+    roomId,
+    userName || "",
     uniqueId
   );
 
@@ -118,7 +118,7 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
     setIsChatOpen(!isChatOpen);
   };
-  
+
   // Also mark as read when new messages arrive while chat is open
   useEffect(() => {
     if (isChatOpen && latestMessageId && latestMessageId !== lastReadMessageId) {
@@ -129,19 +129,19 @@ export default function RoomPage({ params }: RoomPageProps) {
   // Detect phase transitions - show prompt and play notification sounds
   useEffect(() => {
     if (!room?.timer) return;
-    
+
     const currentPhase = room.timer.phase;
     const prevPhase = prevPhaseRef.current;
-    
+
     // Create a unique transition key to prevent duplicate processing
     const transitionKey = prevPhase && currentPhase ? `${prevPhase}->${currentPhase}` : null;
-    
+
     // Only trigger on actual phase changes (not initial load)
     // Also check if we've already processed this exact transition (handles out-of-order updates)
     if (prevPhase && prevPhase !== currentPhase && processedTransitionRef.current !== transitionKey) {
       // Mark this transition as processed
       processedTransitionRef.current = transitionKey || null;
-      
+
       // Send notification based on what phase just ended
       if (prevPhase === "focus") {
         // Focus session ended → break time! (celebratory notification)
@@ -150,7 +150,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         // Break ended → back to focus (gentle reminder)
         notifyBreakEnd();
       }
-      
+
       // Show prompt ONLY when transitioning FROM break/long_break TO focus
       // Never show when transitioning TO break or long_break
       if (currentPhase === "focus" && (prevPhase === "break" || prevPhase === "long_break")) {
@@ -172,7 +172,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         }
       }
     }
-    
+
     // Update prevPhaseRef at the end, but only if phase actually changed
     // This prevents duplicate processing if multiple updates arrive with same phase
     if (prevPhase !== currentPhase) {
@@ -191,14 +191,14 @@ export default function RoomPage({ params }: RoomPageProps) {
   // CRITICAL: Only auto-skip if timer has been running and counting down for a meaningful duration
   useEffect(() => {
     if (!room?.timer) return;
-    
+
     const { running, phaseEndsAt, phase } = room.timer;
     const prevRunning = prevRunningRef.current;
-    
+
     // Check if timer has reached 0
     const now = Date.now();
     const remainingMs = phaseEndsAt ? phaseEndsAt - now : Infinity;
-    
+
     // Detect when timer actually starts (transitions from false to true)
     // CRITICAL: Only record if phaseEndsAt is in the future AND has meaningful duration
     // This ensures we never track timers that start at 0 or are stale
@@ -209,10 +209,10 @@ export default function RoomPage({ params }: RoomPageProps) {
       hasAutoSkippedRef.current = false;
       console.log(`[AUTO_SKIP] Timer started for phase: ${phase}, remaining: ${Math.ceil(remainingMs / 1000)}s`);
     }
-    
+
     // Update prevRunningRef for next render
     prevRunningRef.current = running;
-    
+
     // Only auto-skip if timer is actually running
     if (!running || !phaseEndsAt) {
       // Reset flags when timer stops
@@ -224,7 +224,7 @@ export default function RoomPage({ params }: RoomPageProps) {
       }
       return;
     }
-    
+
     // CRITICAL: Only auto-skip if current phase matches the phase when timer was started
     // This prevents auto-skipping with stale phaseEndsAt from a previous phase
     if (timerStartPhaseRef.current === null) {
@@ -236,31 +236,31 @@ export default function RoomPage({ params }: RoomPageProps) {
       console.log(`[AUTO_SKIP] Timer is running but start phase not tracked - ignoring (remaining: ${Math.ceil(remainingMs / 1000)}s)`);
       return;
     }
-    
+
     if (timerStartPhaseRef.current !== phase) {
       console.log(`[AUTO_SKIP] Preventing auto-skip - timer was started for phase "${timerStartPhaseRef.current}", but current phase is "${phase}" (stale data)`);
       return;
     }
-    
+
     // CRITICAL: Only auto-skip if timer has been running for at least 5 seconds
     // This ensures the timer actually counted down and wasn't just started at 0
     const timeSinceTimerStart = timerStartTimeRef.current > 0 ? Date.now() - timerStartTimeRef.current : Infinity;
     const MIN_RUNTIME_MS = 5000; // Must run for at least 5 seconds
-    
+
     if (remainingMs <= 0 && !hasAutoSkippedRef.current) {
       if (timerStartTimeRef.current === 0) {
         console.log(`[AUTO_SKIP] Preventing auto-skip - timer start time not tracked`);
         return;
       }
-      
+
       if (timeSinceTimerStart < MIN_RUNTIME_MS) {
         console.log(`[AUTO_SKIP] Preventing auto-skip - timer only ran for ${Math.ceil(timeSinceTimerStart / 1000)}s (need at least ${MIN_RUNTIME_MS / 1000}s)`);
         return;
       }
-      
+
       console.log(`[AUTO_SKIP] Timer reached 0, auto-skipping phase ${phase} to next phase (ran for ${Math.ceil(timeSinceTimerStart / 1000)}s)`);
       hasAutoSkippedRef.current = true;
-      actions.skip();
+      actions.skip("auto");
     }
   }, [remaining, room?.timer?.running, room?.timer?.phaseEndsAt, room?.timer?.phase, actions]);
 
@@ -275,27 +275,27 @@ export default function RoomPage({ params }: RoomPageProps) {
   // Show welcome prompt for new users (no name) immediately, or users with no todos after room loads
   useEffect(() => {
     if (hasShownWelcome || !uniqueId) return;
-    
+
     const savedName = getSavedName();
-    
+
     // If no saved name, show welcome prompt immediately
     if (!savedName) {
       setShowWelcomePrompt(true);
       setHasShownWelcome(true);
       return;
     }
-    
+
     // If we have a name but no todos, show after room loads
     if (room) {
       const myTodos = room.userTodos?.[uniqueId];
       const hasTodos = myTodos && myTodos.todos.length > 0;
-      
+
       if (!hasTodos) {
         const timer = setTimeout(() => {
           setShowWelcomePrompt(true);
           setHasShownWelcome(true);
         }, 500);
-        
+
         return () => clearTimeout(timer);
       }
     }
@@ -305,7 +305,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   // Wait for the REAL ID from server (not temp_xxx) to avoid race condition
   useEffect(() => {
     if (!pendingActiveFromWelcome || !room) return;
-    
+
     const myTodos = room.userTodos?.[uniqueId];
     if (myTodos && myTodos.todos.length > 0) {
       const firstTodo = myTodos.todos[0];
@@ -321,20 +321,20 @@ export default function RoomPage({ params }: RoomPageProps) {
   // Update browser tab title with timer countdown
   useEffect(() => {
     const originalTitle = "Pikoo - Shared Team Timer";
-    
+
     // If no room/timer yet, don't update title
     if (!room?.timer) {
       return;
     }
-    
+
     const { timer } = room;
-    
+
     const formatTime = (seconds: number) => {
       const mins = Math.floor(seconds / 60);
       const secs = seconds % 60;
       return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
-    
+
     const getPhaseLabel = (phase: Phase) => {
       switch (phase) {
         case "focus": return "Focus";
@@ -343,30 +343,30 @@ export default function RoomPage({ params }: RoomPageProps) {
         default: return "";
       }
     };
-    
+
     const updateTitle = () => {
       let remainingSec: number;
-      
+
       if (timer.running && timer.phaseEndsAt) {
         remainingSec = Math.max(0, Math.ceil((timer.phaseEndsAt - Date.now()) / 1000));
       } else {
         remainingSec = timer.remainingSecWhenPaused;
       }
-      
+
       const timeStr = formatTime(remainingSec);
       const phaseLabel = getPhaseLabel(timer.phase);
       document.title = `${timeStr} ${phaseLabel} - Pikoo`;
     };
-    
+
     // Update immediately
     updateTitle();
-    
+
     // If running, set up interval to update every second
     let intervalId: NodeJS.Timeout | null = null;
     if (timer.running) {
       intervalId = setInterval(updateTitle, 1000);
     }
-    
+
     // Cleanup: clear interval and restore original title
     return () => {
       if (intervalId) clearInterval(intervalId);
@@ -433,7 +433,7 @@ export default function RoomPage({ params }: RoomPageProps) {
           <div className="w-12 h-12 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
           <p className="text-white/60">Connecting to room...</p>
         </div>
-        
+
         {/* Welcome Prompt for new users (shown during loading) */}
         <WelcomePrompt
           isVisible={showWelcomePrompt}
@@ -455,7 +455,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   }
 
   const { timer, settings, participants, userTodos } = room;
-  
+
   // Get current user's todos
   const myTodos = userTodos?.[uniqueId] || null;
 
@@ -466,13 +466,13 @@ export default function RoomPage({ params }: RoomPageProps) {
   // Request notification permissions when starting the timer
   const handleStart = async () => {
     const permission = getNotificationPermission();
-    
+
     // If permission hasn't been decided yet, show explanation first
     if (permission === "default") {
       setShowNotificationPrompt(true);
       return;
     }
-    
+
     // Permission already granted or denied, just start
     actions.start();
   };
@@ -480,11 +480,11 @@ export default function RoomPage({ params }: RoomPageProps) {
   // Handle notification permission after user sees explanation
   const handleNotificationResponse = async (allow: boolean) => {
     setShowNotificationPrompt(false);
-    
+
     if (allow) {
       await requestNotificationPermission();
     }
-    
+
     // Start the timer regardless of their choice
     actions.start();
   };
@@ -494,17 +494,17 @@ export default function RoomPage({ params }: RoomPageProps) {
       {/* Space background with planet */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         {/* Planet image */}
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center opacity-50 scale-110"
-          style={{ 
+          style={{
             backgroundImage: `url(${planetImage})`,
             filter: 'blur(1px)',
           }}
         />
-        
+
         {/* Dark gradient overlay for readability */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/70" />
-        
+
         {/* Star field */}
         {STARS.map((star) => (
           <div
@@ -525,7 +525,7 @@ export default function RoomPage({ params }: RoomPageProps) {
 
       {/* Header */}
       <header className="flex items-center justify-between p-4 sm:p-6 relative z-20">
-        <Link 
+        <Link
           href="/"
           className="flex items-center gap-2 text-white/80 hover:text-white transition-colors drop-shadow-lg"
         >
@@ -545,8 +545,8 @@ export default function RoomPage({ params }: RoomPageProps) {
             className={`
               px-3 py-1.5 rounded-full transition-all duration-200 flex items-center gap-1.5
               text-sm font-medium
-              ${showSettings 
-                ? "bg-white/20 text-white" 
+              ${showSettings
+                ? "bg-white/20 text-white"
                 : "bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10"
               }
             `}
@@ -709,6 +709,7 @@ export default function RoomPage({ params }: RoomPageProps) {
               onAddTodo={actions.addTodo}
               onUpdateTodo={actions.updateTodo}
               onDeleteTodo={actions.deleteTodo}
+              onReorderTodos={actions.reorderTodos}
               onSetActiveTodo={actions.setActiveTodo}
               onSetVisibility={actions.setTodoVisibility}
             />
@@ -733,7 +734,7 @@ export default function RoomPage({ params }: RoomPageProps) {
               onStart={handleStart}
               onPause={actions.pause}
               onReset={actions.reset}
-              onSkip={actions.skip}
+              onSkip={() => actions.skip("manual")}
             />
           </div>
 
@@ -744,6 +745,7 @@ export default function RoomPage({ params }: RoomPageProps) {
               onAddTodo={actions.addTodo}
               onUpdateTodo={actions.updateTodo}
               onDeleteTodo={actions.deleteTodo}
+              onReorderTodos={actions.reorderTodos}
               onSetActiveTodo={actions.setActiveTodo}
               onSetVisibility={actions.setTodoVisibility}
             />
@@ -797,7 +799,7 @@ export default function RoomPage({ params }: RoomPageProps) {
       {/* Notification Permission Prompt */}
       {showNotificationPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
+          <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => handleNotificationResponse(false)}
           />
@@ -809,15 +811,15 @@ export default function RoomPage({ params }: RoomPageProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
               </div>
-              
+
               <h3 className="text-xl font-semibold text-white mb-2">
                 Stay in the loop! 🔔
               </h3>
-              
+
               <p className="text-white/70 text-sm mb-6">
                 Enable notifications to get alerted when your <span className="text-rose-400 font-medium">focus session</span> or <span className="text-emerald-400 font-medium">break</span> ends — even if you&apos;re in another tab.
               </p>
-              
+
               <div className="flex gap-3">
                 <button
                   onClick={() => handleNotificationResponse(false)}
@@ -846,6 +848,7 @@ function MobileTodoPanel({
   onAddTodo,
   onUpdateTodo,
   onDeleteTodo,
+  onReorderTodos,
   onSetActiveTodo,
   onSetVisibility,
 }: {
@@ -853,6 +856,7 @@ function MobileTodoPanel({
   onAddTodo: (text: string) => void;
   onUpdateTodo: (todoId: string, updates: { text?: string; completed?: boolean }) => void;
   onDeleteTodo: (todoId: string) => void;
+  onReorderTodos: (todoIds: string[]) => void;
   onSetActiveTodo: (todoId: string | null) => void;
   onSetVisibility: (isPublic: boolean) => void;
 }) {
@@ -867,8 +871,8 @@ function MobileTodoPanel({
         className={`
           flex items-center gap-2 px-4 py-2 rounded-xl
           backdrop-blur-xl border transition-all duration-300
-          ${isOpen 
-            ? "bg-white/15 border-white/20 text-white" 
+          ${isOpen
+            ? "bg-white/15 border-white/20 text-white"
             : "bg-black/40 border-white/10 text-white/70 hover:text-white"
           }
         `}
@@ -884,7 +888,7 @@ function MobileTodoPanel({
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-4">
-          <div 
+          <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setIsOpen(false)}
           />
@@ -905,6 +909,7 @@ function MobileTodoPanel({
               onAddTodo={onAddTodo}
               onUpdateTodo={onUpdateTodo}
               onDeleteTodo={onDeleteTodo}
+              onReorderTodos={onReorderTodos}
               onSetActiveTodo={onSetActiveTodo}
               onSetVisibility={onSetVisibility}
             />
