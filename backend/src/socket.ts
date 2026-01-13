@@ -26,6 +26,7 @@ import {
   deleteTodo,
   setActiveTodo,
   setTodoVisibility,
+  reorderTodos,
 } from "./store.js";
 import { ChatMessage, UserTodos } from "./types.js";
 
@@ -61,6 +62,10 @@ interface TodoSetVisibilityPayload {
   isPublic: boolean;
 }
 
+interface TodoReorderPayload {
+  todoIds: string[];
+}
+
 interface UpdateNamePayload {
   name: string;
 }
@@ -70,13 +75,13 @@ async function cleanupStaleParticipants(io: Server, roomId: string): Promise<voi
   try {
     const room = await getRoom(roomId);
     if (!room) return;
-    
+
     const beforeCount = room.participants.length;
     const beforeParticipants = room.participants.map(p => `${p.name}(${p.id.slice(-6)})`);
-    
+
     const socketsInRoom = await io.in(roomId).fetchSockets();
     const connectedSocketIds = new Set(socketsInRoom.map(s => s.id));
-    
+
     // Double-check: Verify each participant's socket is actually disconnected before removing
     // This prevents race conditions where socket.join() hasn't fully propagated
     const verifiedStaleParticipants = room.participants.filter(p => {
@@ -85,7 +90,7 @@ async function cleanupStaleParticipants(io: Server, roomId: string): Promise<voi
         // Socket is in room, definitely active
         return false;
       }
-      
+
       // Socket not in room - verify it's actually disconnected
       // Check if socket exists in the namespace and is disconnected
       const socket = io.sockets.sockets.get(p.id);
@@ -95,27 +100,27 @@ async function cleanupStaleParticipants(io: Server, roomId: string): Promise<voi
         console.log(`[CLEANUP] WARNING: Participant ${p.name}(${p.id.slice(-6)}) socket is connected but not in room - skipping removal (race condition)`);
         return false;
       }
-      
+
       // Socket doesn't exist or is disconnected - safe to remove
       return true;
     });
-    
+
     // Always log cleanup attempt for debugging
     console.log(`[CLEANUP] Checking room ${roomId}: ${beforeCount} participants stored, ${connectedSocketIds.size} sockets connected`);
     console.log(`[CLEANUP] Stored participants:`, beforeParticipants);
     console.log(`[CLEANUP] Connected socket IDs:`, Array.from(connectedSocketIds).map(id => id.slice(-6)));
-    
+
     if (verifiedStaleParticipants.length > 0) {
-      console.log(`[CLEANUP] Found ${verifiedStaleParticipants.length} verified stale participants in ${roomId}:`, 
+      console.log(`[CLEANUP] Found ${verifiedStaleParticipants.length} verified stale participants in ${roomId}:`,
         verifiedStaleParticipants.map(p => `${p.name}(${p.id.slice(-6)})`));
-      
+
       // Only remove verified stale participants
       const staleSocketIds = new Set(verifiedStaleParticipants.map(p => p.id));
       room.participants = room.participants.filter(p => !staleSocketIds.has(p.id));
-      
+
       const { saveRoom } = await import("./store.js");
       await saveRoom(room);
-      
+
       // Broadcast updated participants
       io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants: room.participants });
       console.log(`[CLEANUP] Removed stale participants, now ${room.participants.length} remaining`);
@@ -130,7 +135,7 @@ async function cleanupStaleParticipants(io: Server, roomId: string): Promise<voi
 export function setupSocketHandlers(io: Server): void {
   io.on("connection", (socket: Socket) => {
     console.log(`🔌 Client connected: ${socket.id}`);
-    
+
     let currentRoomId: string | null = null;
     let currentUserName: string = "Anonymous";
     let currentUniqueId: string = "";
@@ -140,10 +145,10 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     socket.on(SOCKET_EVENTS.JOIN_ROOM, async (payload: JoinRoomPayload) => {
       const { roomId, name, uniqueId } = payload;
-      
+
       try {
         let room = await getRoom(roomId);
-        
+
         if (!room) {
           // Room doesn't exist - this is an error for joining
           socket.emit(SOCKET_EVENTS.ERROR, { message: "Room not found" });
@@ -152,10 +157,10 @@ export function setupSocketHandlers(io: Server): void {
 
         // Try to add participant (validates name uniqueness)
         const result = await addParticipant(roomId, socket.id, uniqueId, name || "Anonymous");
-        
+
         if (!result.success) {
           // Name is taken by another user
-          socket.emit(SOCKET_EVENTS.ERROR, { 
+          socket.emit(SOCKET_EVENTS.ERROR, {
             message: result.error || "Failed to join room",
             code: "NAME_TAKEN"
           });
@@ -175,7 +180,7 @@ export function setupSocketHandlers(io: Server): void {
 
         // Clean up any stale participants before sending state
         await cleanupStaleParticipants(io, roomId);
-        
+
         // Re-fetch room after cleanup
         room = await getRoom(roomId);
 
@@ -202,11 +207,11 @@ export function setupSocketHandlers(io: Server): void {
         console.log("[UPDATE_NAME] Missing roomId or uniqueId, ignoring");
         return;
       }
-      
+
       const { name } = payload;
       console.log(`[UPDATE_NAME] New name: "${name}"`);
       if (!name || name.trim().length === 0) return;
-      
+
       try {
         const result = await updateParticipantName(
           currentRoomId,
@@ -214,33 +219,33 @@ export function setupSocketHandlers(io: Server): void {
           currentUniqueId,
           name.trim()
         );
-        
+
         if (!result.success) {
           console.log(`[UPDATE_NAME] Failed: ${result.error}`);
-          socket.emit(SOCKET_EVENTS.ERROR, { 
+          socket.emit(SOCKET_EVENTS.ERROR, {
             message: result.error || "Failed to update name",
             code: "NAME_TAKEN"
           });
           return;
         }
-        
+
         // Update local state
         currentUserName = name.trim();
-        
+
         // Broadcast updated participants to all in room
-        io.to(currentRoomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { 
-          participants: result.participants 
+        io.to(currentRoomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, {
+          participants: result.participants
         });
-        
+
         // Also broadcast updated todos (since userName changed there too)
         const room = await getRoom(currentRoomId);
         if (room) {
           console.log(`[UPDATE_NAME] Broadcasting TODOS_UPDATE, todos for ${currentUniqueId}:`, room.userTodos[currentUniqueId]?.todos?.length || 0);
-          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { 
-            userTodos: room.userTodos 
+          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, {
+            userTodos: room.userTodos
           });
         }
-        
+
         console.log(`📝 ${socket.id} changed name to "${name.trim()}" in room ${currentRoomId}`);
       } catch (err) {
         console.error("Error updating name:", err);
@@ -315,7 +320,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TIMER_SKIP, async () => {
+    socket.on(SOCKET_EVENTS.TIMER_SKIP, async (payload?: { source?: "auto" | "manual" }) => {
       if (!currentRoomId) return;
 
       try {
@@ -327,7 +332,32 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const timer = await skipPhase(currentRoomId);
+        const source = payload?.source || "manual";
+        const phaseEndsAt = room.timer.phaseEndsAt;
+        const now = Date.now();
+        const remainingMs = phaseEndsAt ? phaseEndsAt - now : null;
+        const AUTO_SKIP_GRACE_MS = 2000;
+
+        if (
+          source === "auto" &&
+          (!room.timer.running || !phaseEndsAt || (remainingMs !== null && remainingMs > AUTO_SKIP_GRACE_MS))
+        ) {
+          console.log(
+            `[AUTO_SKIP] Ignoring auto-skip request - timer not finished or not running (phase=${room.timer.phase}, running=${room.timer.running}, remainingMs=${remainingMs ?? "n/a"})`
+          );
+          return;
+        }
+
+        const timer = await skipPhase(
+          currentRoomId,
+          source === "auto"
+            ? {
+              expectedPhase: room.timer.phase,
+              expectedPhaseEndsAt: room.timer.phaseEndsAt,
+              expectedRunning: room.timer.running,
+            }
+            : undefined
+        );
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
         }
@@ -372,7 +402,7 @@ export function setupSocketHandlers(io: Server): void {
 
       try {
         const { text } = payload;
-        
+
         // Validate message
         if (!text || text.trim().length === 0) return;
         if (text.length > 500) return; // Max 500 chars
@@ -485,6 +515,22 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
+    socket.on(SOCKET_EVENTS.TODO_REORDER, async (payload: TodoReorderPayload) => {
+      if (!currentRoomId || !currentUniqueId) return;
+
+      try {
+        const { todoIds } = payload;
+        if (!Array.isArray(todoIds)) return;
+
+        const userTodos = await reorderTodos(currentRoomId, currentUniqueId, todoIds);
+        if (userTodos) {
+          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
+        }
+      } catch (err) {
+        console.error("Error reordering todos:", err);
+      }
+    });
+
     // ========================================
     // Disconnect
     // ========================================
@@ -496,12 +542,12 @@ export function setupSocketHandlers(io: Server): void {
           // Get room state before removal for debugging
           const roomBefore = await getRoom(currentRoomId);
           const participantsBefore = roomBefore?.participants || [];
-          console.log(`[DISCONNECT] Before removal - room has ${participantsBefore.length} participants:`, 
+          console.log(`[DISCONNECT] Before removal - room has ${participantsBefore.length} participants:`,
             participantsBefore.map(p => `${p.name}(${p.id.slice(-6)}, uniqueId: ${p.uniqueId.slice(-8)})`));
-          
+
           console.log(`[DISCONNECT] Removing participant ${socket.id} (${currentUserName}) from room ${currentRoomId}`);
           const participants = await removeParticipant(currentRoomId, socket.id);
-          console.log(`[DISCONNECT] After removal, ${participants.length} participants remaining:`, 
+          console.log(`[DISCONNECT] After removal, ${participants.length} participants remaining:`,
             participants.map(p => `${p.name}(${p.id.slice(-6)})`));
           io.to(currentRoomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants });
         } catch (err) {
@@ -513,4 +559,3 @@ export function setupSocketHandlers(io: Server): void {
     });
   });
 }
-

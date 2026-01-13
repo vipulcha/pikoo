@@ -110,6 +110,7 @@ export const SOCKET_EVENTS = {
   TODO_ADD: "todo_add",
   TODO_UPDATE: "todo_update",
   TODO_DELETE: "todo_delete",
+  TODO_REORDER: "todo_reorder",
   TODO_SET_ACTIVE: "todo_set_active",
   TODO_SET_VISIBILITY: "todo_set_visibility",
 

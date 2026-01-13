@@ -28,7 +28,7 @@ let redis: Redis | null = null;
 
 export function initRedis(): Redis | null {
   const redisUrl = process.env.REDIS_URL;
-  
+
   if (!redisUrl) {
     console.log("⚠️  No REDIS_URL found, using in-memory store (not for production!)");
     return null;
@@ -59,7 +59,7 @@ export async function createRoom(
   hostId: string | null = null
 ): Promise<RoomState> {
   const fullSettings: RoomSettings = { ...DEFAULT_SETTINGS, ...settings };
-  
+
   const room: RoomState = {
     id: roomId,
     settings: fullSettings,
@@ -121,7 +121,7 @@ export async function pauseTimer(roomId: string): Promise<TimerState | null> {
 
   const now = Date.now();
   const remaining = Math.max(0, Math.ceil((room.timer.phaseEndsAt! - now) / 1000));
-  
+
   room.timer.running = false;
   room.timer.phaseEndsAt = null;
   room.timer.remainingSecWhenPaused = remaining;
@@ -143,9 +143,28 @@ export async function resetTimer(roomId: string): Promise<TimerState | null> {
   return room.timer;
 }
 
-export async function skipPhase(roomId: string): Promise<TimerState | null> {
+export async function skipPhase(
+  roomId: string,
+  guard?: {
+    expectedPhase?: Phase;
+    expectedPhaseEndsAt?: number | null;
+    expectedRunning?: boolean;
+  }
+): Promise<TimerState | null> {
   const room = await getRoom(roomId);
   if (!room) return null;
+
+  if (guard) {
+    if (guard.expectedPhase && room.timer.phase !== guard.expectedPhase) {
+      return null;
+    }
+    if (guard.expectedRunning !== undefined && room.timer.running !== guard.expectedRunning) {
+      return null;
+    }
+    if (guard.expectedPhaseEndsAt !== undefined && room.timer.phaseEndsAt !== guard.expectedPhaseEndsAt) {
+      return null;
+    }
+  }
 
   // Determine next phase
   let nextPhase: Phase;
@@ -205,21 +224,21 @@ export async function addParticipant(
     p => p.name.toLowerCase() === participantName.toLowerCase() && p.uniqueId !== uniqueId
   );
   if (nameTaken) {
-    return { 
-      success: false, 
-      error: "Name already taken in this room", 
-      participants: room.participants 
+    return {
+      success: false,
+      error: "Name already taken in this room",
+      participants: room.participants
     };
   }
 
   // Add the participant (same user can have multiple tabs)
-  room.participants.push({ 
-    id: socketId, 
-    uniqueId, 
-    name: participantName 
+  room.participants.push({
+    id: socketId,
+    uniqueId,
+    name: participantName
   });
   await saveRoom(room);
-  
+
   return { success: true, participants: room.participants };
 }
 
@@ -235,20 +254,20 @@ export async function removeParticipant(
     const beforeCount = room.participants.length;
     room.participants = room.participants.filter((p) => p.id !== participantId);
     const afterCount = room.participants.length;
-    
+
     // If participant wasn't found, they're already removed
     if (beforeCount === afterCount) {
       console.log(`[removeParticipant] Participant ${participantId.slice(-6)} already removed from ${roomId}`);
       return room.participants;
     }
-    
+
     // If host leaves in host mode, assign new host or clear
     if (room.hostId === participantId) {
       room.hostId = room.participants[0]?.id || null;
     }
 
     await saveRoom(room);
-    
+
     // Verify the save worked by re-reading
     const verifyRoom = await getRoom(roomId);
     if (verifyRoom) {
@@ -265,7 +284,7 @@ export async function removeParticipant(
       return [];
     }
   }
-  
+
   // Final attempt - just return current state
   console.log(`[removeParticipant] Failed after ${retries} retries for ${participantId.slice(-6)}`);
   const finalRoom = await getRoom(roomId);
@@ -286,15 +305,15 @@ export async function updateParticipantName(
     p => p.name.toLowerCase() === newName.toLowerCase() && p.uniqueId !== uniqueId
   );
   if (nameTaken) {
-    return { 
-      success: false, 
-      error: "Name already taken in this room", 
-      participants: room.participants 
+    return {
+      success: false,
+      error: "Name already taken in this room",
+      participants: room.participants
     };
   }
 
   // Update name for all connections of this user (same uniqueId)
-  room.participants = room.participants.map(p => 
+  room.participants = room.participants.map(p =>
     p.uniqueId === uniqueId ? { ...p, name: newName } : p
   );
 
@@ -315,13 +334,13 @@ export async function updateSettings(
   if (!room) return null;
 
   room.settings = { ...room.settings, ...settings };
-  
+
   // If timer is paused and we changed a duration setting, update the timer
   if (!room.timer.running) {
     const newDuration = getPhaseDuration(room.timer.phase, room.settings);
     room.timer.remainingSecWhenPaused = newDuration;
   }
-  
+
   await saveRoom(room);
   return room.settings;
 }
@@ -416,7 +435,7 @@ export async function addTodo(
   }
 
   const userTodos = room.userTodos[userId];
-  
+
   // Check limit
   if (userTodos.todos.length >= MAX_TODOS_PER_USER) {
     return null;
@@ -431,7 +450,7 @@ export async function addTodo(
 
   userTodos.todos.push(newTodo);
   userTodos.userName = userName; // Keep name updated
-  
+
   await saveRoom(room);
   return room.userTodos;
 }
@@ -447,7 +466,7 @@ export async function updateTodo(
 
   const userTodos = room.userTodos[userId];
   const todo = userTodos.todos.find(t => t.id === todoId);
-  
+
   if (!todo) return null;
 
   if (updates.text !== undefined) {
@@ -475,7 +494,7 @@ export async function deleteTodo(
 
   const userTodos = room.userTodos[userId];
   userTodos.todos = userTodos.todos.filter(t => t.id !== todoId);
-  
+
   // Clear active if it was deleted
   if (userTodos.activeTodoId === todoId) {
     userTodos.activeTodoId = null;
@@ -494,7 +513,7 @@ export async function setActiveTodo(
   if (!room || !room.userTodos?.[userId]) return null;
 
   room.userTodos[userId].activeTodoId = todoId;
-  
+
   await saveRoom(room);
   return room.userTodos;
 }
@@ -512,7 +531,7 @@ export async function setTodoVisibility(
   if (!room.userTodos) {
     room.userTodos = {};
   }
-  
+
   // Initialize user's todos if they don't exist
   if (!room.userTodos[userId]) {
     room.userTodos[userId] = {
@@ -525,8 +544,38 @@ export async function setTodoVisibility(
   } else {
     room.userTodos[userId].isPublic = isPublic;
   }
-  
+
   await saveRoom(room);
   return room.userTodos;
 }
 
+export async function reorderTodos(
+  roomId: string,
+  userId: string,
+  todoIds: string[]
+): Promise<Record<string, UserTodos> | null> {
+  const room = await getRoom(roomId);
+  if (!room || !room.userTodos?.[userId]) return null;
+
+  const userTodos = room.userTodos[userId];
+  const todosMap = new Map(userTodos.todos.map(t => [t.id, t]));
+
+  // Reorder todos based on the provided order
+  const reordered: typeof userTodos.todos = [];
+  for (const id of todoIds) {
+    const todo = todosMap.get(id);
+    if (todo) {
+      reordered.push(todo);
+      todosMap.delete(id);
+    }
+  }
+
+  // Append any remaining todos (in case some were missed)
+  for (const todo of todosMap.values()) {
+    reordered.push(todo);
+  }
+
+  userTodos.todos = reordered;
+  await saveRoom(room);
+  return room.userTodos;
+}
