@@ -404,7 +404,7 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Settings Update
     // ========================================
-    socket.on(SOCKET_EVENTS.UPDATE_SETTINGS, async (payload: Partial<RoomSettings>) => {
+    socket.on(SOCKET_EVENTS.UPDATE_SETTINGS, async (payload: Partial<RoomSettings> & { timestamp?: number }) => {
       if (!currentRoomId) return;
 
       try {
@@ -416,7 +416,7 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const settings = await updateSettings(currentRoomId, payload);
+        const settings = await updateSettings(currentRoomId, payload, payload.timestamp);
         if (settings) {
           const updatedRoom = await getRoom(currentRoomId);
           // Send full room state so timer gets updated too

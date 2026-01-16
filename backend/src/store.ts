@@ -469,12 +469,29 @@ export async function updateParticipantName(
 
 export async function updateSettings(
   roomId: string,
-  settings: Partial<RoomSettings>
+  settings: Partial<RoomSettings>,
+  timestamp?: number
 ): Promise<RoomSettings | null> {
   const room = await getRoom(roomId);
   if (!room) return null;
 
+  const actionTime = timestamp || Date.now();
+
+  // Conflict Resolution: Ignore stale events if we wanted to be strict,
+  // but for settings, we usually want to apply them unless very old.
+  // Ideally we use the same logic: if incoming < lastUpdatedAt, default to ignore?
+  // But settings are separate from timer running state.
+  // HOWEVER, the user glitch is about slider jumping.
+  // So we MUST respect LWW for settings too.
+
+  // NOTE: We share `lastUpdatedAt` on the timer object for ALL state changes to keep it simple.
+  if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
+    console.log(`[CONFLICT] Ignoring stale settings update (T=${actionTime} < Last=${room.timer.lastUpdatedAt})`);
+    return room.settings;
+  }
+
   room.settings = { ...room.settings, ...settings };
+  room.timer.lastUpdatedAt = actionTime;
 
   // If timer is paused and we changed a duration setting, update the timer
   if (!room.timer.running) {

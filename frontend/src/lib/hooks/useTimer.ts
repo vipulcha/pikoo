@@ -128,9 +128,41 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     };
 
     const handleRoomState = (state: RoomState) => {
-      console.log("[ROOM_STATE] Received full room state, userTodos:", JSON.stringify(state.userTodos, null, 2));
-      setRoom(state);
-      setRemaining(calculateRemaining(state.timer));
+      // console.log("[ROOM_STATE] Received full room state, userTodos:", JSON.stringify(state.userTodos, null, 2));
+      setRoom((prev) => {
+        // Initial load
+        if (!prev) {
+          setRemaining(calculateRemaining(state.timer));
+          return state;
+        }
+
+        // Conflict Resolution:
+        // Prioritize local optimistic updates if they are newer than the server state
+        if (prev.timer.lastUpdatedAt && state.timer.lastUpdatedAt < prev.timer.lastUpdatedAt) {
+          console.log(`[CONFLICT] Ignoring stale ROOM_STATE update (Server T=${state.timer.lastUpdatedAt} < Local T=${prev.timer.lastUpdatedAt})`);
+
+          // We must still merge other non-timer/settings state (like participants, messages, todos)
+          // ideally we'd deep merge, but for now let's just keep our local timer/settings
+          // AND preserve our local userTodos (optimistic) if possible, or merge them carefully.
+          // Merging todos effectively requires more complex logic (reusing handleTodosUpdate logic or similar).
+          // For now, to solve the "glitch" of timer/slider jumping, we primarily protect timer/settings.
+
+          // Strategy: Use server state but OVERWRITE with local timer/settings.
+          const protectedState = {
+            ...state,
+            timer: prev.timer,
+            settings: prev.settings,
+            // Note: userTodos might also have optimistic updates. 
+            // Ideally we shouldn't overwrite them with stale server data either if we made changes.
+            // But let's focus on the main glitch first.
+          };
+
+          return protectedState;
+        }
+
+        setRemaining(calculateRemaining(state.timer));
+        return state;
+      });
     };
 
     const handleTimerUpdate = ({ timer }: { timer: TimerState }) => {
@@ -453,6 +485,8 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     },
 
     updateSettings: (settings: Partial<RoomSettings>) => {
+      const timestamp = Date.now();
+
       // Optimistic update for settings
       setRoom((prev) => {
         if (!prev) return prev;
@@ -460,6 +494,11 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
 
         // If timer is paused, update duration if relevant setting changed
         let updatedTimer = { ...prev.timer };
+
+        // NOTE: We update lastUpdatedAt on the timer even for settings changes
+        // This ensures the Conflict Resolution in handleRoomState respects this change
+        updatedTimer.lastUpdatedAt = timestamp;
+
         if (!updatedTimer.running) {
           const getPhaseDurationSimple = (phase: string, s: RoomSettings) => {
             switch (phase) {
@@ -470,14 +509,13 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
             }
           };
           updatedTimer.remainingSecWhenPaused = getPhaseDurationSimple(updatedTimer.phase, newSettings);
-          // Don't update lastUpdatedAt here as typically this is a side effect, but good to keep consistency if we wanted
         }
 
         setRemaining(calculateRemaining(updatedTimer));
         return { ...prev, settings: newSettings, timer: updatedTimer };
       });
 
-      socketRef.current?.emit(SOCKET_EVENTS.UPDATE_SETTINGS, settings);
+      socketRef.current?.emit(SOCKET_EVENTS.UPDATE_SETTINGS, { ...settings, timestamp });
     },
     sendMessage: (text: string) =>
       socketRef.current?.emit(SOCKET_EVENTS.SEND_MESSAGE, { text }),
