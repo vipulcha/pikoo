@@ -13,6 +13,7 @@ import { TodoList } from "@/components/TodoList";
 import { OthersTodos } from "@/components/OthersTodos";
 import { SessionPrompt } from "@/components/SessionPrompt";
 import { WelcomePrompt } from "@/components/WelcomePrompt";
+import { HistoryPanel } from "@/components/HistoryPanel";
 import { RoomSettings, Phase } from "@/lib/types";
 import { notifyFocusEnd, notifyBreakEnd, requestNotificationPermission, getNotificationPermission } from "@/lib/audio";
 import Link from "next/link";
@@ -247,6 +248,7 @@ export default function RoomPage({ params }: RoomPageProps) {
     const timeSinceTimerStart = timerStartTimeRef.current > 0 ? Date.now() - timerStartTimeRef.current : Infinity;
     const MIN_RUNTIME_MS = 5000; // Must run for at least 5 seconds
 
+    // STRICT CHECK: Only auto-skip if remaining EXACTLY 0 (or less) AND not already skipped
     if (remainingMs <= 0 && !hasAutoSkippedRef.current) {
       if (timerStartTimeRef.current === 0) {
         console.log(`[AUTO_SKIP] Preventing auto-skip - timer start time not tracked`);
@@ -255,6 +257,12 @@ export default function RoomPage({ params }: RoomPageProps) {
 
       if (timeSinceTimerStart < MIN_RUNTIME_MS) {
         console.log(`[AUTO_SKIP] Preventing auto-skip - timer only ran for ${Math.ceil(timeSinceTimerStart / 1000)}s (need at least ${MIN_RUNTIME_MS / 1000}s)`);
+        return;
+      }
+
+      // Double check visible remaining seconds too, just to be safe
+      if (remaining > 0) {
+        console.log(`[AUTO_SKIP] Preventing auto-skip - visible remaining is ${remaining}s (wait for 0)`);
         return;
       }
 
@@ -598,13 +606,13 @@ export default function RoomPage({ params }: RoomPageProps) {
                   <input
                     type="number"
                     min="1"
-                    max="60"
+                    max="120"
                     value={settings.focusSec / 60}
                     onChange={(e) => {
-                      const val = Math.max(1, Math.min(60, Number(e.target.value) || 1));
+                      const val = Math.max(1, Math.min(120, Number(e.target.value) || 1));
                       handleSettingChange("focusSec", val * 60);
                     }}
-                    className="w-14 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-rose-500/50"
+                    className="w-16 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-rose-500/50 no-spinner"
                   />
                   <span className="text-white/60 text-sm">m</span>
                 </div>
@@ -625,13 +633,13 @@ export default function RoomPage({ params }: RoomPageProps) {
                   <input
                     type="number"
                     min="1"
-                    max="30"
+                    max="120"
                     value={settings.breakSec / 60}
                     onChange={(e) => {
-                      const val = Math.max(1, Math.min(30, Number(e.target.value) || 1));
+                      const val = Math.max(1, Math.min(120, Number(e.target.value) || 1));
                       handleSettingChange("breakSec", val * 60);
                     }}
-                    className="w-14 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-emerald-500/50"
+                    className="w-16 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-emerald-500/50 no-spinner"
                   />
                   <span className="text-white/60 text-sm">m</span>
                 </div>
@@ -652,13 +660,13 @@ export default function RoomPage({ params }: RoomPageProps) {
                   <input
                     type="number"
                     min="1"
-                    max="45"
+                    max="120"
                     value={settings.longBreakSec / 60}
                     onChange={(e) => {
-                      const val = Math.max(1, Math.min(45, Number(e.target.value) || 1));
+                      const val = Math.max(1, Math.min(120, Number(e.target.value) || 1));
                       handleSettingChange("longBreakSec", val * 60);
                     }}
-                    className="w-14 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-blue-500/50"
+                    className="w-16 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-blue-500/50 no-spinner"
                   />
                   <span className="text-white/60 text-sm">m</span>
                 </div>
@@ -703,16 +711,21 @@ export default function RoomPage({ params }: RoomPageProps) {
       <main className="flex-1 flex items-center justify-center px-4 -mt-16 relative z-10">
         {/* Todo List - Left side */}
         <div className="absolute left-2 sm:left-4 lg:left-8 top-1/2 -translate-y-1/2 hidden md:block">
-          <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl">
-            <TodoList
-              userTodos={myTodos}
-              onAddTodo={actions.addTodo}
-              onUpdateTodo={actions.updateTodo}
-              onDeleteTodo={actions.deleteTodo}
-              onReorderTodos={actions.reorderTodos}
-              onSetActiveTodo={actions.setActiveTodo}
-              onSetVisibility={actions.setTodoVisibility}
-            />
+          <div className="flex flex-col gap-2">
+            {/* History Panel - Above Todo List */}
+            <HistoryPanel history={room?.history || []} />
+
+            <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl">
+              <TodoList
+                userTodos={myTodos}
+                onAddTodo={actions.addTodo}
+                onUpdateTodo={actions.updateTodo}
+                onDeleteTodo={actions.deleteTodo}
+                onReorderTodos={actions.reorderTodos}
+                onSetActiveTodo={actions.setActiveTodo}
+                onSetVisibility={actions.setTodoVisibility}
+              />
+            </div>
           </div>
         </div>
 
@@ -738,10 +751,12 @@ export default function RoomPage({ params }: RoomPageProps) {
             />
           </div>
 
+
           {/* Mobile Todo Toggle - shows todo panel for mobile */}
           <div className="mt-8 md:hidden">
             <MobileTodoPanel
               userTodos={myTodos}
+              history={room?.history || []}
               onAddTodo={actions.addTodo}
               onUpdateTodo={actions.updateTodo}
               onDeleteTodo={actions.deleteTodo}
@@ -845,6 +860,7 @@ export default function RoomPage({ params }: RoomPageProps) {
 // Mobile Todo Panel Component
 function MobileTodoPanel({
   userTodos,
+  history,
   onAddTodo,
   onUpdateTodo,
   onDeleteTodo,
@@ -853,6 +869,7 @@ function MobileTodoPanel({
   onSetVisibility,
 }: {
   userTodos: import("@/lib/types").UserTodos | null;
+  history: import("@/lib/types").ActivityLog[];
   onAddTodo: (text: string) => void;
   onUpdateTodo: (todoId: string, updates: { text?: string; completed?: boolean }) => void;
   onDeleteTodo: (todoId: string) => void;
@@ -904,6 +921,9 @@ function MobileTodoPanel({
                 </svg>
               </button>
             </div>
+            <div className="mb-4">
+              <HistoryPanel history={history} />
+            </div>
             <TodoList
               userTodos={userTodos}
               onAddTodo={onAddTodo}
@@ -919,3 +939,5 @@ function MobileTodoPanel({
     </>
   );
 }
+
+

@@ -58,26 +58,26 @@ function generateNoiseBuffer(type: "white" | "brown" | "pink", duration: number 
 // Start playing noise
 export function startNoise(type: "white" | "brown" | "pink", volume: number = 0.5): void {
   stopNoise(); // Stop any existing noise
-  
+
   const ctx = getAudioContext();
-  
+
   // Resume context if suspended (browser autoplay policy)
   if (ctx.state === "suspended") {
     ctx.resume();
   }
-  
+
   const buffer = generateNoiseBuffer(type);
-  
+
   noiseNode = ctx.createBufferSource();
   noiseNode.buffer = buffer;
   noiseNode.loop = true;
-  
+
   gainNode = ctx.createGain();
   gainNode.gain.value = volume;
-  
+
   noiseNode.connect(gainNode);
   gainNode.connect(ctx.destination);
-  
+
   noiseNode.start();
 }
 
@@ -145,16 +145,16 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   if (typeof window === "undefined" || !("Notification" in window)) {
     return "unsupported";
   }
-  
+
   if (Notification.permission === "granted") {
     return "granted";
   }
-  
+
   if (Notification.permission !== "denied") {
     const permission = await Notification.requestPermission();
     return permission;
   }
-  
+
   return Notification.permission;
 }
 
@@ -163,7 +163,7 @@ function showNotification(title: string, body: string, tag: string): void {
   if (typeof window === "undefined" || !("Notification" in window)) {
     return;
   }
-  
+
   if (Notification.permission === "granted") {
     const notification = new Notification(title, {
       body,
@@ -172,10 +172,10 @@ function showNotification(title: string, body: string, tag: string): void {
       requireInteraction: false,
       silent: false, // Allow system sound
     });
-    
+
     // Auto-close after 5 seconds
     setTimeout(() => notification.close(), 5000);
-    
+
     // Focus the tab when clicked
     notification.onclick = () => {
       window.focus();
@@ -191,7 +191,7 @@ function showNotification(title: string, body: string, tag: string): void {
 // Helper to ensure AudioContext is ready before playing
 async function ensureAudioContextReady(): Promise<AudioContext> {
   const ctx = getAudioContext();
-  
+
   if (ctx.state === "suspended") {
     try {
       await ctx.resume();
@@ -199,7 +199,7 @@ async function ensureAudioContextReady(): Promise<AudioContext> {
       console.warn("Failed to resume AudioContext:", e);
     }
   }
-  
+
   return ctx;
 }
 
@@ -208,22 +208,22 @@ async function playChime(frequencies: number[], type: OscillatorType = "sine", s
   try {
     const ctx = await ensureAudioContextReady();
     const now = ctx.currentTime;
-    
+
     frequencies.forEach((freq, index) => {
       const oscillator = ctx.createOscillator();
       const gainNode = ctx.createGain();
-      
+
       oscillator.type = type;
       oscillator.frequency.value = freq;
-      
+
       const startTime = now + index * spacing;
       gainNode.gain.setValueAtTime(0, startTime);
       gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.05);
       gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.8);
-      
+
       oscillator.connect(gainNode);
       gainNode.connect(ctx.destination);
-      
+
       oscillator.start(startTime);
       oscillator.stop(startTime + 0.8);
     });
@@ -240,7 +240,7 @@ export async function notifyFocusEnd(): Promise<void> {
     "Great work! Time for a well-deserved break.",
     "pikoo-focus-end"
   );
-  
+
   // Also try to play audio chime (only works if tab is active)
   await playChime([523.25, 659.25, 783.99], "sine", 0.15); // C5, E5, G5 ascending
 }
@@ -253,9 +253,22 @@ export async function notifyBreakEnd(): Promise<void> {
     "Ready to get back to work?",
     "pikoo-break-end"
   );
-  
+
   // Also try to play audio chime (only works if tab is active)
   await playChime([659.25, 523.25], "triangle", 0.2); // E5, C5 descending
+}
+
+// Notify when someone joins the room
+export async function notifyRoomJoin(name: string): Promise<void> {
+  // Show browser notification
+  showNotification(
+    "New user joined! 👋",
+    `${name} has entered the room.`,
+    "pikoo-join"
+  );
+
+  // Play subtle chime
+  await playChime([440, 554.37], "sine", 0.1); // A4, C#5
 }
 
 // Legacy function names for backwards compatibility

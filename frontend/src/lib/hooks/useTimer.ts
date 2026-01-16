@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Socket } from "socket.io-client";
 import { RoomState, RoomSettings, TimerState, Participant, ChatMessage, UserTodos, SOCKET_EVENTS } from "../types";
 import { connectSocket, disconnectSocket, getSocket } from "../socket";
+import { notifyRoomJoin } from "../audio";
 
 interface UseTimerReturn {
   room: RoomState | null;
@@ -135,6 +136,15 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     const handleTimerUpdate = ({ timer }: { timer: TimerState }) => {
       setRoom((prev) => {
         if (!prev) return prev;
+
+        // Conflict Resolution:
+        // If server update is older than our local optimistic update, ignore it.
+        // But if server update is newer, accept it (Last Write Wins).
+        if (prev.timer.lastUpdatedAt && timer.lastUpdatedAt < prev.timer.lastUpdatedAt) {
+          console.log(`[CONFLICT] Ignoring stale server update (Server T=${timer.lastUpdatedAt} < Local T=${prev.timer.lastUpdatedAt})`);
+          return prev;
+        }
+
         const updated = { ...prev, timer };
         setRemaining(calculateRemaining(timer));
         return updated;
@@ -144,6 +154,22 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     const handleParticipantsUpdate = ({ participants }: { participants: Participant[] }) => {
       setRoom((prev) => {
         if (!prev) return prev;
+
+        // Detect new joiners
+        // Only if we already had participants (don't notify on initial load/reconnect of everyone)
+        if (prev.participants.length > 0) {
+          const prevIds = new Set(prev.participants.map(p => p.uniqueId));
+          const newJoiners = participants.filter(p => !prevIds.has(p.uniqueId));
+
+          newJoiners.forEach(joiner => {
+            // Don't notify if *we* are the joiner (compare with our uniqueId)
+            if (joiner.uniqueId !== uniqueId) {
+              console.log(`[JOIN_NOTIFY] New user detected: ${joiner.name}`);
+              notifyRoomJoin(joiner.name);
+            }
+          });
+        }
+
         return { ...prev, participants };
       });
     };
@@ -288,15 +314,171 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     });
   }, [uniqueId]); // userName removed - we use userNameRef
 
+  // Helper to update timer state optimistically
+  const updateTimerOptimistically = useCallback((
+    updater: (currentTimer: TimerState) => TimerState
+  ) => {
+    setRoom((prev) => {
+      if (!prev) return prev;
+      const updatedTimer = updater(prev.timer);
+      setRemaining(calculateRemaining(updatedTimer));
+      return { ...prev, timer: updatedTimer };
+    });
+  }, [calculateRemaining]);
+
   // Timer control actions
   const actions = {
-    start: () => socketRef.current?.emit(SOCKET_EVENTS.TIMER_START),
-    pause: () => socketRef.current?.emit(SOCKET_EVENTS.TIMER_PAUSE),
-    reset: () => socketRef.current?.emit(SOCKET_EVENTS.TIMER_RESET),
-    skip: (source: "auto" | "manual" = "manual") =>
-      socketRef.current?.emit(SOCKET_EVENTS.TIMER_SKIP, { source }),
-    updateSettings: (settings: Partial<RoomSettings>) =>
-      socketRef.current?.emit(SOCKET_EVENTS.UPDATE_SETTINGS, settings),
+    start: () => {
+      const timestamp = Date.now();
+
+      // Optimistic update
+      updateTimerOptimistically((current) => {
+        if (current.running) return current;
+        return {
+          ...current,
+          running: true,
+          phaseEndsAt: timestamp + current.remainingSecWhenPaused * 1000,
+          lastUpdatedAt: timestamp
+        };
+      });
+
+      socketRef.current?.emit(SOCKET_EVENTS.TIMER_START, { timestamp });
+    },
+
+    pause: () => {
+      const timestamp = Date.now();
+
+      // Optimistic update
+      updateTimerOptimistically((current) => {
+        if (!current.running || !current.phaseEndsAt) return current;
+        const remaining = Math.max(0, Math.ceil((current.phaseEndsAt - timestamp) / 1000));
+        return {
+          ...current,
+          running: false,
+          phaseEndsAt: null,
+          remainingSecWhenPaused: remaining,
+          lastUpdatedAt: timestamp
+        };
+      });
+
+      socketRef.current?.emit(SOCKET_EVENTS.TIMER_PAUSE, { timestamp });
+    },
+
+    reset: () => {
+      const timestamp = Date.now();
+
+      // Optimistic update (requires room settings access, but we don't have settings inside helper easily unless we change store structure or pass it)
+      // We can use setRoom callback to access full state
+      setRoom((prev) => {
+        if (!prev) return prev;
+        // We need getPhaseDuration but it's not imported. 
+        // Let's assume standard durations from RoomSettings for now or wait for server correction?
+        // Better: Import getPhaseDuration helper if possible, or replicate logic simply.
+        // Actually, we can just use the settings from room state.
+
+        const getPhaseDurationSimple = (phase: string, s: RoomSettings) => {
+          switch (phase) {
+            case "focus": return s.focusSec;
+            case "break": return s.breakSec;
+            case "long_break": return s.longBreakSec;
+            default: return s.focusSec;
+          }
+        };
+
+        const duration = getPhaseDurationSimple(prev.timer.phase, prev.settings);
+        const updatedTimer = {
+          ...prev.timer,
+          running: false,
+          phaseEndsAt: null,
+          remainingSecWhenPaused: duration,
+          lastUpdatedAt: timestamp
+        };
+
+        setRemaining(duration); // Update remaining locally
+        return { ...prev, timer: updatedTimer };
+      });
+
+      socketRef.current?.emit(SOCKET_EVENTS.TIMER_RESET, { timestamp });
+    },
+
+    skip: (source: "auto" | "manual" = "manual") => {
+      const timestamp = Date.now();
+
+      if (source === "manual") {
+        // Optimistic update for manual skip
+        setRoom((prev) => {
+          if (!prev) return prev;
+
+          // Determine next phase locally
+          let nextPhase: import("../types").Phase;
+          let newCycleCount = prev.timer.cycleCount;
+
+          if (prev.timer.phase === "focus") {
+            newCycleCount++;
+            if (newCycleCount % prev.settings.longBreakEvery === 0) {
+              nextPhase = "long_break";
+            } else {
+              nextPhase = "break";
+            }
+          } else {
+            nextPhase = "focus";
+          }
+
+          const getPhaseDurationSimple = (phase: string, s: RoomSettings) => {
+            switch (phase) {
+              case "focus": return s.focusSec;
+              case "break": return s.breakSec;
+              case "long_break": return s.longBreakSec;
+              default: return s.focusSec;
+            }
+          };
+
+          const duration = getPhaseDurationSimple(nextPhase, prev.settings);
+          const updatedTimer = {
+            ...prev.timer,
+            phase: nextPhase,
+            cycleCount: newCycleCount,
+            running: false,
+            phaseEndsAt: null,
+            remainingSecWhenPaused: duration,
+            lastUpdatedAt: timestamp
+          };
+
+          setRemaining(duration);
+          return { ...prev, timer: updatedTimer };
+        });
+      }
+
+      socketRef.current?.emit(SOCKET_EVENTS.TIMER_SKIP, { source, timestamp });
+    },
+
+    updateSettings: (settings: Partial<RoomSettings>) => {
+      // Optimistic update for settings
+      setRoom((prev) => {
+        if (!prev) return prev;
+        const newSettings = { ...prev.settings, ...settings };
+
+        // If timer is paused, update duration if relevant setting changed
+        let updatedTimer = { ...prev.timer };
+        if (!updatedTimer.running) {
+          const getPhaseDurationSimple = (phase: string, s: RoomSettings) => {
+            switch (phase) {
+              case "focus": return s.focusSec;
+              case "break": return s.breakSec;
+              case "long_break": return s.longBreakSec;
+              default: return s.focusSec;
+            }
+          };
+          updatedTimer.remainingSecWhenPaused = getPhaseDurationSimple(updatedTimer.phase, newSettings);
+          // Don't update lastUpdatedAt here as typically this is a side effect, but good to keep consistency if we wanted
+        }
+
+        setRemaining(calculateRemaining(updatedTimer));
+        return { ...prev, settings: newSettings, timer: updatedTimer };
+      });
+
+      socketRef.current?.emit(SOCKET_EVENTS.UPDATE_SETTINGS, settings);
+    },
     sendMessage: (text: string) =>
       socketRef.current?.emit(SOCKET_EVENTS.SEND_MESSAGE, { text }),
 

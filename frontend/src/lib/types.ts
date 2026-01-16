@@ -19,6 +19,7 @@ export interface TimerState {
   phaseEndsAt: number | null;
   remainingSecWhenPaused: number;
   cycleCount: number;
+  lastUpdatedAt: number;
 }
 
 export interface Participant {
@@ -50,6 +51,17 @@ export interface UserTodos {
   isPublic: boolean;
 }
 
+export type ActivityType = "timer_start" | "timer_pause" | "timer_reset" | "timer_skip" | "join" | "leave";
+
+export interface ActivityLog {
+  id: string;
+  type: ActivityType;
+  userId: string;
+  userName: string;
+  timestamp: number;
+  details?: string;
+}
+
 export interface RoomState {
   id: string;
   settings: RoomSettings;
@@ -59,6 +71,7 @@ export interface RoomState {
   participants: Participant[];
   messages: ChatMessage[];
   userTodos: Record<string, UserTodos>;
+  history: ActivityLog[];
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {
