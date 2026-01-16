@@ -50,6 +50,17 @@ export interface UserTodos {
   isPublic: boolean;                 // share with others?
 }
 
+export type ActivityType = "timer_start" | "timer_pause" | "timer_reset" | "timer_skip" | "join" | "leave";
+
+export interface ActivityLog {
+  id: string;
+  type: ActivityType;
+  userId: string;
+  userName: string;
+  timestamp: number;
+  details?: string;
+}
+
 export interface RoomState {
   id: string;
   settings: RoomSettings;
@@ -59,6 +70,7 @@ export interface RoomState {
   participants: Participant[];       // participants with names
   messages: ChatMessage[];           // chat messages (max 100)
   userTodos: Record<string, UserTodos>; // todos by uniqueId
+  history: ActivityLog[];            // activity history (max 50)
 }
 
 // Default settings
@@ -105,7 +117,7 @@ export const SOCKET_EVENTS = {
   TIMER_SKIP: "timer_skip",
   UPDATE_SETTINGS: "update_settings",
   SEND_MESSAGE: "send_message",
-  
+
   // Todo events (Client -> Server)
   TODO_ADD: "todo_add",
   TODO_UPDATE: "todo_update",

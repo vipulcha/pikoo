@@ -15,9 +15,12 @@ import {
   getInitialTimerState,
   getPhaseDuration,
   Phase,
+  ActivityLog,
+  ActivityType,
 } from "./types.js";
 
 const MAX_MESSAGES = 100; // Keep last 100 messages per room
+const MAX_HISTORY = 50; // Keep last 50 activity logs per room
 
 const ROOM_TTL = 60 * 60 * 24; // 24 hours
 
@@ -69,6 +72,7 @@ export async function createRoom(
     participants: [],
     messages: [],
     userTodos: {},
+    history: [],
   };
 
   await saveRoom(room);
@@ -100,10 +104,46 @@ export async function deleteRoom(roomId: string): Promise<void> {
 }
 
 // ============================================
+// Activity Operations
+// ============================================
+
+export async function addActivity(
+  roomId: string,
+  type: ActivityType,
+  userId: string,
+  userName: string,
+  details?: string
+): Promise<void> {
+  const room = await getRoom(roomId);
+  if (!room) return;
+
+  if (!room.history) {
+    room.history = [];
+  }
+
+  const log: ActivityLog = {
+    id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
+    type,
+    userId,
+    userName,
+    timestamp: Date.now(),
+    details
+  };
+
+  room.history.unshift(log); // Add to beginning
+
+  if (room.history.length > MAX_HISTORY) {
+    room.history = room.history.slice(0, MAX_HISTORY);
+  }
+
+  await saveRoom(room);
+}
+
+// ============================================
 // Timer Operations
 // ============================================
 
-export async function startTimer(roomId: string): Promise<TimerState | null> {
+export async function startTimer(roomId: string, userId: string, userName: string): Promise<TimerState | null> {
   const room = await getRoom(roomId);
   if (!room) return null;
 
@@ -112,10 +152,14 @@ export async function startTimer(roomId: string): Promise<TimerState | null> {
   room.timer.phaseEndsAt = now + room.timer.remainingSecWhenPaused * 1000;
 
   await saveRoom(room);
+
+  // Log activity
+  await addActivity(roomId, "timer_start", userId, userName, room.timer.phase);
+
   return room.timer;
 }
 
-export async function pauseTimer(roomId: string): Promise<TimerState | null> {
+export async function pauseTimer(roomId: string, userId: string, userName: string): Promise<TimerState | null> {
   const room = await getRoom(roomId);
   if (!room || !room.timer.running) return room?.timer || null;
 
@@ -127,10 +171,14 @@ export async function pauseTimer(roomId: string): Promise<TimerState | null> {
   room.timer.remainingSecWhenPaused = remaining;
 
   await saveRoom(room);
+
+  // Log activity
+  await addActivity(roomId, "timer_pause", userId, userName, room.timer.phase);
+
   return room.timer;
 }
 
-export async function resetTimer(roomId: string): Promise<TimerState | null> {
+export async function resetTimer(roomId: string, userId: string, userName: string): Promise<TimerState | null> {
   const room = await getRoom(roomId);
   if (!room) return null;
 
@@ -140,11 +188,17 @@ export async function resetTimer(roomId: string): Promise<TimerState | null> {
   room.timer.remainingSecWhenPaused = duration;
 
   await saveRoom(room);
+
+  // Log activity
+  await addActivity(roomId, "timer_reset", userId, userName);
+
   return room.timer;
 }
 
 export async function skipPhase(
   roomId: string,
+  userId: string,
+  userName: string,
   guard?: {
     expectedPhase?: Phase;
     expectedPhaseEndsAt?: number | null;
@@ -191,6 +245,10 @@ export async function skipPhase(
   room.timer.remainingSecWhenPaused = duration;
 
   await saveRoom(room);
+
+  // Log activity
+  await addActivity(roomId, "timer_skip", userId, userName, `Skipped ${room.timer.phase} -> ${nextPhase}`);
+
   return room.timer;
 }
 
@@ -239,6 +297,11 @@ export async function addParticipant(
   });
   await saveRoom(room);
 
+  // Log activity ONLY if not anonymous
+  if (participantName && participantName !== "Anonymous") {
+    await addActivity(roomId, "join", uniqueId, participantName);
+  }
+
   return { success: true, participants: room.participants };
 }
 
@@ -261,7 +324,30 @@ export async function removeParticipant(
       return room.participants;
     }
 
-    // If host leaves in host mode, assign new host or clear
+    // Capture who left for logging (we need to find who it was before filtering, but here we only know they are gone)
+    // We can't easily log "who" left if we filter first without finding them.
+    // Ideally we'd find them first.
+    // Since we are iterating and filtering, let's assume we can't easily get the name here without changing logic significantly.
+    // However, for "leave" events, we usually trust the socket disconnect. 
+    // We can try to log if we persist the user info.
+    // For now, let's skip logging "leave" inside this function and rely on the socket handler having the user info if possible, 
+    // OR, we can improve this.
+    // Actually, let's just log "A user left" if we don't have the name, or try to get it.
+
+    // To properly log "leave", let's find the user first. (Optimization: do this before filter)
+    // But since this tool call is a replace block, I can't check previous code easily.
+    // I will add a simple log entry directly to the room history in the socket handler instead, 
+    // OR refactor this function to return who left. 
+    // Update: The socket handler has `currentUserName` and `currentUniqueId`. I'll log from there for simplicity and reliability.
+
+    // WAIT, `removeParticipant` is called on disconnect. 
+    // Let's modify `removeParticipant` to take `userId` and `userName` optionally? No, logging inside here is better if we want truth.
+
+    // Let's just modify the return type or logic slightly? 
+    // Actually, purely logging inside `removeParticipant` is hard because we filter blindly.
+    // I will logging "leave" activity in `socket.ts` where we likely know the user name.
+
+    // Start of the block
     if (room.hostId === participantId) {
       room.hostId = room.participants[0]?.id || null;
     }

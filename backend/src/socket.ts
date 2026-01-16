@@ -27,6 +27,7 @@ import {
   setActiveTodo,
   setTodoVisibility,
   reorderTodos,
+  addActivity,
 } from "./store.js";
 import { ChatMessage, UserTodos } from "./types.js";
 
@@ -244,6 +245,14 @@ export function setupSocketHandlers(io: Server): void {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, {
             userTodos: room.userTodos
           });
+
+          // Log "join" activity if previous name was "Anonymous"
+          // This handles the "notification only when they enter name" requirement
+          if (currentUserName === "Anonymous" && name.trim() !== "Anonymous") {
+            await addActivity(currentRoomId, "join", currentUniqueId, name.trim());
+            // Broadcast update for history
+            io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, room);
+          }
         }
 
         console.log(`📝 ${socket.id} changed name to "${name.trim()}" in room ${currentRoomId}`);
@@ -269,9 +278,14 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const timer = await startTimer(currentRoomId);
+        const timer = await startTimer(currentRoomId, socket.id, currentUserName);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+          // Also broadcast history update since we logged it
+          const updatedRoom = await getRoom(currentRoomId);
+          if (updatedRoom) {
+            io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
+          }
         }
       } catch (err) {
         console.error("Error starting timer:", err);
@@ -290,9 +304,14 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const timer = await pauseTimer(currentRoomId);
+        const timer = await pauseTimer(currentRoomId, socket.id, currentUserName);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+          // Also broadcast history update
+          const updatedRoom = await getRoom(currentRoomId);
+          if (updatedRoom) {
+            io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
+          }
         }
       } catch (err) {
         console.error("Error pausing timer:", err);
@@ -311,9 +330,14 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const timer = await resetTimer(currentRoomId);
+        const timer = await resetTimer(currentRoomId, socket.id, currentUserName);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+          // Also broadcast history update
+          const updatedRoom = await getRoom(currentRoomId);
+          if (updatedRoom) {
+            io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
+          }
         }
       } catch (err) {
         console.error("Error resetting timer:", err);
@@ -350,6 +374,8 @@ export function setupSocketHandlers(io: Server): void {
 
         const timer = await skipPhase(
           currentRoomId,
+          socket.id,
+          currentUserName,
           source === "auto"
             ? {
               expectedPhase: room.timer.phase,
@@ -360,6 +386,14 @@ export function setupSocketHandlers(io: Server): void {
         );
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+
+          if (source === "manual") {
+            // Also broadcast history update
+            const updatedRoom = await getRoom(currentRoomId);
+            if (updatedRoom) {
+              io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
+            }
+          }
         }
       } catch (err) {
         console.error("Error skipping phase:", err);
@@ -550,6 +584,16 @@ export function setupSocketHandlers(io: Server): void {
           console.log(`[DISCONNECT] After removal, ${participants.length} participants remaining:`,
             participants.map(p => `${p.name}(${p.id.slice(-6)})`));
           io.to(currentRoomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants });
+
+          // Log "leave" activity (we do this here because we have the user info)
+          if (participants.length < participantsBefore.length) {
+            await addActivity(currentRoomId, "leave", currentUniqueId, currentUserName);
+            // Broadcast room state to update history
+            const updatedRoom = await getRoom(currentRoomId);
+            if (updatedRoom) {
+              io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
+            }
+          }
         } catch (err) {
           console.error("[DISCONNECT] Error removing participant:", err);
         }
