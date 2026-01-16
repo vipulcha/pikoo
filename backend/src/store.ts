@@ -107,6 +107,35 @@ export async function deleteRoom(roomId: string): Promise<void> {
 // Activity Operations
 // ============================================
 
+// Helper to add activity to room object in memory (no IO)
+export function pushActivity(
+  room: RoomState,
+  type: ActivityType,
+  userId: string,
+  userName: string,
+  details?: string,
+  timestamp?: number
+): void {
+  if (!room.history) {
+    room.history = [];
+  }
+
+  const log: ActivityLog = {
+    id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
+    type,
+    userId,
+    userName,
+    timestamp: timestamp || Date.now(),
+    details
+  };
+
+  room.history.unshift(log); // Add to beginning
+
+  if (room.history.length > MAX_HISTORY) {
+    room.history = room.history.slice(0, MAX_HISTORY);
+  }
+}
+
 export async function addActivity(
   roomId: string,
   type: ActivityType,
@@ -117,24 +146,7 @@ export async function addActivity(
   const room = await getRoom(roomId);
   if (!room) return;
 
-  if (!room.history) {
-    room.history = [];
-  }
-
-  const log: ActivityLog = {
-    id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
-    type,
-    userId,
-    userName,
-    timestamp: Date.now(),
-    details
-  };
-
-  room.history.unshift(log); // Add to beginning
-
-  if (room.history.length > MAX_HISTORY) {
-    room.history = room.history.slice(0, MAX_HISTORY);
-  }
+  pushActivity(room, type, userId, userName, details);
 
   await saveRoom(room);
 }
@@ -155,7 +167,7 @@ export async function startTimer(
   const actionTime = timestamp || Date.now();
 
   // Always log activity (even if conflict check fails later)
-  await addActivity(roomId, "timer_start", userId, userName, room.timer.phase);
+  pushActivity(room, "timer_start", userId, userName, room.timer.phase, actionTime);
 
   // Conflict Resolution: Ignore stale events
   if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
@@ -185,7 +197,7 @@ export async function pauseTimer(
   const actionTime = timestamp || Date.now();
 
   // Always log activity
-  await addActivity(roomId, "timer_pause", userId, userName, room.timer.phase);
+  pushActivity(room, "timer_pause", userId, userName, room.timer.phase, actionTime);
 
   // Conflict Resolution: Ignore stale events
   if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
@@ -221,7 +233,7 @@ export async function resetTimer(
   const actionTime = timestamp || Date.now();
 
   // Always log activity
-  await addActivity(roomId, "timer_reset", userId, userName);
+  pushActivity(room, "timer_reset", userId, userName, undefined, actionTime);
 
   // Conflict Resolution: Ignore stale events
   if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
@@ -286,7 +298,7 @@ export async function skipPhase(
   const actionTime = timestamp || Date.now();
 
   // Always log activity
-  await addActivity(roomId, "timer_skip", userId, userName, `Skipped ${room.timer.phase} -> ${nextPhase}`);
+  pushActivity(room, "timer_skip", userId, userName, `Skipped ${room.timer.phase} -> ${nextPhase}`, actionTime);
 
   // Conflict Resolution: Ignore stale events
   if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
