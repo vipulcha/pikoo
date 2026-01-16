@@ -265,7 +265,7 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Timer Controls
     // ========================================
-    socket.on(SOCKET_EVENTS.TIMER_START, async () => {
+    socket.on(SOCKET_EVENTS.TIMER_START, async (payload?: { timestamp?: number }) => {
       if (!currentRoomId) return;
 
       try {
@@ -278,7 +278,7 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const timer = await startTimer(currentRoomId, socket.id, currentUserName);
+        const timer = await startTimer(currentRoomId, socket.id, currentUserName, payload?.timestamp);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
           // Also broadcast history update since we logged it
@@ -292,7 +292,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TIMER_PAUSE, async () => {
+    socket.on(SOCKET_EVENTS.TIMER_PAUSE, async (payload?: { timestamp?: number }) => {
       if (!currentRoomId) return;
 
       try {
@@ -304,7 +304,7 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const timer = await pauseTimer(currentRoomId, socket.id, currentUserName);
+        const timer = await pauseTimer(currentRoomId, socket.id, currentUserName, payload?.timestamp);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
           // Also broadcast history update
@@ -318,7 +318,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TIMER_RESET, async () => {
+    socket.on(SOCKET_EVENTS.TIMER_RESET, async (payload?: { timestamp?: number }) => {
       if (!currentRoomId) return;
 
       try {
@@ -330,7 +330,7 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const timer = await resetTimer(currentRoomId, socket.id, currentUserName);
+        const timer = await resetTimer(currentRoomId, socket.id, currentUserName, payload?.timestamp);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
           // Also broadcast history update
@@ -344,7 +344,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TIMER_SKIP, async (payload?: { source?: "auto" | "manual" }) => {
+    socket.on(SOCKET_EVENTS.TIMER_SKIP, async (payload?: { source?: "auto" | "manual", timestamp?: number }) => {
       if (!currentRoomId) return;
 
       try {
@@ -382,7 +382,8 @@ export function setupSocketHandlers(io: Server): void {
               expectedPhaseEndsAt: room.timer.phaseEndsAt,
               expectedRunning: room.timer.running,
             }
-            : undefined
+            : undefined,
+          payload?.timestamp
         );
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });

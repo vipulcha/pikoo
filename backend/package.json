@@ -8,7 +8,12 @@
     "build": "echo 'No build needed'",
     "start": "tsx src/index.ts"
   },
-  "keywords": ["pomodoro", "timer", "websocket", "real-time"],
+  "keywords": [
+    "pomodoro",
+    "timer",
+    "websocket",
+    "real-time"
+  ],
   "author": "",
   "license": "ISC",
   "description": "Pikoo - Shared Team Timer Backend",

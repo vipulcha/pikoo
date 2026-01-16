@@ -143,25 +143,58 @@ export async function addActivity(
 // Timer Operations
 // ============================================
 
-export async function startTimer(roomId: string, userId: string, userName: string): Promise<TimerState | null> {
+export async function startTimer(
+  roomId: string,
+  userId: string,
+  userName: string,
+  timestamp?: number
+): Promise<TimerState | null> {
   const room = await getRoom(roomId);
   if (!room) return null;
+
+  const actionTime = timestamp || Date.now();
+
+  // Always log activity (even if conflict check fails later)
+  await addActivity(roomId, "timer_start", userId, userName, room.timer.phase);
+
+  // Conflict Resolution: Ignore stale events
+  if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
+    console.log(`[CONFLICT] Ignoring stale startTimer event from ${userName} (T=${actionTime} < Last=${room.timer.lastUpdatedAt})`);
+    return room.timer;
+  }
 
   const now = Date.now();
   room.timer.running = true;
   room.timer.phaseEndsAt = now + room.timer.remainingSecWhenPaused * 1000;
+  room.timer.lastUpdatedAt = actionTime;
 
   await saveRoom(room);
-
-  // Log activity
-  await addActivity(roomId, "timer_start", userId, userName, room.timer.phase);
 
   return room.timer;
 }
 
-export async function pauseTimer(roomId: string, userId: string, userName: string): Promise<TimerState | null> {
+export async function pauseTimer(
+  roomId: string,
+  userId: string,
+  userName: string,
+  timestamp?: number
+): Promise<TimerState | null> {
   const room = await getRoom(roomId);
-  if (!room || !room.timer.running) return room?.timer || null;
+  if (!room) return null;
+
+  const actionTime = timestamp || Date.now();
+
+  // Always log activity
+  await addActivity(roomId, "timer_pause", userId, userName, room.timer.phase);
+
+  // Conflict Resolution: Ignore stale events
+  if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
+    console.log(`[CONFLICT] Ignoring stale pauseTimer event from ${userName} (T=${actionTime} < Last=${room.timer.lastUpdatedAt})`);
+    return room.timer;
+  }
+
+  // If already paused, just return current state (idempotent-ish)
+  if (!room.timer.running) return room.timer;
 
   const now = Date.now();
   const remaining = Math.max(0, Math.ceil((room.timer.phaseEndsAt! - now) / 1000));
@@ -169,28 +202,40 @@ export async function pauseTimer(roomId: string, userId: string, userName: strin
   room.timer.running = false;
   room.timer.phaseEndsAt = null;
   room.timer.remainingSecWhenPaused = remaining;
+  room.timer.lastUpdatedAt = actionTime;
 
   await saveRoom(room);
-
-  // Log activity
-  await addActivity(roomId, "timer_pause", userId, userName, room.timer.phase);
 
   return room.timer;
 }
 
-export async function resetTimer(roomId: string, userId: string, userName: string): Promise<TimerState | null> {
+export async function resetTimer(
+  roomId: string,
+  userId: string,
+  userName: string,
+  timestamp?: number
+): Promise<TimerState | null> {
   const room = await getRoom(roomId);
   if (!room) return null;
+
+  const actionTime = timestamp || Date.now();
+
+  // Always log activity
+  await addActivity(roomId, "timer_reset", userId, userName);
+
+  // Conflict Resolution: Ignore stale events
+  if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
+    console.log(`[CONFLICT] Ignoring stale resetTimer event from ${userName} (T=${actionTime} < Last=${room.timer.lastUpdatedAt})`);
+    return room.timer;
+  }
 
   const duration = getPhaseDuration(room.timer.phase, room.settings);
   room.timer.running = false;
   room.timer.phaseEndsAt = null;
   room.timer.remainingSecWhenPaused = duration;
+  room.timer.lastUpdatedAt = actionTime;
 
   await saveRoom(room);
-
-  // Log activity
-  await addActivity(roomId, "timer_reset", userId, userName);
 
   return room.timer;
 }
@@ -203,7 +248,8 @@ export async function skipPhase(
     expectedPhase?: Phase;
     expectedPhaseEndsAt?: number | null;
     expectedRunning?: boolean;
-  }
+  },
+  timestamp?: number
 ): Promise<TimerState | null> {
   const room = await getRoom(roomId);
   if (!room) return null;
@@ -237,17 +283,26 @@ export async function skipPhase(
     nextPhase = "focus";
   }
 
+  const actionTime = timestamp || Date.now();
+
+  // Always log activity
+  await addActivity(roomId, "timer_skip", userId, userName, `Skipped ${room.timer.phase} -> ${nextPhase}`);
+
+  // Conflict Resolution: Ignore stale events
+  if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
+    console.log(`[CONFLICT] Ignoring stale skipPhase event from ${userName} (T=${actionTime} < Last=${room.timer.lastUpdatedAt})`);
+    return room.timer;
+  }
+
   const duration = getPhaseDuration(nextPhase, room.settings);
   room.timer.phase = nextPhase;
   room.timer.cycleCount = newCycleCount;
   room.timer.running = false;
   room.timer.phaseEndsAt = null;
   room.timer.remainingSecWhenPaused = duration;
+  room.timer.lastUpdatedAt = actionTime;
 
   await saveRoom(room);
-
-  // Log activity
-  await addActivity(roomId, "timer_skip", userId, userName, `Skipped ${room.timer.phase} -> ${nextPhase}`);
 
   return room.timer;
 }

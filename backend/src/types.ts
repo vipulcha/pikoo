@@ -19,6 +19,7 @@ export interface TimerState {
   phaseEndsAt: number | null;        // epoch_ms when running
   remainingSecWhenPaused: number;    // seconds remaining when paused
   cycleCount: number;                // completed focus cycles
+  lastUpdatedAt: number;             // epoch_ms of last state change (for conflict resolution)
 }
 
 export interface Participant {
@@ -90,6 +91,7 @@ export function getInitialTimerState(settings: RoomSettings): TimerState {
     phaseEndsAt: null,
     remainingSecWhenPaused: settings.focusSec,
     cycleCount: 0,
+    lastUpdatedAt: Date.now(),
   };
 }
 
