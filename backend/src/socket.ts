@@ -190,7 +190,14 @@ export function setupSocketHandlers(io: Server): void {
         socket.emit(SOCKET_EVENTS.ROOM_STATE, room);
 
         // Broadcast updated participants to all in room
-        io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants: room?.participants || [] });
+        if (name && name !== "Anonymous") {
+          // If user has a name, they generated a "join" activity log
+          // So we must broadcast the full ROOM_STATE to update history for everyone
+          io.to(roomId).emit(SOCKET_EVENTS.ROOM_STATE, room);
+        } else {
+          // Anonymous users don't generate activity logs, so just update participants list
+          io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants: room?.participants || [] });
+        }
 
         console.log(`👤 ${name || "Anonymous"} (${socket.id}) joined room ${roomId}`);
       } catch (err) {
@@ -230,6 +237,17 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
+        // Check if we need to log a "join" activity (if unmasking from Anonymous)
+        // We must check this BEFORE updating currentUserName to the new name
+        if (currentUserName === "Anonymous" && name.trim() !== "Anonymous") {
+          await addActivity(currentRoomId, "join", currentUniqueId, name.trim());
+          // Broadcast update for history - Must refetch to get the new activity log!
+          const updatedRoomWithHistory = await getRoom(currentRoomId);
+          if (updatedRoomWithHistory) {
+            io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoomWithHistory);
+          }
+        }
+
         // Update local state
         currentUserName = name.trim();
 
@@ -245,14 +263,6 @@ export function setupSocketHandlers(io: Server): void {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, {
             userTodos: room.userTodos
           });
-
-          // Log "join" activity if previous name was "Anonymous"
-          // This handles the "notification only when they enter name" requirement
-          if (currentUserName === "Anonymous" && name.trim() !== "Anonymous") {
-            await addActivity(currentRoomId, "join", currentUniqueId, name.trim());
-            // Broadcast update for history
-            io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, room);
-          }
         }
 
         console.log(`📝 ${socket.id} changed name to "${name.trim()}" in room ${currentRoomId}`);
