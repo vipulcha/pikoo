@@ -6,6 +6,11 @@ import { RoomState, RoomSettings, TimerState, Participant, ChatMessage, UserTodo
 import { connectSocket, disconnectSocket, getSocket } from "../socket";
 import { notifyRoomJoin } from "../audio";
 
+interface PendingTodoAdd {
+  text: string;
+  clientRequestId: string;
+}
+
 interface UseTimerReturn {
   room: RoomState | null;
   remaining: number;
@@ -40,6 +45,8 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
   const socketRef = useRef<Socket | null>(null);
   const userNameRef = useRef(userName);
   const hasJoinedRef = useRef(false);
+  const hasReceivedRoomStateRef = useRef(false);
+  const pendingTodoAddsRef = useRef<PendingTodoAdd[]>([]);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Calculate remaining time from timer state
@@ -51,6 +58,79 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     const remaining = Math.max(0, Math.ceil((timer.phaseEndsAt! - now) / 1000));
     return remaining;
   }, []);
+
+  const isJoinReady = useCallback(() => {
+    return Boolean(socketRef.current?.connected && hasReceivedRoomStateRef.current);
+  }, []);
+
+  const mergeServerUserTodosWithLocalPending = useCallback((
+    serverUserTodos: Record<string, UserTodos>,
+    localUserTodos: Record<string, UserTodos> | undefined
+  ): Record<string, UserTodos> => {
+    const myUniqueId = uniqueId;
+    const myLocalTodos = localUserTodos?.[myUniqueId];
+    const myServerTodos = serverUserTodos[myUniqueId];
+    if (!myLocalTodos) return serverUserTodos;
+
+    const pendingTodos = myLocalTodos.todos.filter((t) => t.id.startsWith("temp_"));
+    if (pendingTodos.length === 0) return serverUserTodos;
+
+    const serverRequestIds = new Set(
+      (myServerTodos?.todos || [])
+        .map((todo) => todo.clientRequestId)
+        .filter((id): id is string => Boolean(id))
+    );
+
+    const unconfirmedPending = pendingTodos.filter((todo) => {
+      if (!todo.clientRequestId) {
+        // Backward compatibility: keep old temp todos until another update confirms/removes them.
+        return true;
+      }
+      return !serverRequestIds.has(todo.clientRequestId);
+    });
+
+    if (unconfirmedPending.length === 0) {
+      return serverUserTodos;
+    }
+
+    console.log(
+      `[TODO_SYNC] Preserving ${unconfirmedPending.length} pending local todos during server sync`
+    );
+
+    const baseMyTodos = myServerTodos || myLocalTodos;
+    const mergedTodos = [...baseMyTodos.todos];
+    const todoIds = new Set(mergedTodos.map((todo) => todo.id));
+    for (const pendingTodo of unconfirmedPending) {
+      if (!todoIds.has(pendingTodo.id)) {
+        mergedTodos.push(pendingTodo);
+      }
+    }
+
+    return {
+      ...serverUserTodos,
+      [myUniqueId]: {
+        ...baseMyTodos,
+        todos: mergedTodos,
+        activeTodoId: myLocalTodos.activeTodoId?.startsWith("temp_") &&
+          unconfirmedPending.some((t) => t.id === myLocalTodos.activeTodoId)
+          ? myLocalTodos.activeTodoId
+          : baseMyTodos.activeTodoId,
+      },
+    };
+  }, [uniqueId]);
+
+  const flushQueuedTodoAdds = useCallback(() => {
+    if (!isJoinReady()) return;
+    const socket = socketRef.current;
+    if (!socket || pendingTodoAddsRef.current.length === 0) return;
+
+    const pendingQueue = [...pendingTodoAddsRef.current];
+    pendingTodoAddsRef.current = [];
+    console.log(`[TODO_ADD] Flushing ${pendingQueue.length} queued todo request(s)`);
+    for (const pending of pendingQueue) {
+      socket.emit(SOCKET_EVENTS.TODO_ADD, pending);
+    }
+  }, [isJoinReady]);
 
   // Update remaining time every 100ms when running
   useEffect(() => {
@@ -118,6 +198,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       setIsConnected(true);
       setError(null);
       setNameTakenError(false);
+      hasReceivedRoomStateRef.current = false;
       // Use ref to get current userName (avoids dependency on userName)
       socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name: userNameRef.current, uniqueId });
       hasJoinedRef.current = true;
@@ -125,15 +206,20 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
 
     const handleDisconnect = () => {
       setIsConnected(false);
+      hasReceivedRoomStateRef.current = false;
     };
 
     const handleRoomState = (state: RoomState) => {
       // console.log("[ROOM_STATE] Received full room state, userTodos:", JSON.stringify(state.userTodos, null, 2));
+      hasReceivedRoomStateRef.current = true;
       setRoom((prev) => {
         // Initial load
         if (!prev) {
           setRemaining(calculateRemaining(state.timer));
-          return state;
+          return {
+            ...state,
+            userTodos: mergeServerUserTodosWithLocalPending(state.userTodos, undefined),
+          };
         }
 
         // Conflict Resolution:
@@ -157,12 +243,19 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
             // But let's focus on the main glitch first.
           };
 
-          return protectedState;
+          return {
+            ...protectedState,
+            userTodos: mergeServerUserTodosWithLocalPending(protectedState.userTodos, prev.userTodos),
+          };
         }
 
         setRemaining(calculateRemaining(state.timer));
-        return state;
+        return {
+          ...state,
+          userTodos: mergeServerUserTodosWithLocalPending(state.userTodos, prev.userTodos),
+        };
       });
+      flushQueuedTodoAdds();
     };
 
     const handleTimerUpdate = ({ timer }: { timer: TimerState }) => {
@@ -220,52 +313,72 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     const handleTodosUpdate = ({ userTodos }: { userTodos: Record<string, UserTodos> }) => {
       setRoom((prev) => {
         if (!prev) return prev;
-
-        // Smart merge: preserve our optimistic (temp_) todos that server doesn't know about yet
-        const myUniqueId = uniqueId;
-        const myLocalTodos = prev.userTodos?.[myUniqueId];
-        const myServerTodos = userTodos[myUniqueId];
-
-        if (myLocalTodos && myServerTodos) {
-          // Get our pending (temp_) todos
-          const pendingTodos = myLocalTodos.todos.filter(t => t.id.startsWith('temp_'));
-          const serverTodoTexts = new Set(myServerTodos.todos.map(t => t.text));
-
-          if (pendingTodos.length > 0) {
-            // Only keep pending todos that DON'T have a matching text on server
-            // (if server has a todo with same text, it's the real version of our temp)
-            const unconfirmedPending = pendingTodos.filter(t => !serverTodoTexts.has(t.text));
-
-            if (unconfirmedPending.length > 0) {
-
-              // Merge: server todos + unconfirmed pending todos
-              const mergedTodos = [...myServerTodos.todos, ...unconfirmedPending];
-
-              return {
-                ...prev,
-                userTodos: {
-                  ...userTodos,
-                  [myUniqueId]: {
-                    ...myServerTodos,
-                    todos: mergedTodos,
-                    // Keep local activeTodoId if it's a temp_ id that's still pending
-                    activeTodoId: myLocalTodos.activeTodoId?.startsWith('temp_') &&
-                      unconfirmedPending.some(t => t.id === myLocalTodos.activeTodoId)
-                      ? myLocalTodos.activeTodoId
-                      : myServerTodos.activeTodoId,
-                  },
-                },
-              };
-            }
-
-          }
-        }
-
-        return { ...prev, userTodos };
+        return {
+          ...prev,
+          userTodos: mergeServerUserTodosWithLocalPending(userTodos, prev.userTodos),
+        };
       });
     };
 
-    const handleError = ({ message, code }: { message: string; code?: string }) => {
+    const handleError = ({
+      message,
+      code,
+      clientRequestId,
+    }: {
+      message: string;
+      code?: string;
+      clientRequestId?: string;
+    }) => {
+      if (code === "TODO_ADD_REJECTED_NOT_JOINED" && clientRequestId) {
+        setRoom((prev) => {
+          if (!prev) return prev;
+          const myTodos = prev.userTodos?.[uniqueId];
+          if (!myTodos) return prev;
+          const pendingTodo = myTodos.todos.find(
+            (todo) => todo.id.startsWith("temp_") && todo.clientRequestId === clientRequestId
+          );
+          if (pendingTodo) {
+            const alreadyQueued = pendingTodoAddsRef.current.some(
+              (entry) => entry.clientRequestId === clientRequestId
+            );
+            if (!alreadyQueued) {
+              pendingTodoAddsRef.current.push({
+                text: pendingTodo.text,
+                clientRequestId,
+              });
+            }
+          }
+          return prev;
+        });
+        flushQueuedTodoAdds();
+      } else if (code?.startsWith("TODO_ADD_REJECTED") && clientRequestId) {
+        // Remove failed optimistic todo so UI matches server truth.
+        setRoom((prev) => {
+          if (!prev) return prev;
+          const myTodos = prev.userTodos?.[uniqueId];
+          if (!myTodos) return prev;
+
+          return {
+            ...prev,
+            userTodos: {
+              ...prev.userTodos,
+              [uniqueId]: {
+                ...myTodos,
+                todos: myTodos.todos.filter((todo) => todo.clientRequestId !== clientRequestId),
+                activeTodoId:
+                  myTodos.activeTodoId &&
+                  myTodos.todos.some(
+                    (todo) =>
+                      todo.id === myTodos.activeTodoId && todo.clientRequestId === clientRequestId
+                  )
+                    ? null
+                    : myTodos.activeTodoId,
+              },
+            },
+          };
+        });
+      }
+
       if (code === "NAME_TAKEN") {
         setNameTakenError(true);
         setError(message);
@@ -301,7 +414,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       disconnectSocket();
       hasJoinedRef.current = false;
     };
-  }, [roomId, uniqueId, calculateRemaining]); // Note: userName removed - we use UPDATE_NAME instead
+  }, [roomId, uniqueId, calculateRemaining, mergeServerUserTodosWithLocalPending, flushQueuedTodoAdds]); // Note: userName removed - we use UPDATE_NAME instead
 
   // Send UPDATE_NAME when userName changes (after initial join)
   useEffect(() => {
@@ -514,6 +627,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
 
     // Todo actions with OPTIMISTIC UPDATES
     addTodo: (text: string) => {
+      const clientRequestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       updateMyTodosOptimistically((current) => {
         return {
@@ -523,10 +637,18 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
             text,
             completed: false,
             createdAt: Date.now(),
+            clientRequestId,
           }],
         };
       });
-      socketRef.current?.emit(SOCKET_EVENTS.TODO_ADD, { text });
+
+      const payload: PendingTodoAdd = { text, clientRequestId };
+      if (isJoinReady()) {
+        socketRef.current?.emit(SOCKET_EVENTS.TODO_ADD, payload);
+      } else {
+        pendingTodoAddsRef.current.push(payload);
+        console.log("[TODO_ADD] Queued until room join is ready");
+      }
     },
 
     updateTodo: (todoId: string, updates: { text?: string; completed?: boolean }) => {

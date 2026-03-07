@@ -585,7 +585,8 @@ export async function addTodo(
   roomId: string,
   userId: string,
   userName: string,
-  text: string
+  text: string,
+  clientRequestId?: string
 ): Promise<Record<string, UserTodos> | null> {
   const room = await getRoom(roomId);
   if (!room) return null;
@@ -616,6 +617,7 @@ export async function addTodo(
     text: text.trim(),
     completed: false,
     createdAt: Date.now(),
+    clientRequestId,
   };
 
   userTodos.todos.push(newTodo);

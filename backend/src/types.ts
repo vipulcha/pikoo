@@ -41,6 +41,7 @@ export interface TodoItem {
   text: string;                      // todo content
   completed: boolean;                // is it done?
   createdAt: number;                 // when created
+  clientRequestId?: string;          // correlates optimistic client add requests
 }
 
 export interface UserTodos {

@@ -41,6 +41,7 @@ export interface TodoItem {
   text: string;
   completed: boolean;
   createdAt: number;
+  clientRequestId?: string;
 }
 
 export interface UserTodos {

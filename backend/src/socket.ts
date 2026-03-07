@@ -43,6 +43,7 @@ interface SendMessagePayload {
 
 interface TodoAddPayload {
   text: string;
+  clientRequestId?: string;
 }
 
 interface TodoUpdatePayload {
@@ -477,24 +478,53 @@ export function setupSocketHandlers(io: Server): void {
       console.log(`[TODO_ADD] Received from ${socket.id}, currentRoomId=${currentRoomId}, currentUniqueId=${currentUniqueId}`);
       if (!currentRoomId || !currentUniqueId) {
         console.log("[TODO_ADD] Missing roomId or uniqueId, ignoring");
+        socket.emit(SOCKET_EVENTS.ERROR, {
+          message: "Room sync is still in progress. Please try again.",
+          code: "TODO_ADD_REJECTED_NOT_JOINED",
+          clientRequestId: payload?.clientRequestId,
+        });
         return;
       }
 
       try {
-        const { text } = payload;
-        console.log(`[TODO_ADD] Adding todo: "${text}" for user ${currentUserName}`);
-        if (!text || text.trim().length === 0) return;
-        if (text.length > 200) return; // Max 200 chars per todo
+        const { text, clientRequestId } = payload;
+        console.log(`[TODO_ADD] Adding todo: "${text}" for user ${currentUserName} requestId=${clientRequestId || "none"}`);
+        if (!text || text.trim().length === 0) {
+          socket.emit(SOCKET_EVENTS.ERROR, {
+            message: "Task cannot be empty",
+            code: "TODO_ADD_REJECTED_INVALID",
+            clientRequestId,
+          });
+          return;
+        }
+        if (text.length > 200) {
+          socket.emit(SOCKET_EVENTS.ERROR, {
+            message: "Task is too long (max 200 characters)",
+            code: "TODO_ADD_REJECTED_INVALID",
+            clientRequestId,
+          });
+          return;
+        } // Max 200 chars per todo
 
-        const userTodos = await addTodo(currentRoomId, currentUniqueId, currentUserName, text);
+        const userTodos = await addTodo(currentRoomId, currentUniqueId, currentUserName, text, clientRequestId);
         if (userTodos) {
           console.log(`[TODO_ADD] Broadcasting TODOS_UPDATE, todos count for ${currentUniqueId}:`, userTodos[currentUniqueId]?.todos?.length);
           io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
         } else {
           console.log("[TODO_ADD] addTodo returned null");
+          socket.emit(SOCKET_EVENTS.ERROR, {
+            message: "You have reached the max of 50 tasks",
+            code: "TODO_ADD_REJECTED_LIMIT",
+            clientRequestId,
+          });
         }
       } catch (err) {
         console.error("Error adding todo:", err);
+        socket.emit(SOCKET_EVENTS.ERROR, {
+          message: "Failed to add task",
+          code: "TODO_ADD_REJECTED_SERVER",
+          clientRequestId: payload?.clientRequestId,
+        });
       }
     });
 
