@@ -1,7 +1,56 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { TodoItem, UserTodos } from "@/lib/types";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  type DragStartEvent,
+  type DragEndEvent,
+  type Modifier,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+/**
+ * Compensates for ancestor CSS transforms that break position:fixed
+ * in DragOverlay's portal. Measures the actual offset by temporarily
+ * inserting a probe element and comparing its fixed position.
+ */
+function useTransformCompensation(containerRef: React.RefObject<HTMLDivElement | null>): Modifier[] {
+  const offsetRef = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;pointer-events:none;visibility:hidden";
+    el.appendChild(probe);
+    const rect = probe.getBoundingClientRect();
+    el.removeChild(probe);
+
+    offsetRef.current = { x: rect.left, y: rect.top };
+  });
+
+  return useMemo(() => {
+    const modifier: Modifier = ({ transform }) => {
+      const { x: ox, y: oy } = offsetRef.current;
+      if (ox === 0 && oy === 0) return transform;
+      return { ...transform, x: transform.x - ox, y: transform.y - oy };
+    };
+    return [modifier];
+  }, []);
+}
 
 interface TodoListProps {
   userTodos: UserTodos | null;
@@ -26,10 +75,26 @@ export function TodoList({
   const [isExpanded, setIsExpanded] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const todos = userTodos?.todos || [];
   const activeTodoId = userTodos?.activeTodoId || null;
   const isPublic = userTodos?.isPublic ?? true;
+
+  const todoIds = useMemo(() => todos.map(t => t.id), [todos]);
+  const activeDragTodo = useMemo(
+    () => (activeId ? todos.find(t => t.id === activeId) : null),
+    [activeId, todos]
+  );
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 4 },
+    })
+  );
+
+  const overlayModifiers = useTransformCompensation(wrapperRef);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,33 +110,37 @@ export function TodoList({
 
   const handleSetActive = (todoId: string) => {
     if (activeTodoId === todoId) {
-      onSetActiveTodo(null); // Deselect if already active
+      onSetActiveTodo(null);
     } else {
       onSetActiveTodo(todoId);
     }
   };
 
-  const handleMoveUp = (index: number) => {
-    if (index === 0 || !onReorderTodos) return;
-    const newOrder = [...todos];
-    [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
-    onReorderTodos(newOrder.map(t => t.id));
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
   };
 
-  const handleMoveDown = (index: number) => {
-    if (index === todos.length - 1 || !onReorderTodos) return;
-    const newOrder = [...todos];
-    [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
-    onReorderTodos(newOrder.map(t => t.id));
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id || !onReorderTodos) return;
+
+    const oldIndex = todos.findIndex(t => t.id === active.id);
+    const newIndex = todos.findIndex(t => t.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(todos, oldIndex, newIndex);
+    onReorderTodos(reordered.map(t => t.id));
   };
 
-  // Don't auto-sort - preserve user's order
-  const displayTodos = todos;
+  const handleDragCancel = () => {
+    setActiveId(null);
+  };
 
   const completedCount = todos.filter(t => t.completed).length;
 
   return (
-    <div className="w-72 flex flex-col">
+    <div ref={wrapperRef} className="w-72 flex flex-col relative">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <button
@@ -173,29 +242,53 @@ export function TodoList({
               scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent
             "
           >
-            {displayTodos.length === 0 ? (
+            {todos.length === 0 ? (
               <div className="text-center py-6 text-white/30 text-sm">
                 No tasks yet. Add one above!
               </div>
             ) : (
-              <div className="space-y-1.5">
-                {displayTodos.map((todo, index) => (
-                  <TodoItemRow
-                    key={todo.id}
-                    todo={todo}
-                    index={index}
-                    totalCount={displayTodos.length}
-                    isActive={todo.id === activeTodoId}
-                    onToggleComplete={() => handleToggleComplete(todo)}
-                    onSetActive={() => handleSetActive(todo.id)}
-                    onDelete={() => onDeleteTodo(todo.id)}
-                    onUpdateText={(text) => onUpdateTodo(todo.id, { text })}
-                    onMoveUp={() => handleMoveUp(index)}
-                    onMoveDown={() => handleMoveDown(index)}
-                    canReorder={!!onReorderTodos}
-                  />
-                ))}
-              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDragCancel={handleDragCancel}
+              >
+                <SortableContext items={todoIds} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-1.5">
+                    {todos.map((todo) => (
+                      <SortableTodoItem
+                        key={todo.id}
+                        todo={todo}
+                        isActive={todo.id === activeTodoId}
+                        isDragActive={todo.id === activeId}
+                        onToggleComplete={() => handleToggleComplete(todo)}
+                        onSetActive={() => handleSetActive(todo.id)}
+                        onDelete={() => onDeleteTodo(todo.id)}
+                        onUpdateText={(text) => onUpdateTodo(todo.id, { text })}
+                        canReorder={!!onReorderTodos}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+
+                <DragOverlay
+                  dropAnimation={null}
+                  modifiers={overlayModifiers}
+                >
+                  {activeDragTodo ? (
+                    <TodoItemContent
+                      todo={activeDragTodo}
+                      isActive={activeDragTodo.id === activeTodoId}
+                      isOverlay
+                      onToggleComplete={() => {}}
+                      onSetActive={() => {}}
+                      onDelete={() => {}}
+                      onUpdateText={() => {}}
+                    />
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
             )}
           </div>
 
@@ -211,39 +304,86 @@ export function TodoList({
   );
 }
 
-interface TodoItemRowProps {
+interface SortableTodoItemProps {
   todo: TodoItem;
-  index: number;
-  totalCount: number;
   isActive: boolean;
+  isDragActive: boolean;
   onToggleComplete: () => void;
   onSetActive: () => void;
   onDelete: () => void;
   onUpdateText: (text: string) => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
   canReorder: boolean;
 }
 
-function TodoItemRow({
+function SortableTodoItem({
   todo,
-  index,
-  totalCount,
   isActive,
+  isDragActive,
   onToggleComplete,
   onSetActive,
   onDelete,
   onUpdateText,
-  onMoveUp,
-  onMoveDown,
   canReorder,
-}: TodoItemRowProps) {
+}: SortableTodoItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isSorting,
+  } = useSortable({ id: todo.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition: isSorting ? transition : undefined,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={isDragActive ? "opacity-0" : ""}
+    >
+      <TodoItemContent
+        todo={todo}
+        isActive={isActive}
+        onToggleComplete={onToggleComplete}
+        onSetActive={onSetActive}
+        onDelete={onDelete}
+        onUpdateText={onUpdateText}
+        dragHandleProps={canReorder ? { ...attributes, ...listeners } : undefined}
+      />
+    </div>
+  );
+}
+
+interface TodoItemContentProps {
+  todo: TodoItem;
+  isActive: boolean;
+  isOverlay?: boolean;
+  onToggleComplete: () => void;
+  onSetActive: () => void;
+  onDelete: () => void;
+  onUpdateText: (text: string) => void;
+  dragHandleProps?: Record<string, unknown>;
+}
+
+function TodoItemContent({
+  todo,
+  isActive,
+  isOverlay,
+  onToggleComplete,
+  onSetActive,
+  onDelete,
+  onUpdateText,
+  dragHandleProps,
+}: TodoItemContentProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(todo.text);
   const editInputRef = useRef<HTMLInputElement>(null);
 
-  // Focus input when entering edit mode
   useEffect(() => {
     if (isEditing && editInputRef.current) {
       editInputRef.current.focus();
@@ -280,15 +420,39 @@ function TodoItemRow({
   return (
     <div
       className={`
-        group flex items-start gap-2 p-2 rounded-lg transition-all duration-200
-        ${isActive
-          ? "bg-rose-500/15 border border-rose-500/30"
-          : "bg-white/5 border border-transparent hover:bg-white/8 hover:border-white/10"
+        group flex items-start gap-2 p-2 rounded-lg transition-colors duration-200
+        ${isOverlay
+          ? "bg-white/15 border border-rose-500/40 shadow-lg shadow-black/30 ring-1 ring-rose-500/20 scale-[1.02]"
+          : isActive
+            ? "bg-rose-500/15 border border-rose-500/30"
+            : "bg-white/5 border border-transparent hover:bg-white/8 hover:border-white/10"
         }
       `}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
+      {/* Drag handle */}
+      {dragHandleProps && (
+        <div
+          className={`
+            mt-0.5 flex-shrink-0 cursor-grab active:cursor-grabbing
+            transition-opacity duration-150 touch-none
+            ${isHovered && !isEditing ? "opacity-60 hover:opacity-100" : "opacity-0 group-hover:opacity-40"}
+          `}
+          title="Drag to reorder"
+          {...dragHandleProps}
+        >
+          <svg className="w-3.5 h-3.5 text-white/50" viewBox="0 0 16 16" fill="currentColor">
+            <circle cx="5" cy="3" r="1.5" />
+            <circle cx="11" cy="3" r="1.5" />
+            <circle cx="5" cy="8" r="1.5" />
+            <circle cx="11" cy="8" r="1.5" />
+            <circle cx="5" cy="13" r="1.5" />
+            <circle cx="11" cy="13" r="1.5" />
+          </svg>
+        </div>
+      )}
+
       {/* Checkbox */}
       <button
         onClick={onToggleComplete}
@@ -341,78 +505,54 @@ function TodoItemRow({
       </div>
 
       {/* Action buttons */}
-      <div className={`
-        flex items-center gap-0.5 flex-shrink-0 transition-opacity duration-150
-        ${isHovered && !isEditing ? "opacity-100" : "opacity-0"}
-      `}>
-        {/* Move up/down buttons */}
-        {canReorder && (
-          <>
-            <button
-              onClick={onMoveUp}
-              disabled={index === 0}
-              className="p-1 rounded text-white/40 hover:text-white/70 disabled:opacity-20 disabled:cursor-not-allowed transition-colors duration-150"
-              title="Move up"
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-              </svg>
-            </button>
-            <button
-              onClick={onMoveDown}
-              disabled={index === totalCount - 1}
-              className="p-1 rounded text-white/40 hover:text-white/70 disabled:opacity-20 disabled:cursor-not-allowed transition-colors duration-150"
-              title="Move down"
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-          </>
-        )}
-
-        {/* Edit button */}
-        <button
-          onClick={handleStartEdit}
-          className="p-1 rounded text-white/40 hover:text-white/70 transition-colors duration-150"
-          title="Edit task"
-        >
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-          </svg>
-        </button>
-
-        {/* Focus/Active button */}
-        {!todo.completed && (
+      {!isOverlay && (
+        <div className={`
+          flex items-center gap-0.5 flex-shrink-0 transition-opacity duration-150
+          ${isHovered && !isEditing ? "opacity-100" : "opacity-0"}
+        `}>
+          {/* Edit button */}
           <button
-            onClick={onSetActive}
-            className={`
-              p-1 rounded transition-colors duration-150
-              ${isActive
-                ? "text-rose-400 hover:text-rose-300"
-                : "text-white/40 hover:text-white/70"
-              }
-            `}
-            title={isActive ? "Unfocus this task" : "Focus on this task"}
+            onClick={handleStartEdit}
+            className="p-1 rounded text-white/40 hover:text-white/70 transition-colors duration-150"
+            title="Edit task"
           >
-            <svg className="w-3.5 h-3.5" fill={isActive ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1A3.75 3.75 0 0012 18z" />
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
             </svg>
           </button>
-        )}
 
-        {/* Delete button */}
-        <button
-          onClick={onDelete}
-          className="p-1 rounded text-white/40 hover:text-red-400 transition-colors duration-150"
-          title="Delete task"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-          </svg>
-        </button>
-      </div>
+          {/* Focus/Active button */}
+          {!todo.completed && (
+            <button
+              onClick={onSetActive}
+              className={`
+                p-1 rounded transition-colors duration-150
+                ${isActive
+                  ? "text-rose-400 hover:text-rose-300"
+                  : "text-white/40 hover:text-white/70"
+                }
+              `}
+              title={isActive ? "Unfocus this task" : "Focus on this task"}
+            >
+              <svg className="w-3.5 h-3.5" fill={isActive ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1A3.75 3.75 0 0012 18z" />
+              </svg>
+            </button>
+          )}
+
+          {/* Delete button */}
+          <button
+            onClick={onDelete}
+            className="p-1 rounded text-white/40 hover:text-red-400 transition-colors duration-150"
+            title="Delete task"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
