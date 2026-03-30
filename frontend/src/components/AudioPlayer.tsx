@@ -178,7 +178,7 @@ export function AudioPlayer() {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V4.5A2.25 2.25 0 0016.5 2.25H6A2.25 2.25 0 003.75 4.5v15A2.25 2.25 0 006 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.954" />
               </svg>
-              <span>Music</span>
+              <span className="hidden sm:inline">Music</span>
               {isPlaying && (
                 <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
               )}

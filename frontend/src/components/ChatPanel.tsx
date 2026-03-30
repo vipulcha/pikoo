@@ -56,12 +56,13 @@ export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, hasUnread
     <>
       {/* Toggle Button - only show when chat is closed */}
       {!isOpen && (
-        <div className="fixed right-4 bottom-4 z-40">
+        <div className="fixed right-3 bottom-3 sm:right-4 sm:bottom-4 z-40">
           <button
             onClick={onToggle}
-            className="relative px-4 py-2.5 rounded-xl shadow-2xl transition-all duration-300 bg-white/10 backdrop-blur-sm border border-white/10 text-white/80 hover:bg-white/20 text-sm font-medium"
+            className="relative px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg sm:rounded-xl shadow-lg sm:shadow-2xl transition-all duration-300 bg-white/10 backdrop-blur-sm border border-white/10 text-white/80 hover:bg-white/20 text-xs sm:text-sm font-medium"
           >
-            Talk to Study Mates!
+            <span className="sm:hidden">Chat</span>
+            <span className="hidden sm:inline">Talk to Study Mates!</span>
             
             {/* Unread indicator */}
             {hasUnread && (
@@ -74,7 +75,7 @@ export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, hasUnread
       {/* Chat Panel Drawer */}
       <div 
         className={`
-          fixed right-0 top-18 h-[calc(100vh-4rem)] w-80 sm:w-96 z-30
+          fixed right-0 top-18 h-[calc(100vh-4rem)] w-full sm:w-96 z-30
           bg-black/80 backdrop-blur-xl border-l border-white/10
           transform transition-transform duration-300 ease-out
           ${isOpen ? "translate-x-0" : "translate-x-full"}

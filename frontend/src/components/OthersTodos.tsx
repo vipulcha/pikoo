@@ -37,12 +37,12 @@ export function OthersTodos({ userTodos, currentUserId, participants }: OthersTo
   }
 
   return (
-    <div className="fixed bottom-4 left-4 z-30">
+    <div className="fixed bottom-3 left-3 sm:bottom-4 sm:left-4 z-30">
       {/* Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`
-          flex items-center gap-2 px-3 py-2 rounded-xl
+          flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl
           backdrop-blur-xl border transition-all duration-300
           ${isOpen 
             ? "bg-white/15 border-white/20 text-white shadow-lg" 
@@ -50,15 +50,15 @@ export function OthersTodos({ userTodos, currentUserId, participants }: OthersTo
           }
         `}
       >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
         </svg>
-        <span className="text-sm font-medium">Team Tasks</span>
+        <span className="text-xs sm:text-sm font-medium">Team Tasks</span>
         <span className="px-1.5 py-0.5 bg-white/10 rounded-full text-xs">
           {totalOtherTodos}
         </span>
         <svg
-          className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+          className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -68,10 +68,22 @@ export function OthersTodos({ userTodos, currentUserId, participants }: OthersTo
         </svg>
       </button>
 
+      {/* Backdrop on mobile */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-20 sm:hidden"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
       {/* Panel */}
       {isOpen && (
-        <div className="absolute bottom-14 left-0 w-80 animate-fade-in">
-          <div className="bg-black/70 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="fixed bottom-0 left-0 right-0 sm:absolute sm:bottom-14 sm:left-0 sm:right-auto sm:w-80 z-30 animate-fade-in">
+          <div className="bg-black/70 backdrop-blur-xl border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[70vh] sm:max-h-none flex flex-col">
+            {/* Mobile handle */}
+            <div className="sm:hidden flex justify-center pt-2 pb-1">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
             {/* User tabs */}
             <div className="flex overflow-x-auto border-b border-white/10 p-1 gap-1 scrollbar-none">
               {sortedOtherUsers.map((user) => {

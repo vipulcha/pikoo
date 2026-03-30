@@ -87,13 +87,14 @@ export function ParticipantCount({ participants, isConnected }: ParticipantCount
         
         {/* Count */}
         <span className="text-white/80 text-sm font-medium">
-          {uniqueCount} {uniqueCount === 1 ? "person" : "people"}
+          <span className="sm:hidden">{uniqueCount}</span>
+          <span className="hidden sm:inline">{uniqueCount} {uniqueCount === 1 ? "person" : "people"}</span>
         </span>
       </button>
 
       {/* Dropdown list */}
       {showList && (
-        <div className="absolute top-full right-0 mt-2 w-56 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in z-50">
+        <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-2 w-56 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in z-50">
           <div className="px-3 py-2 border-b border-white/10">
             <p className="text-xs text-white/50 uppercase tracking-wide">In this room</p>
           </div>

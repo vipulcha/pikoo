@@ -285,7 +285,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="mb-10">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm text-white/70 text-sm mb-8 shadow-lg">
+              <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-white/10 backdrop-blur-sm text-white/70 text-xs sm:text-sm mb-6 sm:mb-8 shadow-lg">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 No sign-up required
               </div>
@@ -298,15 +298,15 @@ export default function Home() {
               onClick={handleCreateRoom}
               disabled={isCreating}
               className={`
-                w-full py-4 px-8 rounded-full font-semibold text-lg
+                w-full py-3 px-6 sm:py-4 sm:px-8 rounded-full font-semibold text-base sm:text-lg
                 bg-gradient-to-r from-rose-500 to-pink-500 
                 hover:from-rose-400 hover:to-pink-400
                 active:from-rose-600 active:to-pink-600
                 disabled:opacity-50 disabled:cursor-not-allowed
                 transition-all duration-200 
-                shadow-2xl shadow-rose-500/30 animate-glow-pulse
-                hover:scale-105 active:scale-[0.98]
-                hover:shadow-rose-500/50
+                shadow-xl sm:shadow-2xl shadow-rose-500/30 animate-glow-pulse
+                sm:hover:scale-105 active:scale-[0.98]
+                sm:hover:shadow-rose-500/50
               `}
             >
               {isCreating ? (
@@ -347,6 +347,29 @@ export default function Home() {
           </div>
 
         </div>{/* end three-col grid */}
+
+        {/* Mobile-only: Built for + How it works */}
+        <div className="lg:hidden w-full max-w-md mx-auto mt-16 grid grid-cols-2 gap-8 text-center opacity-0 animate-slide-up animation-delay-400">
+          <div>
+            <p className="text-xs font-semibold text-white/30 uppercase tracking-widest mb-4">Built for</p>
+            <ul className="space-y-2">
+              {["Study sessions", "Body doubling", "Remote sprints", "Coworking"].map((item) => (
+                <li key={item} className="text-white/55 text-sm font-medium">{item}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-white/30 uppercase tracking-widest mb-4">How it works</p>
+            <ol className="space-y-2">
+              {["Create a room", "Share the link", "Focus together"].map((step, i) => (
+                <li key={step} className="flex items-center justify-center gap-2">
+                  <span className="font-mono text-rose-400/70 tabular-nums text-xs">0{i + 1}</span>
+                  <span className="text-white/75 text-sm font-medium">{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
 
       </div>
 
@@ -404,7 +427,7 @@ export default function Home() {
             <button
               onClick={handleCreateRoom}
               disabled={isCreating}
-              className="px-10 py-4 rounded-full font-semibold text-lg bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-400 hover:to-pink-400 active:from-rose-600 active:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-2xl shadow-rose-500/30 hover:scale-105 active:scale-[0.98] hover:shadow-rose-500/50"
+              className="px-8 py-3 sm:px-10 sm:py-4 rounded-full font-semibold text-base sm:text-lg bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-400 hover:to-pink-400 active:from-rose-600 active:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-xl sm:shadow-2xl shadow-rose-500/30 sm:hover:scale-105 active:scale-[0.98] sm:hover:shadow-rose-500/50"
             >
               {isCreating ? "Creating..." : "Create focus room"}
             </button>
