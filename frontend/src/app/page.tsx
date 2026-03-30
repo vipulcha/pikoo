@@ -138,16 +138,37 @@ export default function Home() {
       <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4">
         {/* Logo / Title */}
         <div className="text-center mb-16 relative">
-          <h1 className="relative text-7xl sm:text-8xl font-bold tracking-tight mb-6 animate-shimmer opacity-0 animate-slide-up drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">
-            Pikoo
+          <h1 className="relative text-5xl sm:text-7xl font-bold tracking-tight mb-6 opacity-0 animate-slide-up drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">
+            <span className="text-white">Focus together. </span>
+            <span className="animate-shimmer">Instantly.</span>
           </h1>
-          <p className="relative text-white/80 text-lg sm:text-xl max-w-md mx-auto opacity-0 animate-slide-up animation-delay-200 drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
-            A shared Pomodoro timer for remote collaboration. Focus together, anywhere.
+          <p className="relative text-white/80 text-lg sm:text-xl max-w-lg mx-auto opacity-0 animate-slide-up animation-delay-200 drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
+            Shared Pomodoro rooms with session goals, lo-fi music, and real-time presence. Built for studying, body doubling, and remote work.
           </p>
         </div>
 
-        {/* Main content - no card */}
-        <div className="w-full max-w-md opacity-0 animate-slide-up animation-delay-400 text-center">
+        {/* Three-column hero row */}
+        <div className="w-full max-w-6xl px-8 grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center gap-16 lg:gap-16 opacity-0 animate-slide-up animation-delay-400">
+
+          {/* Built for — left */}
+          <div className="hidden lg:block text-right">
+            <p className="text-xs font-semibold text-white/30 uppercase tracking-widest mb-6">Built for</p>
+            <ul className="space-y-4">
+              {[
+                "Study sessions",
+                "Body doubling / accountability",
+                "Remote work sprints",
+                "Coworking with a friend",
+              ].map((item) => (
+                <li key={item} className="text-white/55 text-sm font-medium">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Centre — CTA */}
+          <div className="w-full max-w-md mx-auto text-center">
           {/* Settings panel - keep card for form elements */}
           {showSettings ? (
             <div className="bg-black/70 backdrop-blur-xl border border-white/10 rounded-3xl p-8 mb-6">
@@ -297,7 +318,7 @@ export default function Home() {
                   Creating...
                 </span>
               ) : (
-                "Create Room"
+                "Create focus room"
               )}
             </button>
 
@@ -310,8 +331,85 @@ export default function Home() {
               </button>
             )}
           </div>
+          </div>{/* end centre col */}
+
+          {/* How it works — right */}
+          <div className="hidden lg:block text-left">
+            <p className="text-xs font-semibold text-white/30 uppercase tracking-widest mb-6">How it works</p>
+            <ol className="space-y-5">
+              {["Create a room", "Share the link", "Focus together"].map((step, i) => (
+                <li key={step} className="flex items-center gap-4">
+                  <span className="font-mono text-rose-400/70 tabular-nums text-xs shrink-0">0{i + 1}</span>
+                  <span className="text-white/75 text-base font-medium">{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+        </div>{/* end three-col grid */}
+
+      </div>
+
+      {/* Below-the-fold sections */}
+      <div className="relative z-10 border-t border-white/5">
+
+        {/* Why Pikoo */}
+        <section className="py-20 sm:py-28 px-6">
+          <div className="max-w-xl mx-auto">
+            <h2 className="text-lg sm:text-xl font-semibold text-white/50 uppercase tracking-widest mb-10">
+              Why Pikoo
+            </h2>
+            <ul className="space-y-6">
+              {[
+                ["Start in seconds", "no accounts, no setup"],
+                ["Work better together", "simple shared focus sessions"],
+                ["No meeting overhead", "just a room and a timer"],
+              ].map(([title, desc]) => (
+                <li key={title} className="flex items-start gap-4 text-lg sm:text-xl">
+                  <span className="mt-2.5 w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+                  <span>
+                    <span className="text-white font-semibold">{title}</span>
+                    <span className="text-white/50"> — {desc}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <div className="mx-auto max-w-xl px-6">
+          <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
         </div>
 
+        {/* Social proof */}
+        <section className="py-20 sm:py-28 px-6">
+          <div className="max-w-xl mx-auto flex flex-col items-center gap-4 text-center">
+            {[
+              "Used for 300+ focus sessions",
+              "Loved by students and remote teams",
+            ].map((quote) => (
+              <p
+                key={quote}
+                className="text-white/40 text-base sm:text-lg italic"
+              >
+                &ldquo;{quote}&rdquo;
+              </p>
+            ))}
+          </div>
+        </section>
+
+        {/* Bottom CTA */}
+        <section className="pb-28 px-6">
+          <div className="max-w-md mx-auto text-center">
+            <button
+              onClick={handleCreateRoom}
+              disabled={isCreating}
+              className="px-10 py-4 rounded-full font-semibold text-lg bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-400 hover:to-pink-400 active:from-rose-600 active:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-2xl shadow-rose-500/30 hover:scale-105 active:scale-[0.98] hover:shadow-rose-500/50"
+            >
+              {isCreating ? "Creating..." : "Create focus room"}
+            </button>
+          </div>
+        </section>
       </div>
 
       {/* Name prompt modal */}

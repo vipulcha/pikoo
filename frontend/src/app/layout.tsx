@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Pikoo - Shared Team Timer",
-  description: "A shared Pomodoro timer for remote collaboration. Focus together, anywhere.",
+  title: "Pikoo - Focus together. Instantly.",
+  description: "Shared Pomodoro rooms with session goals, lo-fi music, and real-time presence. Built for studying, body doubling, and remote work.",
   keywords: ["pomodoro", "timer", "team", "productivity", "focus", "remote work"],
 };
 
