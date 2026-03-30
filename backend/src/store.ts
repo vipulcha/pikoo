@@ -18,6 +18,7 @@ import {
   ActivityLog,
   ActivityType,
 } from "./types.js";
+import { log } from "./logger.js";
 
 const MAX_MESSAGES = 100; // Keep last 100 messages per room
 const MAX_HISTORY = 50; // Keep last 50 activity logs per room
@@ -33,21 +34,21 @@ export function initRedis(): Redis | null {
   const redisUrl = process.env.REDIS_URL;
 
   if (!redisUrl) {
-    console.log("⚠️  No REDIS_URL found, using in-memory store (not for production!)");
+    log.store.warn("No REDIS_URL found, using in-memory store (not for production!)");
     return null;
   }
 
   try {
     redis = new Redis(redisUrl);
     redis.on("error", (err) => {
-      console.error("Redis error:", err);
+      log.store.error("Redis error", { error: String(err) });
     });
     redis.on("connect", () => {
-      console.log("✅ Connected to Redis");
+      log.store.info("Connected to Redis");
     });
     return redis;
   } catch (err) {
-    console.error("Failed to connect to Redis:", err);
+    log.store.error("Failed to connect to Redis", { error: String(err) });
     return null;
   }
 }
@@ -120,7 +121,7 @@ export function pushActivity(
     room.history = [];
   }
 
-  const log: ActivityLog = {
+  const entry: ActivityLog = {
     id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
     type,
     userId,
@@ -129,7 +130,7 @@ export function pushActivity(
     details
   };
 
-  room.history.unshift(log); // Add to beginning
+  room.history.unshift(entry);
 
   if (room.history.length > MAX_HISTORY) {
     room.history = room.history.slice(0, MAX_HISTORY);
@@ -171,7 +172,7 @@ export async function startTimer(
 
   // Conflict Resolution: Ignore stale events
   if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
-    console.log(`[CONFLICT] Ignoring stale startTimer event from ${userName} (T=${actionTime} < Last=${room.timer.lastUpdatedAt})`);
+    log.store.debug("Ignoring stale startTimer event", { userName, actionTime, lastUpdated: room.timer.lastUpdatedAt });
     return room.timer;
   }
 
@@ -201,7 +202,7 @@ export async function pauseTimer(
 
   // Conflict Resolution: Ignore stale events
   if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
-    console.log(`[CONFLICT] Ignoring stale pauseTimer event from ${userName} (T=${actionTime} < Last=${room.timer.lastUpdatedAt})`);
+    log.store.debug("Ignoring stale pauseTimer event", { userName, actionTime, lastUpdated: room.timer.lastUpdatedAt });
     return room.timer;
   }
 
@@ -237,7 +238,7 @@ export async function resetTimer(
 
   // Conflict Resolution: Ignore stale events
   if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
-    console.log(`[CONFLICT] Ignoring stale resetTimer event from ${userName} (T=${actionTime} < Last=${room.timer.lastUpdatedAt})`);
+    log.store.debug("Ignoring stale resetTimer event", { userName, actionTime, lastUpdated: room.timer.lastUpdatedAt });
     return room.timer;
   }
 
@@ -302,7 +303,7 @@ export async function skipPhase(
 
   // Conflict Resolution: Ignore stale events
   if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
-    console.log(`[CONFLICT] Ignoring stale skipPhase event from ${userName} (T=${actionTime} < Last=${room.timer.lastUpdatedAt})`);
+    log.store.debug("Ignoring stale skipPhase event", { userName, actionTime, lastUpdated: room.timer.lastUpdatedAt });
     return room.timer;
   }
 
@@ -385,36 +386,10 @@ export async function removeParticipant(
     room.participants = room.participants.filter((p) => p.id !== participantId);
     const afterCount = room.participants.length;
 
-    // If participant wasn't found, they're already removed
     if (beforeCount === afterCount) {
-      console.log(`[removeParticipant] Participant ${participantId.slice(-6)} already removed from ${roomId}`);
       return room.participants;
     }
 
-    // Capture who left for logging (we need to find who it was before filtering, but here we only know they are gone)
-    // We can't easily log "who" left if we filter first without finding them.
-    // Ideally we'd find them first.
-    // Since we are iterating and filtering, let's assume we can't easily get the name here without changing logic significantly.
-    // However, for "leave" events, we usually trust the socket disconnect. 
-    // We can try to log if we persist the user info.
-    // For now, let's skip logging "leave" inside this function and rely on the socket handler having the user info if possible, 
-    // OR, we can improve this.
-    // Actually, let's just log "A user left" if we don't have the name, or try to get it.
-
-    // To properly log "leave", let's find the user first. (Optimization: do this before filter)
-    // But since this tool call is a replace block, I can't check previous code easily.
-    // I will add a simple log entry directly to the room history in the socket handler instead, 
-    // OR refactor this function to return who left. 
-    // Update: The socket handler has `currentUserName` and `currentUniqueId`. I'll log from there for simplicity and reliability.
-
-    // WAIT, `removeParticipant` is called on disconnect. 
-    // Let's modify `removeParticipant` to take `userId` and `userName` optionally? No, logging inside here is better if we want truth.
-
-    // Let's just modify the return type or logic slightly? 
-    // Actually, purely logging inside `removeParticipant` is hard because we filter blindly.
-    // I will logging "leave" activity in `socket.ts` where we likely know the user name.
-
-    // Start of the block
     if (room.hostId === participantId) {
       room.hostId = room.participants[0]?.id || null;
     }
@@ -426,11 +401,9 @@ export async function removeParticipant(
     if (verifyRoom) {
       const stillExists = verifyRoom.participants.find(p => p.id === participantId);
       if (!stillExists) {
-        console.log(`[removeParticipant] Successfully removed ${participantId.slice(-6)}, now ${verifyRoom.participants.length} participants`);
         return verifyRoom.participants;
       } else {
-        console.log(`[removeParticipant] Race condition detected! Participant ${participantId.slice(-6)} still exists, retry ${attempt + 1}/${retries}`);
-        // Small delay before retry
+        log.store.warn("Race condition in removeParticipant, retrying", { participantId: participantId.slice(-6), attempt: attempt + 1 });
         await new Promise(resolve => setTimeout(resolve, 50 * (attempt + 1)));
       }
     } else {
@@ -438,8 +411,7 @@ export async function removeParticipant(
     }
   }
 
-  // Final attempt - just return current state
-  console.log(`[removeParticipant] Failed after ${retries} retries for ${participantId.slice(-6)}`);
+  log.store.error("removeParticipant failed after retries", { participantId: participantId.slice(-6), retries });
   const finalRoom = await getRoom(roomId);
   return finalRoom?.participants || [];
 }
@@ -498,7 +470,7 @@ export async function updateSettings(
 
   // NOTE: We share `lastUpdatedAt` on the timer object for ALL state changes to keep it simple.
   if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
-    console.log(`[CONFLICT] Ignoring stale settings update (T=${actionTime} < Last=${room.timer.lastUpdatedAt})`);
+    log.store.debug("Ignoring stale settings update", { actionTime, lastUpdated: room.timer.lastUpdatedAt });
     return room.settings;
   }
 

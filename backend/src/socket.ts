@@ -1,7 +1,3 @@
-// ============================================
-// Pikoo - WebSocket Gateway
-// ============================================
-
 import { Server, Socket } from "socket.io";
 import {
   SOCKET_EVENTS,
@@ -11,6 +7,7 @@ import {
 import {
   getRoom,
   createRoom,
+  saveRoom,
   startTimer,
   pauseTimer,
   resetTimer,
@@ -30,11 +27,23 @@ import {
   addActivity,
 } from "./store.js";
 import { ChatMessage, UserTodos } from "./types.js";
+import { log } from "./logger.js";
+import { socketEventLimiter, chatMessageLimiter } from "./rate-limit.js";
+import {
+  sanitizeName,
+  sanitizeMessage,
+  sanitizeTodoText,
+  sanitizeRoomId,
+  sanitizeUniqueId,
+  isValidTodoId,
+  isValidBoolean,
+  sanitizeSettings,
+} from "./sanitize.js";
 
 interface JoinRoomPayload {
   roomId: string;
   name: string;
-  uniqueId: string;  // persistent user id from localStorage
+  uniqueId: string;
 }
 
 interface SendMessagePayload {
@@ -71,71 +80,53 @@ interface UpdateNamePayload {
   name: string;
 }
 
-// Helper to clean up stale participants (not actually connected)
+// Rate-limit guard — returns true if blocked
+function rateLimited(socket: Socket, label?: string): boolean {
+  if (!socketEventLimiter.consume(socket.id)) {
+    socket.emit(SOCKET_EVENTS.ERROR, { message: "Too many requests, slow down" });
+    return true;
+  }
+  return false;
+}
+
 async function cleanupStaleParticipants(io: Server, roomId: string): Promise<void> {
   try {
     const room = await getRoom(roomId);
     if (!room) return;
 
-    const beforeCount = room.participants.length;
-    const beforeParticipants = room.participants.map(p => `${p.name}(${p.id.slice(-6)})`);
-
     const socketsInRoom = await io.in(roomId).fetchSockets();
     const connectedSocketIds = new Set(socketsInRoom.map(s => s.id));
 
-    // Double-check: Verify each participant's socket is actually disconnected before removing
-    // This prevents race conditions where socket.join() hasn't fully propagated
     const verifiedStaleParticipants = room.participants.filter(p => {
-      const isInRoom = connectedSocketIds.has(p.id);
-      if (isInRoom) {
-        // Socket is in room, definitely active
-        return false;
-      }
-
-      // Socket not in room - verify it's actually disconnected
-      // Check if socket exists in the namespace and is disconnected
+      if (connectedSocketIds.has(p.id)) return false;
       const socket = io.sockets.sockets.get(p.id);
       if (socket && socket.connected) {
-        // Socket exists and is connected but not in room - might be a race condition
-        // Don't remove it, it might be joining
-        console.log(`[CLEANUP] WARNING: Participant ${p.name}(${p.id.slice(-6)}) socket is connected but not in room - skipping removal (race condition)`);
+        log.socket.debug("Skipping removal — socket connected but not in room (race)", { socketId: p.id.slice(-6), name: p.name });
         return false;
       }
-
-      // Socket doesn't exist or is disconnected - safe to remove
       return true;
     });
 
-    // Always log cleanup attempt for debugging
-    console.log(`[CLEANUP] Checking room ${roomId}: ${beforeCount} participants stored, ${connectedSocketIds.size} sockets connected`);
-    console.log(`[CLEANUP] Stored participants:`, beforeParticipants);
-    console.log(`[CLEANUP] Connected socket IDs:`, Array.from(connectedSocketIds).map(id => id.slice(-6)));
-
     if (verifiedStaleParticipants.length > 0) {
-      console.log(`[CLEANUP] Found ${verifiedStaleParticipants.length} verified stale participants in ${roomId}:`,
-        verifiedStaleParticipants.map(p => `${p.name}(${p.id.slice(-6)})`));
+      log.socket.info("Removing stale participants", {
+        roomId,
+        count: verifiedStaleParticipants.length,
+        names: verifiedStaleParticipants.map(p => p.name),
+      });
 
-      // Only remove verified stale participants
       const staleSocketIds = new Set(verifiedStaleParticipants.map(p => p.id));
       room.participants = room.participants.filter(p => !staleSocketIds.has(p.id));
-
-      const { saveRoom } = await import("./store.js");
       await saveRoom(room);
-
-      // Broadcast updated participants
       io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants: room.participants });
-      console.log(`[CLEANUP] Removed stale participants, now ${room.participants.length} remaining`);
-    } else {
-      console.log(`[CLEANUP] No stale participants found in ${roomId}`);
     }
   } catch (err) {
-    console.error("[CLEANUP] Error cleaning up stale participants:", err);
+    log.socket.error("Cleanup error", { error: String(err) });
   }
 }
 
 export function setupSocketHandlers(io: Server): void {
   io.on("connection", (socket: Socket) => {
-    console.log(`🔌 Client connected: ${socket.id}`);
+    log.socket.info("Client connected", { socketId: socket.id.slice(-6) });
 
     let currentRoomId: string | null = null;
     let currentUserName: string = "Anonymous";
@@ -145,22 +136,28 @@ export function setupSocketHandlers(io: Server): void {
     // Join Room
     // ========================================
     socket.on(SOCKET_EVENTS.JOIN_ROOM, async (payload: JoinRoomPayload) => {
-      const { roomId, name, uniqueId } = payload;
+      if (rateLimited(socket)) return;
+
+      const roomId = sanitizeRoomId(payload?.roomId);
+      const name = sanitizeName(payload?.name) || "Anonymous";
+      const uniqueId = sanitizeUniqueId(payload?.uniqueId);
+
+      if (!roomId || !uniqueId) {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: "Invalid room ID or user ID" });
+        return;
+      }
 
       try {
         let room = await getRoom(roomId);
 
         if (!room) {
-          // Room doesn't exist - this is an error for joining
           socket.emit(SOCKET_EVENTS.ERROR, { message: "Room not found" });
           return;
         }
 
-        // Try to add participant (validates name uniqueness)
-        const result = await addParticipant(roomId, socket.id, uniqueId, name || "Anonymous");
+        const result = await addParticipant(roomId, socket.id, uniqueId, name);
 
         if (!result.success) {
-          // Name is taken by another user
           socket.emit(SOCKET_EVENTS.ERROR, {
             message: result.error || "Failed to join room",
             code: "NAME_TAKEN"
@@ -168,68 +165,49 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        // Join socket room
         socket.join(roomId);
         currentRoomId = roomId;
-        currentUserName = name || "Anonymous";
+        currentUserName = name;
         currentUniqueId = uniqueId;
 
-        // Ensure user has a todo list entry
         await ensureUserTodos(roomId, uniqueId, currentUserName);
-
-        room = await getRoom(roomId);
-
-        // Clean up any stale participants before sending state
         await cleanupStaleParticipants(io, roomId);
-
-        // Re-fetch room after cleanup
         room = await getRoom(roomId);
 
-        // Send current state to joining client
-        console.log(`[JOIN_ROOM] Sending ROOM_STATE to ${socket.id}, userTodos for ${uniqueId}:`, room?.userTodos?.[uniqueId]?.todos?.length || 0);
         socket.emit(SOCKET_EVENTS.ROOM_STATE, room);
 
-        // Broadcast updated participants to all in room
-        if (name && name !== "Anonymous") {
-          // If user has a name, they generated a "join" activity log
-          // So we must broadcast the full ROOM_STATE to update history for everyone
+        if (name !== "Anonymous") {
           io.to(roomId).emit(SOCKET_EVENTS.ROOM_STATE, room);
         } else {
-          // Anonymous users don't generate activity logs, so just update participants list
           io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants: room?.participants || [] });
         }
 
-        console.log(`👤 ${name || "Anonymous"} (${socket.id}) joined room ${roomId}`);
+        log.socket.info("User joined room", { roomId, name, socketId: socket.id.slice(-6) });
       } catch (err) {
-        console.error("Error joining room:", err);
+        log.socket.error("Join room error", { error: String(err), roomId });
         socket.emit(SOCKET_EVENTS.ERROR, { message: "Failed to join room" });
       }
     });
 
     // ========================================
-    // Update Name (without reconnecting)
+    // Update Name
     // ========================================
     socket.on(SOCKET_EVENTS.UPDATE_NAME, async (payload: UpdateNamePayload) => {
-      console.log(`[UPDATE_NAME] Received from ${socket.id}, currentRoomId=${currentRoomId}, currentUniqueId=${currentUniqueId}`);
-      if (!currentRoomId || !currentUniqueId) {
-        console.log("[UPDATE_NAME] Missing roomId or uniqueId, ignoring");
-        return;
-      }
+      if (rateLimited(socket)) return;
+      if (!currentRoomId || !currentUniqueId) return;
 
-      const { name } = payload;
-      console.log(`[UPDATE_NAME] New name: "${name}"`);
-      if (!name || name.trim().length === 0) return;
+      const name = sanitizeName(payload?.name);
+      if (!name) return;
 
       try {
         const result = await updateParticipantName(
           currentRoomId,
           socket.id,
           currentUniqueId,
-          name.trim()
+          name
         );
 
         if (!result.success) {
-          console.log(`[UPDATE_NAME] Failed: ${result.error}`);
           socket.emit(SOCKET_EVENTS.ERROR, {
             message: result.error || "Failed to update name",
             code: "NAME_TAKEN"
@@ -237,37 +215,30 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        // Check if we need to log a "join" activity (if unmasking from Anonymous)
-        // We must check this BEFORE updating currentUserName to the new name
-        if (currentUserName === "Anonymous" && name.trim() !== "Anonymous") {
-          await addActivity(currentRoomId, "join", currentUniqueId, name.trim());
-          // Broadcast update for history - Must refetch to get the new activity log!
+        if (currentUserName === "Anonymous" && name !== "Anonymous") {
+          await addActivity(currentRoomId, "join", currentUniqueId, name);
           const updatedRoomWithHistory = await getRoom(currentRoomId);
           if (updatedRoomWithHistory) {
             io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoomWithHistory);
           }
         }
 
-        // Update local state
-        currentUserName = name.trim();
+        currentUserName = name;
 
-        // Broadcast updated participants to all in room
         io.to(currentRoomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, {
           participants: result.participants
         });
 
-        // Also broadcast updated todos (since userName changed there too)
         const room = await getRoom(currentRoomId);
         if (room) {
-          console.log(`[UPDATE_NAME] Broadcasting TODOS_UPDATE, todos for ${currentUniqueId}:`, room.userTodos[currentUniqueId]?.todos?.length || 0);
           io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, {
             userTodos: room.userTodos
           });
         }
 
-        console.log(`📝 ${socket.id} changed name to "${name.trim()}" in room ${currentRoomId}`);
+        log.socket.info("Name updated", { socketId: socket.id.slice(-6), newName: name });
       } catch (err) {
-        console.error("Error updating name:", err);
+        log.socket.error("Update name error", { error: String(err) });
         socket.emit(SOCKET_EVENTS.ERROR, { message: "Failed to update name" });
       }
     });
@@ -276,13 +247,13 @@ export function setupSocketHandlers(io: Server): void {
     // Timer Controls
     // ========================================
     socket.on(SOCKET_EVENTS.TIMER_START, async (payload?: { timestamp?: number }) => {
+      if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
       try {
         const room = await getRoom(currentRoomId);
         if (!room) return;
 
-        // Check permissions
         if (room.settings.mode === "host" && room.hostId !== socket.id) {
           socket.emit(SOCKET_EVENTS.ERROR, { message: "Only the host can control the timer" });
           return;
@@ -291,18 +262,18 @@ export function setupSocketHandlers(io: Server): void {
         const timer = await startTimer(currentRoomId, socket.id, currentUserName, payload?.timestamp);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
-          // Also broadcast history update since we logged it
           const updatedRoom = await getRoom(currentRoomId);
           if (updatedRoom) {
             io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
           }
         }
       } catch (err) {
-        console.error("Error starting timer:", err);
+        log.socket.error("Timer start error", { error: String(err) });
       }
     });
 
     socket.on(SOCKET_EVENTS.TIMER_PAUSE, async (payload?: { timestamp?: number }) => {
+      if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
       try {
@@ -317,18 +288,18 @@ export function setupSocketHandlers(io: Server): void {
         const timer = await pauseTimer(currentRoomId, socket.id, currentUserName, payload?.timestamp);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
-          // Also broadcast history update
           const updatedRoom = await getRoom(currentRoomId);
           if (updatedRoom) {
             io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
           }
         }
       } catch (err) {
-        console.error("Error pausing timer:", err);
+        log.socket.error("Timer pause error", { error: String(err) });
       }
     });
 
     socket.on(SOCKET_EVENTS.TIMER_RESET, async (payload?: { timestamp?: number }) => {
+      if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
       try {
@@ -343,18 +314,18 @@ export function setupSocketHandlers(io: Server): void {
         const timer = await resetTimer(currentRoomId, socket.id, currentUserName, payload?.timestamp);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
-          // Also broadcast history update
           const updatedRoom = await getRoom(currentRoomId);
           if (updatedRoom) {
             io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
           }
         }
       } catch (err) {
-        console.error("Error resetting timer:", err);
+        log.socket.error("Timer reset error", { error: String(err) });
       }
     });
 
     socket.on(SOCKET_EVENTS.TIMER_SKIP, async (payload?: { source?: "auto" | "manual", timestamp?: number }) => {
+      if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
       try {
@@ -376,9 +347,6 @@ export function setupSocketHandlers(io: Server): void {
           source === "auto" &&
           (!room.timer.running || !phaseEndsAt || (remainingMs !== null && remainingMs > AUTO_SKIP_GRACE_MS))
         ) {
-          console.log(
-            `[AUTO_SKIP] Ignoring auto-skip request - timer not finished or not running (phase=${room.timer.phase}, running=${room.timer.running}, remainingMs=${remainingMs ?? "n/a"})`
-          );
           return;
         }
 
@@ -397,9 +365,7 @@ export function setupSocketHandlers(io: Server): void {
         );
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
-
           if (source === "manual") {
-            // Also broadcast history update
             const updatedRoom = await getRoom(currentRoomId);
             if (updatedRoom) {
               io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
@@ -407,7 +373,7 @@ export function setupSocketHandlers(io: Server): void {
           }
         }
       } catch (err) {
-        console.error("Error skipping phase:", err);
+        log.socket.error("Timer skip error", { error: String(err) });
       }
     });
 
@@ -415,6 +381,7 @@ export function setupSocketHandlers(io: Server): void {
     // Settings Update
     // ========================================
     socket.on(SOCKET_EVENTS.UPDATE_SETTINGS, async (payload: Partial<RoomSettings> & { timestamp?: number }) => {
+      if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
       try {
@@ -426,16 +393,17 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const settings = await updateSettings(currentRoomId, payload, payload.timestamp);
+        const cleanSettings = sanitizeSettings(payload);
+        if (!cleanSettings) return;
+
+        const settings = await updateSettings(currentRoomId, cleanSettings as Partial<RoomSettings>, payload.timestamp);
         if (settings) {
           const updatedRoom = await getRoom(currentRoomId);
-          // Send full room state so timer gets updated too
           io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
-          // Also send timer update explicitly
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer: updatedRoom?.timer });
         }
       } catch (err) {
-        console.error("Error updating settings:", err);
+        log.socket.error("Settings update error", { error: String(err) });
       }
     });
 
@@ -443,30 +411,32 @@ export function setupSocketHandlers(io: Server): void {
     // Chat Messages
     // ========================================
     socket.on(SOCKET_EVENTS.SEND_MESSAGE, async (payload: SendMessagePayload) => {
+      if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
-      try {
-        const { text } = payload;
+      if (!chatMessageLimiter.consume(socket.id)) {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: "Sending messages too fast" });
+        return;
+      }
 
-        // Validate message
-        if (!text || text.trim().length === 0) return;
-        if (text.length > 500) return; // Max 500 chars
+      try {
+        const text = sanitizeMessage(payload?.text);
+        if (!text) return;
 
         const message: ChatMessage = {
           id: `${socket.id}-${Date.now()}`,
           senderId: socket.id,
           senderName: currentUserName,
-          text: text.trim(),
+          text,
           timestamp: Date.now(),
         };
 
         const savedMessage = await addMessage(currentRoomId, message);
         if (savedMessage) {
-          // Broadcast to all in room including sender
           io.to(currentRoomId).emit(SOCKET_EVENTS.NEW_MESSAGE, { message: savedMessage });
         }
       } catch (err) {
-        console.error("Error sending message:", err);
+        log.socket.error("Send message error", { error: String(err) });
       }
     });
 
@@ -474,105 +444,112 @@ export function setupSocketHandlers(io: Server): void {
     // Todo Operations
     // ========================================
     socket.on(SOCKET_EVENTS.TODO_ADD, async (payload: TodoAddPayload) => {
-      console.log(`[TODO_ADD] Received from ${socket.id}, currentRoomId=${currentRoomId}, currentUniqueId=${currentUniqueId}`);
-      if (!currentRoomId || !currentUniqueId) {
-        console.log("[TODO_ADD] Missing roomId or uniqueId, ignoring");
-        return;
-      }
+      if (rateLimited(socket)) return;
+      if (!currentRoomId || !currentUniqueId) return;
 
       try {
-        const { text } = payload;
-        console.log(`[TODO_ADD] Adding todo: "${text}" for user ${currentUserName}`);
-        if (!text || text.trim().length === 0) return;
-        if (text.length > 200) return; // Max 200 chars per todo
+        const text = sanitizeTodoText(payload?.text);
+        if (!text) return;
 
         const userTodos = await addTodo(currentRoomId, currentUniqueId, currentUserName, text);
         if (userTodos) {
-          console.log(`[TODO_ADD] Broadcasting TODOS_UPDATE, todos count for ${currentUniqueId}:`, userTodos[currentUniqueId]?.todos?.length);
           io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
-        } else {
-          console.log("[TODO_ADD] addTodo returned null");
         }
       } catch (err) {
-        console.error("Error adding todo:", err);
+        log.socket.error("Todo add error", { error: String(err) });
       }
     });
 
     socket.on(SOCKET_EVENTS.TODO_UPDATE, async (payload: TodoUpdatePayload) => {
+      if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
       try {
-        const { todoId, text, completed } = payload;
-        if (!todoId) return;
+        if (!isValidTodoId(payload?.todoId)) return;
 
-        const userTodos = await updateTodo(currentRoomId, currentUniqueId, todoId, { text, completed });
+        const updates: { text?: string; completed?: boolean } = {};
+        if (payload.text !== undefined) {
+          const cleanText = sanitizeTodoText(payload.text);
+          if (cleanText) updates.text = cleanText;
+        }
+        if (isValidBoolean(payload.completed)) {
+          updates.completed = payload.completed;
+        }
+        if (Object.keys(updates).length === 0) return;
+
+        const userTodos = await updateTodo(currentRoomId, currentUniqueId, payload.todoId, updates);
         if (userTodos) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
         }
       } catch (err) {
-        console.error("Error updating todo:", err);
+        log.socket.error("Todo update error", { error: String(err) });
       }
     });
 
     socket.on(SOCKET_EVENTS.TODO_DELETE, async (payload: TodoDeletePayload) => {
+      if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
       try {
-        const { todoId } = payload;
-        if (!todoId) return;
+        if (!isValidTodoId(payload?.todoId)) return;
 
-        const userTodos = await deleteTodo(currentRoomId, currentUniqueId, todoId);
+        const userTodos = await deleteTodo(currentRoomId, currentUniqueId, payload.todoId);
         if (userTodos) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
         }
       } catch (err) {
-        console.error("Error deleting todo:", err);
+        log.socket.error("Todo delete error", { error: String(err) });
       }
     });
 
     socket.on(SOCKET_EVENTS.TODO_SET_ACTIVE, async (payload: TodoSetActivePayload) => {
+      if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
       try {
-        const { todoId } = payload;
+        const todoId = payload?.todoId;
+        if (todoId !== null && !isValidTodoId(todoId)) return;
 
         const userTodos = await setActiveTodo(currentRoomId, currentUniqueId, todoId);
         if (userTodos) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
         }
       } catch (err) {
-        console.error("Error setting active todo:", err);
+        log.socket.error("Todo set active error", { error: String(err) });
       }
     });
 
     socket.on(SOCKET_EVENTS.TODO_SET_VISIBILITY, async (payload: TodoSetVisibilityPayload) => {
+      if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
       try {
-        const { isPublic } = payload;
+        if (!isValidBoolean(payload?.isPublic)) return;
 
-        const userTodos = await setTodoVisibility(currentRoomId, currentUniqueId, isPublic, currentUserName);
+        const userTodos = await setTodoVisibility(currentRoomId, currentUniqueId, payload.isPublic, currentUserName);
         if (userTodos) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
         }
       } catch (err) {
-        console.error("Error setting todo visibility:", err);
+        log.socket.error("Todo visibility error", { error: String(err) });
       }
     });
 
     socket.on(SOCKET_EVENTS.TODO_REORDER, async (payload: TodoReorderPayload) => {
+      if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
       try {
-        const { todoIds } = payload;
-        if (!Array.isArray(todoIds)) return;
+        const todoIds = payload?.todoIds;
+        if (!Array.isArray(todoIds) || todoIds.length > 100) return;
+        if (!todoIds.every(id => typeof id === "string" && id.length < 100)) return;
 
         const userTodos = await reorderTodos(currentRoomId, currentUniqueId, todoIds);
         if (userTodos) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
         }
       } catch (err) {
-        console.error("Error reordering todos:", err);
+        log.socket.error("Todo reorder error", { error: String(err) });
       }
     });
 
@@ -580,36 +557,31 @@ export function setupSocketHandlers(io: Server): void {
     // Disconnect
     // ========================================
     socket.on("disconnect", async (reason) => {
-      console.log(`🔌 Client disconnected: ${socket.id}, reason: ${reason}, roomId: ${currentRoomId}, user: ${currentUserName}, uniqueId: ${currentUniqueId}`);
+      log.socket.info("Client disconnected", {
+        socketId: socket.id.slice(-6),
+        reason,
+        roomId: currentRoomId,
+        user: currentUserName,
+      });
 
       if (currentRoomId) {
         try {
-          // Get room state before removal for debugging
           const roomBefore = await getRoom(currentRoomId);
-          const participantsBefore = roomBefore?.participants || [];
-          console.log(`[DISCONNECT] Before removal - room has ${participantsBefore.length} participants:`,
-            participantsBefore.map(p => `${p.name}(${p.id.slice(-6)}, uniqueId: ${p.uniqueId.slice(-8)})`));
+          const countBefore = roomBefore?.participants.length || 0;
 
-          console.log(`[DISCONNECT] Removing participant ${socket.id} (${currentUserName}) from room ${currentRoomId}`);
           const participants = await removeParticipant(currentRoomId, socket.id);
-          console.log(`[DISCONNECT] After removal, ${participants.length} participants remaining:`,
-            participants.map(p => `${p.name}(${p.id.slice(-6)})`));
           io.to(currentRoomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants });
 
-          // Log "leave" activity (we do this here because we have the user info)
-          if (participants.length < participantsBefore.length) {
+          if (participants.length < countBefore) {
             await addActivity(currentRoomId, "leave", currentUniqueId, currentUserName);
-            // Broadcast room state to update history
             const updatedRoom = await getRoom(currentRoomId);
             if (updatedRoom) {
               io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
             }
           }
         } catch (err) {
-          console.error("[DISCONNECT] Error removing participant:", err);
+          log.socket.error("Disconnect cleanup error", { error: String(err) });
         }
-      } else {
-        console.log(`[DISCONNECT] No room to leave for ${socket.id} (${currentUserName})`);
       }
     });
   });
