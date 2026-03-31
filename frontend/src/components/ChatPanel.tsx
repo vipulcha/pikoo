@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useSyncExternalStore } from "react";
 import { ChatMessage } from "@/lib/types";
 
 interface ChatPanelProps {
@@ -13,14 +13,9 @@ interface ChatPanelProps {
 
 export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, hasUnread }: ChatPanelProps) {
   const [inputText, setInputText] = useState("");
-  const [isMounted, setIsMounted] = useState(false);
+  const isMounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Track client mount for hydration-safe rendering
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -75,7 +70,7 @@ export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, hasUnread
       {/* Chat Panel Drawer */}
       <div 
         className={`
-          fixed right-0 top-18 h-[calc(100vh-4rem)] w-full sm:w-96 z-30
+          fixed right-0 top-0 h-[100dvh] sm:top-18 sm:h-[calc(100dvh-4.5rem)] w-full sm:w-96 z-30
           bg-black/80 backdrop-blur-xl border-l border-white/10
           transform transition-transform duration-300 ease-out
           ${isOpen ? "translate-x-0" : "translate-x-full"}
@@ -133,7 +128,7 @@ export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, hasUnread
         </div>
 
         {/* Input */}
-        <form onSubmit={handleSubmit} className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10 bg-black/50">
+        <form onSubmit={handleSubmit} className="absolute bottom-0 left-0 right-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-black/50">
           <div className="flex gap-2">
             <input
               ref={inputRef}
