@@ -1,16 +1,58 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
+const SITE_URL = "https://pikoo.live";
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#000000",
 };
 
 export const metadata: Metadata = {
-  title: "Pikoo - Focus together. Instantly.",
-  description: "Shared Pomodoro rooms with session goals, lo-fi music, and real-time presence. Built for studying, body doubling, and remote work.",
-  keywords: ["pomodoro", "timer", "team", "productivity", "focus", "remote work"],
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Pikoo - Focus together. Instantly.",
+    template: "%s | Pikoo",
+  },
+  description:
+    "Shared Pomodoro rooms with session goals, lo-fi music, and real-time presence. Built for studying, body doubling, and remote work.",
+  keywords: [
+    "pomodoro",
+    "timer",
+    "team",
+    "productivity",
+    "focus",
+    "remote work",
+    "study together",
+    "body doubling",
+    "shared timer",
+    "focus room",
+  ],
+  authors: [{ name: "Pikoo" }],
+  robots: {
+    index: true,
+    follow: true,
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: SITE_URL,
+    siteName: "Pikoo",
+    title: "Pikoo - Focus together. Instantly.",
+    description:
+      "Shared Pomodoro rooms with session goals, lo-fi music, and real-time presence. Built for studying, body doubling, and remote work.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Pikoo - Focus together. Instantly.",
+    description:
+      "Shared Pomodoro rooms with session goals, lo-fi music, and real-time presence.",
+  },
+  alternates: {
+    canonical: SITE_URL,
+  },
 };
 
 export default function RootLayout({
