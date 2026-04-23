@@ -60,6 +60,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
   const [pendingActiveFromWelcome, setPendingActiveFromWelcome] = useState(false);
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
+  const notificationPromptShownRef = useRef(false); // Show the prompt at most once per page visit
   const prevPhaseRef = useRef<Phase | null>(null);
   const hasAutoSkippedRef = useRef(false);
   const timerStartPhaseRef = useRef<Phase | null>(null); // Track which phase the timer was started for
@@ -475,18 +476,20 @@ export default function RoomPage({ params }: RoomPageProps) {
   const handleStart = async () => {
     const permission = getNotificationPermission();
 
-    // If permission hasn't been decided yet, show explanation first
-    if (permission === "default") {
+    // If permission hasn't been decided yet AND the user hasn't already seen+dismissed the prompt this page visit, show explanation first
+    if (permission === "default" && !notificationPromptShownRef.current) {
       setShowNotificationPrompt(true);
       return;
     }
 
-    // Permission already granted or denied, just start
+    // Permission already granted/denied, or user already dismissed the prompt this visit — just start
     actions.start();
   };
 
   // Handle notification permission after user sees explanation
   const handleNotificationResponse = async (allow: boolean) => {
+    // Mark the prompt as shown for the rest of this page visit so subsequent starts don't re-prompt
+    notificationPromptShownRef.current = true;
     setShowNotificationPrompt(false);
 
     if (allow) {
