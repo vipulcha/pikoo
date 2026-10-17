@@ -74,6 +74,7 @@ export interface RoomState {
   messages: ChatMessage[];           // chat messages (max 100)
   userTodos: Record<string, UserTodos>; // todos by uniqueId
   history: ActivityLog[];            // activity history (max 50)
+  userSecrets?: Record<string, string>; // sha256 of each user's secret, binds a uniqueId to one browser (never sent to clients)
 }
 
 // Default settings

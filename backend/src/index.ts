@@ -11,6 +11,7 @@ import { setupSocketHandlers } from "./socket.js";
 import { RoomSettings, DEFAULT_SETTINGS } from "./types.js";
 import { log } from "./logger.js";
 import { roomCreateLimiter, restGetLimiter, connectionLimiter, suggestionLimiter } from "./rate-limit.js";
+import { roomForUser } from "./views.js";
 import { sanitizeSettings, sanitizeSuggestion, sanitizeName, sanitizeRoomId, sanitizeUniqueId } from "./sanitize.js";
 
 dotenv.config();
@@ -170,7 +171,7 @@ app.get("/rooms/:roomId/state", async (req, res) => {
     if (!room) {
       return res.status(404).json({ error: "Room not found" });
     }
-    res.json(room);
+    res.json(roomForUser(room, undefined));
   } catch (err) {
     log.server.error("Failed to get room state", { error: String(err) });
     res.status(500).json({ error: "Failed to get room state" });

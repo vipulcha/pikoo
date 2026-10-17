@@ -3,6 +3,7 @@ import {
   SOCKET_EVENTS,
   RoomSettings,
   RoomState,
+  TimerState,
 } from "./types.js";
 import {
   getRoom,
@@ -28,6 +29,9 @@ import {
 } from "./store.js";
 import { ChatMessage, UserTodos } from "./types.js";
 import { log } from "./logger.js";
+import { withRoomLock } from "./room-lock.js";
+import { roomForUser, todosForUser } from "./views.js";
+import { createHash } from "crypto";
 import { socketEventLimiter, chatMessageLimiter } from "./rate-limit.js";
 import {
   sanitizeName,
@@ -38,12 +42,14 @@ import {
   isValidTodoId,
   isValidBoolean,
   sanitizeSettings,
+  sanitizeUserSecret,
 } from "./sanitize.js";
 
 interface JoinRoomPayload {
   roomId: string;
   name: string;
   uniqueId: string;
+  secret?: string;
 }
 
 interface SendMessagePayload {
@@ -97,6 +103,82 @@ function canControl(room: RoomState, uniqueId: string): boolean {
   return !room.participants.some(p => p.uniqueId === room.hostId);
 }
 
+// ============================================
+// Per-viewer broadcasts (private todos and secrets stay on the server)
+// ============================================
+
+async function emitRoomState(io: Server, roomId: string, room: RoomState | null | undefined): Promise<void> {
+  if (!room) return;
+  const sockets = await io.in(roomId).fetchSockets();
+  for (const s of sockets) {
+    s.emit(SOCKET_EVENTS.ROOM_STATE, roomForUser(room, s.data.uniqueId));
+  }
+}
+
+async function emitTodos(io: Server, roomId: string, userTodos: RoomState["userTodos"]): Promise<void> {
+  const sockets = await io.in(roomId).fetchSockets();
+  for (const s of sockets) {
+    s.emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos: todosForUser(userTodos, s.data.uniqueId) });
+  }
+}
+
+function hashSecret(secret: string): string {
+  return createHash("sha256").update(secret).digest("hex");
+}
+
+// ============================================
+// Server-side phase transitions
+// ============================================
+// The server ends each phase when its time is up, so the room moves on even if
+// nobody who saw the timer start is still connected.
+
+const phaseTimers = new Map<string, NodeJS.Timeout>();
+
+function scheduleAutoAdvance(io: Server, roomId: string, timer: TimerState | undefined): void {
+  const existing = phaseTimers.get(roomId);
+  if (existing) clearTimeout(existing);
+  phaseTimers.delete(roomId);
+
+  if (!timer?.running || !timer.phaseEndsAt) return;
+
+  const handle = setTimeout(() => {
+    phaseTimers.delete(roomId);
+    withRoomLock(roomId, () => advanceIfDue(io, roomId)).catch((err) => {
+      log.socket.error("Auto-advance error", { error: String(err), roomId });
+    });
+  }, Math.max(0, timer.phaseEndsAt - Date.now()));
+  handle.unref();
+  phaseTimers.set(roomId, handle);
+}
+
+// Must be called while holding the room lock
+async function advanceIfDue(io: Server, roomId: string): Promise<void> {
+  const room = await getRoom(roomId);
+  if (!room) return;
+
+  const { running, phaseEndsAt, phase } = room.timer;
+  if (!running || !phaseEndsAt || phaseEndsAt > Date.now()) {
+    // Paused or changed since this was scheduled
+    scheduleAutoAdvance(io, roomId, room.timer);
+    return;
+  }
+
+  const timer = await skipPhase(roomId, "system", "Timer", {
+    expectedPhase: phase,
+    expectedPhaseEndsAt: phaseEndsAt,
+    expectedRunning: true,
+  });
+  if (!timer) return;
+
+  io.to(roomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+  const updatedRoom = await getRoom(roomId);
+  if (updatedRoom) {
+    await emitRoomState(io, roomId, updatedRoom);
+  }
+  scheduleAutoAdvance(io, roomId, timer);
+  log.socket.info("Phase auto-advanced", { roomId, from: phase, to: timer.phase });
+}
+
 async function cleanupStaleParticipants(io: Server, roomId: string): Promise<void> {
   try {
     const room = await getRoom(roomId);
@@ -140,10 +222,25 @@ export function setupSocketHandlers(io: Server): void {
     let currentUserName: string = "Anonymous";
     let currentUniqueId: string = "";
 
+    // Clock sync: clients measure their offset from server time (see frontend lib/clock.ts)
+    socket.on("time_sync", (ack: unknown) => {
+      if (typeof ack === "function") ack(Date.now());
+    });
+
+    // Register a handler that runs under its room's lock (see room-lock.ts)
+    const on = <P>(event: string, handler: (payload: P) => Promise<void>) => {
+      socket.on(event, (payload: P) => {
+        const roomId = event === SOCKET_EVENTS.JOIN_ROOM
+          ? sanitizeRoomId((payload as { roomId?: unknown } | undefined)?.roomId)
+          : currentRoomId;
+        return roomId ? withRoomLock(roomId, () => handler(payload)) : handler(payload);
+      });
+    };
+
     // ========================================
     // Join Room
     // ========================================
-    socket.on(SOCKET_EVENTS.JOIN_ROOM, async (payload: JoinRoomPayload) => {
+    on(SOCKET_EVENTS.JOIN_ROOM, async (payload: JoinRoomPayload) => {
       if (rateLimited(socket)) return;
 
       const roomId = sanitizeRoomId(payload?.roomId);
@@ -161,6 +258,20 @@ export function setupSocketHandlers(io: Server): void {
         if (!room) {
           socket.emit(SOCKET_EVENTS.ERROR, { message: "Room not found" });
           return;
+        }
+
+        // A uniqueId is public (other clients see it), so the first browser to join
+        // with a secret claims it; later joins must present the same secret.
+        const secret = sanitizeUserSecret(payload?.secret);
+        const knownHash = room.userSecrets?.[uniqueId];
+        if (knownHash && (!secret || hashSecret(secret) !== knownHash)) {
+          log.security.warn("Join rejected: uniqueId secret mismatch", { roomId });
+          socket.emit(SOCKET_EVENTS.ERROR, { message: "Could not verify your identity for this room" });
+          return;
+        }
+        if (!knownHash && secret) {
+          room.userSecrets = { ...room.userSecrets, [uniqueId]: hashSecret(secret) };
+          await saveRoom(room);
         }
 
         const result = await addParticipant(roomId, socket.id, uniqueId, name);
@@ -183,10 +294,20 @@ export function setupSocketHandlers(io: Server): void {
         await cleanupStaleParticipants(io, roomId);
         room = await getRoom(roomId);
 
-        socket.emit(SOCKET_EVENTS.ROOM_STATE, room);
+        // Catch up on a phase that ended while nobody was here (or the server restarted)
+        if (room?.timer.running) {
+          if (room.timer.phaseEndsAt && room.timer.phaseEndsAt <= Date.now()) {
+            await advanceIfDue(io, roomId);
+            room = await getRoom(roomId);
+          } else if (!phaseTimers.has(roomId)) {
+            scheduleAutoAdvance(io, roomId, room.timer);
+          }
+        }
+
+        if (room) socket.emit(SOCKET_EVENTS.ROOM_STATE, roomForUser(room, uniqueId));
 
         if (name !== "Anonymous") {
-          io.to(roomId).emit(SOCKET_EVENTS.ROOM_STATE, room);
+          await emitRoomState(io, roomId, room);
         } else {
           io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants: room?.participants || [] });
         }
@@ -201,7 +322,7 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Update Name
     // ========================================
-    socket.on(SOCKET_EVENTS.UPDATE_NAME, async (payload: UpdateNamePayload) => {
+    on(SOCKET_EVENTS.UPDATE_NAME, async (payload: UpdateNamePayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
@@ -228,7 +349,7 @@ export function setupSocketHandlers(io: Server): void {
           await addActivity(currentRoomId, "join", currentUniqueId, name);
           const updatedRoomWithHistory = await getRoom(currentRoomId);
           if (updatedRoomWithHistory) {
-            io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoomWithHistory);
+            await emitRoomState(io, currentRoomId, updatedRoomWithHistory);
           }
         }
 
@@ -240,9 +361,7 @@ export function setupSocketHandlers(io: Server): void {
 
         const room = await getRoom(currentRoomId);
         if (room) {
-          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, {
-            userTodos: room.userTodos
-          });
+          await emitTodos(io, currentRoomId, room.userTodos);
         }
 
         log.socket.info("Name updated", { socketId: socket.id.slice(-6), newName: name });
@@ -255,7 +374,7 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Timer Controls
     // ========================================
-    socket.on(SOCKET_EVENTS.TIMER_START, async (payload?: { timestamp?: number }) => {
+    on(SOCKET_EVENTS.TIMER_START, async () => {
       if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
@@ -268,12 +387,13 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const timer = await startTimer(currentRoomId, socket.id, currentUserName, payload?.timestamp);
+        const timer = await startTimer(currentRoomId, socket.id, currentUserName);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+          scheduleAutoAdvance(io, currentRoomId, timer);
           const updatedRoom = await getRoom(currentRoomId);
           if (updatedRoom) {
-            io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
+            await emitRoomState(io, currentRoomId, updatedRoom);
           }
         }
       } catch (err) {
@@ -281,7 +401,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TIMER_PAUSE, async (payload?: { timestamp?: number }) => {
+    on(SOCKET_EVENTS.TIMER_PAUSE, async () => {
       if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
@@ -294,12 +414,13 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const timer = await pauseTimer(currentRoomId, socket.id, currentUserName, payload?.timestamp);
+        const timer = await pauseTimer(currentRoomId, socket.id, currentUserName);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+          scheduleAutoAdvance(io, currentRoomId, timer);
           const updatedRoom = await getRoom(currentRoomId);
           if (updatedRoom) {
-            io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
+            await emitRoomState(io, currentRoomId, updatedRoom);
           }
         }
       } catch (err) {
@@ -307,7 +428,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TIMER_RESET, async (payload?: { timestamp?: number }) => {
+    on(SOCKET_EVENTS.TIMER_RESET, async () => {
       if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
@@ -320,12 +441,13 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const timer = await resetTimer(currentRoomId, socket.id, currentUserName, payload?.timestamp);
+        const timer = await resetTimer(currentRoomId, socket.id, currentUserName);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+          scheduleAutoAdvance(io, currentRoomId, timer);
           const updatedRoom = await getRoom(currentRoomId);
           if (updatedRoom) {
-            io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
+            await emitRoomState(io, currentRoomId, updatedRoom);
           }
         }
       } catch (err) {
@@ -333,7 +455,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TIMER_SKIP, async (payload?: { source?: "auto" | "manual", timestamp?: number }) => {
+    on(SOCKET_EVENTS.TIMER_SKIP, async (payload?: { source?: "auto" | "manual" }) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
@@ -369,15 +491,15 @@ export function setupSocketHandlers(io: Server): void {
               expectedPhaseEndsAt: room.timer.phaseEndsAt,
               expectedRunning: room.timer.running,
             }
-            : undefined,
-          payload?.timestamp
+            : undefined
         );
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+          scheduleAutoAdvance(io, currentRoomId, timer);
           if (source === "manual") {
             const updatedRoom = await getRoom(currentRoomId);
             if (updatedRoom) {
-              io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
+              await emitRoomState(io, currentRoomId, updatedRoom);
             }
           }
         }
@@ -389,7 +511,7 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Settings Update
     // ========================================
-    socket.on(SOCKET_EVENTS.UPDATE_SETTINGS, async (payload: Partial<RoomSettings> & { timestamp?: number }) => {
+    on(SOCKET_EVENTS.UPDATE_SETTINGS, async (payload: Partial<RoomSettings>) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
@@ -405,11 +527,12 @@ export function setupSocketHandlers(io: Server): void {
         const cleanSettings = sanitizeSettings(payload);
         if (!cleanSettings) return;
 
-        const settings = await updateSettings(currentRoomId, cleanSettings as Partial<RoomSettings>, payload.timestamp);
+        const settings = await updateSettings(currentRoomId, cleanSettings as Partial<RoomSettings>);
         if (settings) {
           const updatedRoom = await getRoom(currentRoomId);
-          io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
+          await emitRoomState(io, currentRoomId, updatedRoom);
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer: updatedRoom?.timer });
+          scheduleAutoAdvance(io, currentRoomId, updatedRoom?.timer);
         }
       } catch (err) {
         log.socket.error("Settings update error", { error: String(err) });
@@ -419,7 +542,7 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Chat Messages
     // ========================================
-    socket.on(SOCKET_EVENTS.SEND_MESSAGE, async (payload: SendMessagePayload) => {
+    on(SOCKET_EVENTS.SEND_MESSAGE, async (payload: SendMessagePayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
@@ -453,7 +576,7 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Todo Operations
     // ========================================
-    socket.on(SOCKET_EVENTS.TODO_ADD, async (payload: TodoAddPayload) => {
+    on(SOCKET_EVENTS.TODO_ADD, async (payload: TodoAddPayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
@@ -463,14 +586,14 @@ export function setupSocketHandlers(io: Server): void {
 
         const userTodos = await addTodo(currentRoomId, currentUniqueId, currentUserName, text);
         if (userTodos) {
-          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
+          await emitTodos(io, currentRoomId, userTodos);
         }
       } catch (err) {
         log.socket.error("Todo add error", { error: String(err) });
       }
     });
 
-    socket.on(SOCKET_EVENTS.TODO_UPDATE, async (payload: TodoUpdatePayload) => {
+    on(SOCKET_EVENTS.TODO_UPDATE, async (payload: TodoUpdatePayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
@@ -489,14 +612,14 @@ export function setupSocketHandlers(io: Server): void {
 
         const userTodos = await updateTodo(currentRoomId, currentUniqueId, payload.todoId, updates);
         if (userTodos) {
-          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
+          await emitTodos(io, currentRoomId, userTodos);
         }
       } catch (err) {
         log.socket.error("Todo update error", { error: String(err) });
       }
     });
 
-    socket.on(SOCKET_EVENTS.TODO_DELETE, async (payload: TodoDeletePayload) => {
+    on(SOCKET_EVENTS.TODO_DELETE, async (payload: TodoDeletePayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
@@ -505,14 +628,14 @@ export function setupSocketHandlers(io: Server): void {
 
         const userTodos = await deleteTodo(currentRoomId, currentUniqueId, payload.todoId);
         if (userTodos) {
-          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
+          await emitTodos(io, currentRoomId, userTodos);
         }
       } catch (err) {
         log.socket.error("Todo delete error", { error: String(err) });
       }
     });
 
-    socket.on(SOCKET_EVENTS.TODO_SET_ACTIVE, async (payload: TodoSetActivePayload) => {
+    on(SOCKET_EVENTS.TODO_SET_ACTIVE, async (payload: TodoSetActivePayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
@@ -522,14 +645,14 @@ export function setupSocketHandlers(io: Server): void {
 
         const userTodos = await setActiveTodo(currentRoomId, currentUniqueId, todoId);
         if (userTodos) {
-          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
+          await emitTodos(io, currentRoomId, userTodos);
         }
       } catch (err) {
         log.socket.error("Todo set active error", { error: String(err) });
       }
     });
 
-    socket.on(SOCKET_EVENTS.TODO_SET_VISIBILITY, async (payload: TodoSetVisibilityPayload) => {
+    on(SOCKET_EVENTS.TODO_SET_VISIBILITY, async (payload: TodoSetVisibilityPayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
@@ -538,14 +661,14 @@ export function setupSocketHandlers(io: Server): void {
 
         const userTodos = await setTodoVisibility(currentRoomId, currentUniqueId, payload.isPublic, currentUserName);
         if (userTodos) {
-          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
+          await emitTodos(io, currentRoomId, userTodos);
         }
       } catch (err) {
         log.socket.error("Todo visibility error", { error: String(err) });
       }
     });
 
-    socket.on(SOCKET_EVENTS.TODO_REORDER, async (payload: TodoReorderPayload) => {
+    on(SOCKET_EVENTS.TODO_REORDER, async (payload: TodoReorderPayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
@@ -556,7 +679,7 @@ export function setupSocketHandlers(io: Server): void {
 
         const userTodos = await reorderTodos(currentRoomId, currentUniqueId, todoIds);
         if (userTodos) {
-          io.to(currentRoomId).emit(SOCKET_EVENTS.TODOS_UPDATE, { userTodos });
+          await emitTodos(io, currentRoomId, userTodos);
         }
       } catch (err) {
         log.socket.error("Todo reorder error", { error: String(err) });
@@ -566,7 +689,7 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Disconnect
     // ========================================
-    socket.on("disconnect", async (reason) => {
+    on("disconnect", async (reason: string) => {
       log.socket.info("Client disconnected", {
         socketId: socket.id.slice(-6),
         reason,
@@ -586,7 +709,7 @@ export function setupSocketHandlers(io: Server): void {
             await addActivity(currentRoomId, "leave", currentUniqueId, currentUserName);
             const updatedRoom = await getRoom(currentRoomId);
             if (updatedRoom) {
-              io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
+              await emitRoomState(io, currentRoomId, updatedRoom);
             }
           }
         } catch (err) {

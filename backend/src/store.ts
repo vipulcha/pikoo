@@ -159,22 +159,18 @@ export async function addActivity(
 export async function startTimer(
   roomId: string,
   userId: string,
-  userName: string,
-  timestamp?: number
+  userName: string
 ): Promise<TimerState | null> {
   const room = await getRoom(roomId);
   if (!room) return null;
 
-  const actionTime = timestamp || Date.now();
+  const actionTime = Date.now();
 
-  // Always log activity (even if conflict check fails later)
+  // Already running (e.g. two people pressed play at once): nothing to do
+  if (room.timer.running) return room.timer;
+
   pushActivity(room, "timer_start", userId, userName, room.timer.phase, actionTime);
 
-  // Conflict Resolution: Ignore stale events
-  if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
-    log.store.debug("Ignoring stale startTimer event", { userName, actionTime, lastUpdated: room.timer.lastUpdatedAt });
-    return room.timer;
-  }
 
   const now = Date.now();
   room.timer.running = true;
@@ -189,22 +185,16 @@ export async function startTimer(
 export async function pauseTimer(
   roomId: string,
   userId: string,
-  userName: string,
-  timestamp?: number
+  userName: string
 ): Promise<TimerState | null> {
   const room = await getRoom(roomId);
   if (!room) return null;
 
-  const actionTime = timestamp || Date.now();
+  const actionTime = Date.now();
 
   // Always log activity
   pushActivity(room, "timer_pause", userId, userName, room.timer.phase, actionTime);
 
-  // Conflict Resolution: Ignore stale events
-  if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
-    log.store.debug("Ignoring stale pauseTimer event", { userName, actionTime, lastUpdated: room.timer.lastUpdatedAt });
-    return room.timer;
-  }
 
   // If already paused, just return current state (idempotent-ish)
   if (!room.timer.running) return room.timer;
@@ -225,22 +215,16 @@ export async function pauseTimer(
 export async function resetTimer(
   roomId: string,
   userId: string,
-  userName: string,
-  timestamp?: number
+  userName: string
 ): Promise<TimerState | null> {
   const room = await getRoom(roomId);
   if (!room) return null;
 
-  const actionTime = timestamp || Date.now();
+  const actionTime = Date.now();
 
   // Always log activity
   pushActivity(room, "timer_reset", userId, userName, undefined, actionTime);
 
-  // Conflict Resolution: Ignore stale events
-  if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
-    log.store.debug("Ignoring stale resetTimer event", { userName, actionTime, lastUpdated: room.timer.lastUpdatedAt });
-    return room.timer;
-  }
 
   const duration = getPhaseDuration(room.timer.phase, room.settings);
   room.timer.running = false;
@@ -261,8 +245,7 @@ export async function skipPhase(
     expectedPhase?: Phase;
     expectedPhaseEndsAt?: number | null;
     expectedRunning?: boolean;
-  },
-  timestamp?: number
+  }
 ): Promise<TimerState | null> {
   const room = await getRoom(roomId);
   if (!room) return null;
@@ -296,16 +279,14 @@ export async function skipPhase(
     nextPhase = "focus";
   }
 
-  const actionTime = timestamp || Date.now();
+  const actionTime = Date.now();
 
   // Always log activity
-  pushActivity(room, "timer_skip", userId, userName, `Skipped ${room.timer.phase} -> ${nextPhase}`, actionTime);
+  const details = guard
+    ? `${room.timer.phase === "focus" ? "Focus" : "Break"} finished`
+    : `Skipped ${room.timer.phase} -> ${nextPhase}`;
+  pushActivity(room, "timer_skip", userId, userName, details, actionTime);
 
-  // Conflict Resolution: Ignore stale events
-  if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
-    log.store.debug("Ignoring stale skipPhase event", { userName, actionTime, lastUpdated: room.timer.lastUpdatedAt });
-    return room.timer;
-  }
 
   const duration = getPhaseDuration(nextPhase, room.settings);
   room.timer.phase = nextPhase;
@@ -456,26 +437,12 @@ export async function updateParticipantName(
 
 export async function updateSettings(
   roomId: string,
-  settings: Partial<RoomSettings>,
-  timestamp?: number
+  settings: Partial<RoomSettings>
 ): Promise<RoomSettings | null> {
   const room = await getRoom(roomId);
   if (!room) return null;
 
-  const actionTime = timestamp || Date.now();
-
-  // Conflict Resolution: Ignore stale events if we wanted to be strict,
-  // but for settings, we usually want to apply them unless very old.
-  // Ideally we use the same logic: if incoming < lastUpdatedAt, default to ignore?
-  // But settings are separate from timer running state.
-  // HOWEVER, the user glitch is about slider jumping.
-  // So we MUST respect LWW for settings too.
-
-  // NOTE: We share `lastUpdatedAt` on the timer object for ALL state changes to keep it simple.
-  if (room.timer.lastUpdatedAt && actionTime < room.timer.lastUpdatedAt) {
-    log.store.debug("Ignoring stale settings update", { actionTime, lastUpdated: room.timer.lastUpdatedAt });
-    return room.settings;
-  }
+  const actionTime = Date.now();
 
   const prevDuration = getPhaseDuration(room.timer.phase, room.settings);
   room.settings = { ...room.settings, ...settings };
