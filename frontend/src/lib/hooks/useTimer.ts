@@ -123,8 +123,12 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       hasJoinedRef.current = true;
     };
 
-    const handleDisconnect = () => {
+    const handleDisconnect = (reason: Socket.DisconnectReason) => {
       setIsConnected(false);
+      // Socket.IO doesn't auto-reconnect when the server closed the connection
+      if (reason === "io server disconnect") {
+        socket.connect();
+      }
     };
 
     const handleRoomState = (state: RoomState) => {

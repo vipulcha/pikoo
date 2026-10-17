@@ -11,7 +11,8 @@ export function getSocket(): Socket {
     socket = io(BACKEND_URL, {
       autoConnect: false,
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: Infinity,
+      reconnectionDelayMax: 5000,
       reconnectionDelay: 1000,
     });
   }
