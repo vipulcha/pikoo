@@ -141,6 +141,11 @@ export function setupSocketHandlers(io: Server): void {
     let currentUserName: string = "Anonymous";
     let currentUniqueId: string = "";
 
+    // Clock sync: clients measure their offset from server time (see frontend lib/clock.ts)
+    socket.on("time_sync", (ack: unknown) => {
+      if (typeof ack === "function") ack(Date.now());
+    });
+
     // Register a handler that runs under its room's lock (see room-lock.ts)
     const on = <P>(event: string, handler: (payload: P) => Promise<void>) => {
       socket.on(event, (payload: P) => {

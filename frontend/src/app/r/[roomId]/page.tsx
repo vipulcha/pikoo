@@ -19,6 +19,7 @@ import { HistoryPanel } from "@/components/HistoryPanel";
 import { RoomSettings, Phase } from "@/lib/types";
 import { notifyFocusEnd, notifyBreakEnd, requestNotificationPermission, getNotificationPermission } from "@/lib/audio";
 import Link from "next/link";
+import { serverNow } from "@/lib/clock";
 
 // Realistic planet/space images from Unsplash
 const PLANET_IMAGES = [
@@ -342,7 +343,7 @@ export default function RoomPage({ params }: RoomPageProps) {
       let remainingSec: number;
 
       if (timer.running && timer.phaseEndsAt) {
-        remainingSec = Math.max(0, Math.ceil((timer.phaseEndsAt - Date.now()) / 1000));
+        remainingSec = Math.max(0, Math.ceil((timer.phaseEndsAt - serverNow()) / 1000));
       } else {
         remainingSec = timer.remainingSecWhenPaused;
       }

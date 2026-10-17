@@ -5,6 +5,7 @@ import { Socket } from "socket.io-client";
 import { RoomState, RoomSettings, TimerState, Participant, ChatMessage, UserTodos, SOCKET_EVENTS } from "../types";
 import { connectSocket, disconnectSocket, getSocket } from "../socket";
 import { notifyRoomJoin } from "../audio";
+import { serverNow, syncClock } from "../clock";
 
 interface UseTimerReturn {
   room: RoomState | null;
@@ -50,7 +51,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     if (!timer.running) {
       return timer.remainingSecWhenPaused;
     }
-    const now = Date.now();
+    const now = serverNow();
     const remaining = Math.max(0, Math.ceil((timer.phaseEndsAt! - now) / 1000));
     return remaining;
   }, []);
@@ -88,7 +89,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       }
 
       // Check if timer has reached 0
-      const now = Date.now();
+      const now = serverNow();
       if (phaseEndsAt <= now) {
         // Timer has reached 0, stop updating remaining
         clearInterval(interval);
@@ -125,6 +126,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       joinStatusRef.current = "pending";
       joinedNameRef.current = userNameRef.current;
       socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name: userNameRef.current, uniqueId });
+      syncClock(socket);
     };
 
     const handleDisconnect = (reason: Socket.DisconnectReason) => {
@@ -377,7 +379,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
   // Timer control actions
   const actions = {
     start: () => {
-      const timestamp = Date.now();
+      const timestamp = serverNow();
 
       // Optimistic update
       updateTimerOptimistically((current) => {
@@ -390,11 +392,11 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
         };
       });
 
-      socketRef.current?.emit(SOCKET_EVENTS.TIMER_START, { timestamp });
+      socketRef.current?.emit(SOCKET_EVENTS.TIMER_START);
     },
 
     pause: () => {
-      const timestamp = Date.now();
+      const timestamp = serverNow();
 
       // Optimistic update
       updateTimerOptimistically((current) => {
@@ -409,11 +411,11 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
         };
       });
 
-      socketRef.current?.emit(SOCKET_EVENTS.TIMER_PAUSE, { timestamp });
+      socketRef.current?.emit(SOCKET_EVENTS.TIMER_PAUSE);
     },
 
     reset: () => {
-      const timestamp = Date.now();
+      const timestamp = serverNow();
 
       // Optimistic update (requires room settings access, but we don't have settings inside helper easily unless we change store structure or pass it)
       // We can use setRoom callback to access full state
@@ -446,11 +448,11 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
         return { ...prev, timer: updatedTimer };
       });
 
-      socketRef.current?.emit(SOCKET_EVENTS.TIMER_RESET, { timestamp });
+      socketRef.current?.emit(SOCKET_EVENTS.TIMER_RESET);
     },
 
     skip: (source: "auto" | "manual" = "manual") => {
-      const timestamp = Date.now();
+      const timestamp = serverNow();
 
       if (source === "manual") {
         // Optimistic update for manual skip
@@ -497,11 +499,11 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
         });
       }
 
-      socketRef.current?.emit(SOCKET_EVENTS.TIMER_SKIP, { source, timestamp });
+      socketRef.current?.emit(SOCKET_EVENTS.TIMER_SKIP, { source });
     },
 
     updateSettings: (settings: Partial<RoomSettings>) => {
-      const timestamp = Date.now();
+      const timestamp = serverNow();
 
       // Optimistic update for settings
       setRoom((prev) => {
@@ -535,7 +537,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
         return { ...prev, settings: newSettings, timer: updatedTimer };
       });
 
-      socketRef.current?.emit(SOCKET_EVENTS.UPDATE_SETTINGS, { ...settings, timestamp });
+      socketRef.current?.emit(SOCKET_EVENTS.UPDATE_SETTINGS, settings);
     },
     sendMessage: (text: string) =>
       socketRef.current?.emit(SOCKET_EVENTS.SEND_MESSAGE, { text }),
