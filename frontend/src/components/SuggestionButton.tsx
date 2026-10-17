@@ -4,7 +4,7 @@ import { useState } from "react";
 import { submitSuggestion } from "@/lib/api";
 
 interface SuggestionButtonProps {
-  roomId: string;
+  roomId?: string;
   name?: string | null;
 }
 
@@ -29,7 +29,7 @@ export function SuggestionButton({ roomId, name }: SuggestionButtonProps) {
     setStatus("sending");
     setError(null);
     try {
-      await submitSuggestion({ text: text.trim(), name: name || undefined, roomId });
+      await submitSuggestion({ text: text.trim(), name: name || undefined, roomId: roomId || undefined });
       setText("");
       setStatus("sent");
       setTimeout(() => {

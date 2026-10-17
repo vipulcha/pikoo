@@ -9,6 +9,7 @@ import { NamePrompt, getSavedName, getUserId } from "@/components/NamePrompt";
 export function CreateRoomPanel() {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [settings, setSettings] = useState<RoomSettings>(DEFAULT_SETTINGS);
@@ -29,11 +30,13 @@ export function CreateRoomPanel() {
 
   const proceedToCreateRoom = async () => {
     setIsCreating(true);
+    setError(null);
     try {
       const { roomId } = await createRoom(settings, getUserId());
       router.push(`/r/${roomId}`);
     } catch (err) {
       console.error("Failed to create room:", err);
+      setError("Couldn't create a room. Please try again.");
       setIsCreating(false);
     }
   };
@@ -149,14 +152,7 @@ export function CreateRoomPanel() {
               </div>
             </div>
           </div>
-        ) : (
-          <div className="mb-10">
-            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-white/10 backdrop-blur-sm text-white/70 text-xs sm:text-sm mb-6 sm:mb-8 shadow-lg">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              No sign-up required
-            </div>
-          </div>
-        )}
+        ) : null}
 
         <div className="space-y-4">
           <button
@@ -187,13 +183,25 @@ export function CreateRoomPanel() {
             )}
           </button>
 
+          {error && <p className="text-sm text-rose-400">{error}</p>}
+
           {!showSettings && (
-            <button
-              onClick={() => setShowSettings(true)}
-              className="text-white/50 hover:text-white transition-all text-sm tracking-wide"
-            >
-              ⚙️ Customize Settings
-            </button>
+            <div className="flex items-center justify-center gap-3 text-sm text-white/55">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                No sign-up required
+              </span>
+              <span className="text-white/20" aria-hidden>·</span>
+              <button
+                onClick={() => setShowSettings(true)}
+                className="inline-flex items-center gap-1.5 hover:text-white transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+                </svg>
+                Customize timer
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -211,6 +219,7 @@ export function CreateRoomPanel() {
 export function CreateRoomButton() {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
 
   const handleCreateRoom = async () => {
@@ -229,11 +238,13 @@ export function CreateRoomButton() {
 
   const proceedToCreateRoom = async () => {
     setIsCreating(true);
+    setError(null);
     try {
       const { roomId } = await createRoom(undefined, getUserId());
       router.push(`/r/${roomId}`);
     } catch (err) {
       console.error("Failed to create room:", err);
+      setError("Couldn't create a room. Please try again.");
       setIsCreating(false);
     }
   };
@@ -247,6 +258,7 @@ export function CreateRoomButton() {
       >
         {isCreating ? "Creating..." : "Create focus room"}
       </button>
+      {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
 
       <NamePrompt
         isOpen={showNamePrompt}
