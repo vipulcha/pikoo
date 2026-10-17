@@ -6,6 +6,7 @@ import { RoomState, RoomSettings, TimerState, Participant, ChatMessage, UserTodo
 import { connectSocket, disconnectSocket, getSocket } from "../socket";
 import { notifyRoomJoin } from "../audio";
 import { serverNow, syncClock } from "../clock";
+import { getUserSecret } from "@/components/NamePrompt";
 
 interface UseTimerReturn {
   room: RoomState | null;
@@ -125,7 +126,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       // Use ref to get current userName (avoids dependency on userName)
       joinStatusRef.current = "pending";
       joinedNameRef.current = userNameRef.current;
-      socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name: userNameRef.current, uniqueId });
+      socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name: userNameRef.current, uniqueId, secret: getUserSecret() });
       syncClock(socket);
     };
 
@@ -335,7 +336,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       // The join was rejected (name taken), so retry it with the new name
       joinStatusRef.current = "pending";
       joinedNameRef.current = userName;
-      socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name: userName, uniqueId });
+      socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name: userName, uniqueId, secret: getUserSecret() });
     }
     // "pending": handleRoomState sends the new name once the join completes
   }, [userName, roomId, uniqueId]);

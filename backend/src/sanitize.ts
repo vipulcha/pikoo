@@ -55,6 +55,12 @@ export function sanitizeUniqueId(raw: unknown): string | null {
   return clean;
 }
 
+export function sanitizeUserSecret(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  if (raw.length < 16 || raw.length > 128) return null;
+  return raw;
+}
+
 export function isValidTodoId(raw: unknown): raw is string {
   return typeof raw === "string" && raw.length > 0 && raw.length < 100;
 }

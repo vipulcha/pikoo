@@ -12,6 +12,7 @@ interface NamePromptProps {
 
 const STORAGE_KEY = "pikoo_user_name";
 const USER_ID_KEY = "pikoo_user_id";
+const USER_SECRET_KEY = "pikoo_user_secret";
 
 export function NamePrompt({ isOpen, onSubmit, title = "Enter your name", subtitle, errorMessage }: NamePromptProps) {
   const [name, setName] = useState("");
@@ -126,3 +127,15 @@ export function getUserId(): string {
   return userId;
 }
 
+// Helper to get or create this browser's secret. It's sent only when joining a room,
+// so others who can see our user id can't join as us.
+export function getUserSecret(): string {
+  if (typeof window === "undefined") return "";
+  let secret = localStorage.getItem(USER_SECRET_KEY);
+  if (!secret) {
+    const bytes = crypto.getRandomValues(new Uint8Array(24));
+    secret = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    localStorage.setItem(USER_SECRET_KEY, secret);
+  }
+  return secret;
+}
