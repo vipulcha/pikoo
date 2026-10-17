@@ -284,16 +284,34 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   }, [showSessionPrompt, room?.timer?.phase]);
 
-  // Show welcome prompt only to first-time visitors (no saved name).
-  // Returning users go straight to the room; they can add tasks from the task panel.
+  // Show welcome prompt for new users (no name) immediately, or users with no todos after room loads
   useEffect(() => {
     if (hasShownWelcome || !uniqueId) return;
 
-    if (!getSavedName()) {
+    const savedName = getSavedName();
+
+    // If no saved name, show welcome prompt immediately
+    if (!savedName) {
       setShowWelcomePrompt(true);
       setHasShownWelcome(true);
+      return;
     }
-  }, [uniqueId, hasShownWelcome]);
+
+    // If we have a name but no todos, show after room loads
+    if (room) {
+      const myTodos = room.userTodos?.[uniqueId];
+      const hasTodos = myTodos && myTodos.todos.length > 0;
+
+      if (!hasTodos) {
+        const timer = setTimeout(() => {
+          setShowWelcomePrompt(true);
+          setHasShownWelcome(true);
+        }, 500);
+
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [room, uniqueId, hasShownWelcome]);
 
   // Auto-set the first todo as active when added from welcome prompt
   // Wait for the REAL ID from server (not temp_xxx) to avoid race condition
