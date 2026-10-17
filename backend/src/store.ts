@@ -390,10 +390,6 @@ export async function removeParticipant(
       return room.participants;
     }
 
-    if (room.hostId === participantId) {
-      room.hostId = room.participants[0]?.id || null;
-    }
-
     await saveRoom(room);
 
     // Verify the save worked by re-reading

@@ -66,7 +66,7 @@ export interface RoomState {
   id: string;
   settings: RoomSettings;
   timer: TimerState;
-  hostId: string | null;
+  hostId: string | null; // uniqueId of the room creator
   createdAt: number;
   participants: Participant[];
   messages: ChatMessage[];

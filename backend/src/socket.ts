@@ -89,6 +89,14 @@ function rateLimited(socket: Socket, label?: string): boolean {
   return false;
 }
 
+// In host mode only the creator controls the timer, but only while they're in the room
+// (otherwise the room would be stuck if they leave). Rooms without a recorded host stay open.
+function canControl(room: RoomState, uniqueId: string): boolean {
+  if (room.settings.mode !== "host" || !room.hostId) return true;
+  if (room.hostId === uniqueId) return true;
+  return !room.participants.some(p => p.uniqueId === room.hostId);
+}
+
 async function cleanupStaleParticipants(io: Server, roomId: string): Promise<void> {
   try {
     const room = await getRoom(roomId);
@@ -254,7 +262,7 @@ export function setupSocketHandlers(io: Server): void {
         const room = await getRoom(currentRoomId);
         if (!room) return;
 
-        if (room.settings.mode === "host" && room.hostId !== socket.id) {
+        if (!canControl(room, currentUniqueId)) {
           socket.emit(SOCKET_EVENTS.ERROR, { message: "Only the host can control the timer" });
           return;
         }
@@ -280,7 +288,7 @@ export function setupSocketHandlers(io: Server): void {
         const room = await getRoom(currentRoomId);
         if (!room) return;
 
-        if (room.settings.mode === "host" && room.hostId !== socket.id) {
+        if (!canControl(room, currentUniqueId)) {
           socket.emit(SOCKET_EVENTS.ERROR, { message: "Only the host can control the timer" });
           return;
         }
@@ -306,7 +314,7 @@ export function setupSocketHandlers(io: Server): void {
         const room = await getRoom(currentRoomId);
         if (!room) return;
 
-        if (room.settings.mode === "host" && room.hostId !== socket.id) {
+        if (!canControl(room, currentUniqueId)) {
           socket.emit(SOCKET_EVENTS.ERROR, { message: "Only the host can control the timer" });
           return;
         }
@@ -332,7 +340,7 @@ export function setupSocketHandlers(io: Server): void {
         const room = await getRoom(currentRoomId);
         if (!room) return;
 
-        if (room.settings.mode === "host" && room.hostId !== socket.id) {
+        if (!canControl(room, currentUniqueId)) {
           socket.emit(SOCKET_EVENTS.ERROR, { message: "Only the host can control the timer" });
           return;
         }
@@ -388,7 +396,7 @@ export function setupSocketHandlers(io: Server): void {
         const room = await getRoom(currentRoomId);
         if (!room) return;
 
-        if (room.settings.mode === "host" && room.hostId !== socket.id) {
+        if (!canControl(room, currentUniqueId)) {
           socket.emit(SOCKET_EVENTS.ERROR, { message: "Only the host can change settings" });
           return;
         }

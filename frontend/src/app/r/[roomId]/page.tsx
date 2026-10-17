@@ -466,6 +466,11 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   const { timer, settings, participants, userTodos } = room;
 
+  // Host mode: only the creator controls the timer, and only while they're in the room
+  const hostId = settings.mode === "host" ? room.hostId : null;
+  const host = hostId ? participants.find(p => p.uniqueId === hostId) : undefined;
+  const controlsLocked = !!host && hostId !== uniqueId;
+
   // Get current user's todos
   const myTodos = userTodos?.[uniqueId] || null;
 
@@ -548,14 +553,17 @@ export default function RoomPage({ params }: RoomPageProps) {
         </Link>
 
         <div className="flex items-center gap-1.5 sm:gap-3">
-          <ParticipantCount participants={participants} isConnected={isConnected} />
+          <ParticipantCount participants={participants} isConnected={isConnected} hostId={hostId} />
           <ShareButton roomId={roomId} />
           <SuggestionButton roomId={roomId} name={userName} />
           <AudioPlayer />
           {/* Settings button */}
           <button
             onClick={() => setShowSettings(!showSettings)}
+            disabled={controlsLocked}
+            title={controlsLocked ? "Only the host can change timer settings" : "Timer settings"}
             className={`
+              disabled:opacity-40 disabled:cursor-not-allowed
               px-3 py-1.5 rounded-full transition-all duration-200 flex items-center gap-1.5
               text-sm font-medium
               ${showSettings
@@ -753,7 +761,13 @@ export default function RoomPage({ params }: RoomPageProps) {
               onPause={actions.pause}
               onReset={actions.reset}
               onSkip={() => actions.skip("manual")}
+              disabled={controlsLocked}
             />
+            {controlsLocked && (
+              <p className="mt-4 text-center text-sm text-white/50">
+                Only {host?.name} (host) can control the timer
+              </p>
+            )}
           </div>
 
 

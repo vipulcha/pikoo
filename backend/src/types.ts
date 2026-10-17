@@ -66,7 +66,7 @@ export interface RoomState {
   id: string;
   settings: RoomSettings;
   timer: TimerState;
-  hostId: string | null;             // socket id of host (if mode is "host")
+  hostId: string | null;             // uniqueId of the room creator (controls the timer in "host" mode)
   createdAt: number;
   participants: Participant[];       // participants with names
   messages: ChatMessage[];           // chat messages (max 100)

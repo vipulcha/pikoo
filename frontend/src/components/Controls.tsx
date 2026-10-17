@@ -9,9 +9,10 @@ interface ControlsProps {
   onPause: () => void;
   onReset: () => void;
   onSkip: () => void;
+  disabled?: boolean;
 }
 
-export function Controls({ running, phase, onStart, onPause, onReset, onSkip }: ControlsProps) {
+export function Controls({ running, phase, onStart, onPause, onReset, onSkip, disabled = false }: ControlsProps) {
   const accentColor = {
     focus: "hover:bg-rose-500/20 hover:border-rose-500/50 active:bg-rose-500/30",
     break: "hover:bg-emerald-500/20 hover:border-emerald-500/50 active:bg-emerald-500/30",
@@ -28,9 +29,10 @@ export function Controls({ running, phase, onStart, onPause, onReset, onSkip }: 
     <div className="flex items-center justify-center gap-2 sm:gap-4">
       {/* Reset button */}
       <button
+        disabled={disabled}
         onClick={onReset}
         className={`
-          p-2.5 sm:p-4 rounded-full border border-white/20 bg-black/30 backdrop-blur-sm transition-all duration-200 shadow-lg
+          p-2.5 sm:p-4 rounded-full border border-white/20 bg-black/30 backdrop-blur-sm transition-all duration-200 shadow-lg disabled:opacity-40 disabled:pointer-events-none
           ${accentColor}
         `}
         title="Reset"
@@ -42,9 +44,10 @@ export function Controls({ running, phase, onStart, onPause, onReset, onSkip }: 
 
       {/* Play/Pause button */}
       <button
+        disabled={disabled}
         onClick={running ? onPause : onStart}
         className={`
-          p-4 sm:p-6 rounded-full transition-all duration-200 shadow-2xl
+          p-4 sm:p-6 rounded-full transition-all duration-200 shadow-2xl disabled:opacity-40 disabled:pointer-events-none
           ${primaryColor}
         `}
         title={running ? "Pause" : "Start"}
@@ -62,9 +65,10 @@ export function Controls({ running, phase, onStart, onPause, onReset, onSkip }: 
 
       {/* Skip button */}
       <button
+        disabled={disabled}
         onClick={onSkip}
         className={`
-          p-2.5 sm:p-4 rounded-full border border-white/20 bg-black/30 backdrop-blur-sm transition-all duration-200 shadow-lg
+          p-2.5 sm:p-4 rounded-full border border-white/20 bg-black/30 backdrop-blur-sm transition-all duration-200 shadow-lg disabled:opacity-40 disabled:pointer-events-none
           ${accentColor}
         `}
         title="Skip to next phase"

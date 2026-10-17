@@ -11,7 +11,7 @@ import { setupSocketHandlers } from "./socket.js";
 import { RoomSettings, DEFAULT_SETTINGS } from "./types.js";
 import { log } from "./logger.js";
 import { roomCreateLimiter, restGetLimiter, connectionLimiter, suggestionLimiter } from "./rate-limit.js";
-import { sanitizeSettings, sanitizeSuggestion, sanitizeName, sanitizeRoomId } from "./sanitize.js";
+import { sanitizeSettings, sanitizeSuggestion, sanitizeName, sanitizeRoomId, sanitizeUniqueId } from "./sanitize.js";
 
 dotenv.config();
 
@@ -143,8 +143,9 @@ app.post("/rooms", async (req, res) => {
   try {
     const rawSettings = req.body?.settings;
     const settings = rawSettings ? sanitizeSettings(rawSettings) : {};
+    const creatorId = sanitizeUniqueId(req.body?.creatorId);
     const roomId = nanoid(10);
-    const room = await createRoom(roomId, (settings || {}) as Partial<RoomSettings>);
+    const room = await createRoom(roomId, (settings || {}) as Partial<RoomSettings>, creatorId);
 
     metrics.roomsCreated++;
     log.server.info("Room created", { roomId });
