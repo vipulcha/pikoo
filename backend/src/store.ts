@@ -282,7 +282,10 @@ export async function skipPhase(
   const actionTime = Date.now();
 
   // Always log activity
-  pushActivity(room, "timer_skip", userId, userName, `Skipped ${room.timer.phase} -> ${nextPhase}`, actionTime);
+  const details = guard
+    ? `${room.timer.phase === "focus" ? "Focus" : "Break"} finished`
+    : `Skipped ${room.timer.phase} -> ${nextPhase}`;
+  pushActivity(room, "timer_skip", userId, userName, details, actionTime);
 
 
   const duration = getPhaseDuration(nextPhase, room.settings);

@@ -3,6 +3,7 @@ import {
   SOCKET_EVENTS,
   RoomSettings,
   RoomState,
+  TimerState,
 } from "./types.js";
 import {
   getRoom,
@@ -96,6 +97,59 @@ function canControl(room: RoomState, uniqueId: string): boolean {
   if (room.settings.mode !== "host" || !room.hostId) return true;
   if (room.hostId === uniqueId) return true;
   return !room.participants.some(p => p.uniqueId === room.hostId);
+}
+
+// ============================================
+// Server-side phase transitions
+// ============================================
+// The server ends each phase when its time is up, so the room moves on even if
+// nobody who saw the timer start is still connected.
+
+const phaseTimers = new Map<string, NodeJS.Timeout>();
+
+function scheduleAutoAdvance(io: Server, roomId: string, timer: TimerState | undefined): void {
+  const existing = phaseTimers.get(roomId);
+  if (existing) clearTimeout(existing);
+  phaseTimers.delete(roomId);
+
+  if (!timer?.running || !timer.phaseEndsAt) return;
+
+  const handle = setTimeout(() => {
+    phaseTimers.delete(roomId);
+    withRoomLock(roomId, () => advanceIfDue(io, roomId)).catch((err) => {
+      log.socket.error("Auto-advance error", { error: String(err), roomId });
+    });
+  }, Math.max(0, timer.phaseEndsAt - Date.now()));
+  handle.unref();
+  phaseTimers.set(roomId, handle);
+}
+
+// Must be called while holding the room lock
+async function advanceIfDue(io: Server, roomId: string): Promise<void> {
+  const room = await getRoom(roomId);
+  if (!room) return;
+
+  const { running, phaseEndsAt, phase } = room.timer;
+  if (!running || !phaseEndsAt || phaseEndsAt > Date.now()) {
+    // Paused or changed since this was scheduled
+    scheduleAutoAdvance(io, roomId, room.timer);
+    return;
+  }
+
+  const timer = await skipPhase(roomId, "system", "Timer", {
+    expectedPhase: phase,
+    expectedPhaseEndsAt: phaseEndsAt,
+    expectedRunning: true,
+  });
+  if (!timer) return;
+
+  io.to(roomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+  const updatedRoom = await getRoom(roomId);
+  if (updatedRoom) {
+    io.to(roomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
+  }
+  scheduleAutoAdvance(io, roomId, timer);
+  log.socket.info("Phase auto-advanced", { roomId, from: phase, to: timer.phase });
 }
 
 async function cleanupStaleParticipants(io: Server, roomId: string): Promise<void> {
@@ -199,6 +253,16 @@ export function setupSocketHandlers(io: Server): void {
         await cleanupStaleParticipants(io, roomId);
         room = await getRoom(roomId);
 
+        // Catch up on a phase that ended while nobody was here (or the server restarted)
+        if (room?.timer.running) {
+          if (room.timer.phaseEndsAt && room.timer.phaseEndsAt <= Date.now()) {
+            await advanceIfDue(io, roomId);
+            room = await getRoom(roomId);
+          } else if (!phaseTimers.has(roomId)) {
+            scheduleAutoAdvance(io, roomId, room.timer);
+          }
+        }
+
         socket.emit(SOCKET_EVENTS.ROOM_STATE, room);
 
         if (name !== "Anonymous") {
@@ -287,6 +351,7 @@ export function setupSocketHandlers(io: Server): void {
         const timer = await startTimer(currentRoomId, socket.id, currentUserName);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+          scheduleAutoAdvance(io, currentRoomId, timer);
           const updatedRoom = await getRoom(currentRoomId);
           if (updatedRoom) {
             io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
@@ -313,6 +378,7 @@ export function setupSocketHandlers(io: Server): void {
         const timer = await pauseTimer(currentRoomId, socket.id, currentUserName);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+          scheduleAutoAdvance(io, currentRoomId, timer);
           const updatedRoom = await getRoom(currentRoomId);
           if (updatedRoom) {
             io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
@@ -339,6 +405,7 @@ export function setupSocketHandlers(io: Server): void {
         const timer = await resetTimer(currentRoomId, socket.id, currentUserName);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+          scheduleAutoAdvance(io, currentRoomId, timer);
           const updatedRoom = await getRoom(currentRoomId);
           if (updatedRoom) {
             io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
@@ -389,6 +456,7 @@ export function setupSocketHandlers(io: Server): void {
         );
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+          scheduleAutoAdvance(io, currentRoomId, timer);
           if (source === "manual") {
             const updatedRoom = await getRoom(currentRoomId);
             if (updatedRoom) {
@@ -425,6 +493,7 @@ export function setupSocketHandlers(io: Server): void {
           const updatedRoom = await getRoom(currentRoomId);
           io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer: updatedRoom?.timer });
+          scheduleAutoAdvance(io, currentRoomId, updatedRoom?.timer);
         }
       } catch (err) {
         log.socket.error("Settings update error", { error: String(err) });
