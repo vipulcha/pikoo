@@ -1,4 +1,5 @@
 import { CreateRoomPanel, CreateRoomButton } from "@/components/CreateRoomPanel";
+import { LiveCount } from "@/components/LiveCount";
 
 const STARS = [...Array(50)].map((_, i) => ({
   id: i,
@@ -123,6 +124,7 @@ export default function Home() {
           <p className="relative text-white/80 text-lg sm:text-xl max-w-lg mx-auto opacity-0 animate-slide-up animation-delay-200 drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
             Shared Pomodoro rooms with session goals, lo-fi music, and real-time presence. Built for studying, body doubling, and remote work.
           </p>
+          <LiveCount />
         </div>
 
         {/* Three-column hero row */}

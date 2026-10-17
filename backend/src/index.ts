@@ -11,7 +11,7 @@ import { setupSocketHandlers } from "./socket.js";
 import { RoomSettings, DEFAULT_SETTINGS } from "./types.js";
 import { log } from "./logger.js";
 import { roomCreateLimiter, restGetLimiter, connectionLimiter, suggestionLimiter } from "./rate-limit.js";
-import { sanitizeSettings, sanitizeSuggestion, sanitizeName, sanitizeRoomId } from "./sanitize.js";
+import { sanitizeSettings, sanitizeSuggestion, sanitizeName, sanitizeRoomId, sanitizeUniqueId } from "./sanitize.js";
 
 dotenv.config();
 
@@ -143,8 +143,9 @@ app.post("/rooms", async (req, res) => {
   try {
     const rawSettings = req.body?.settings;
     const settings = rawSettings ? sanitizeSettings(rawSettings) : {};
+    const creatorId = sanitizeUniqueId(req.body?.creatorId);
     const roomId = nanoid(10);
-    const room = await createRoom(roomId, (settings || {}) as Partial<RoomSettings>);
+    const room = await createRoom(roomId, (settings || {}) as Partial<RoomSettings>, creatorId);
 
     metrics.roomsCreated++;
     log.server.info("Room created", { roomId });
@@ -174,6 +175,22 @@ app.get("/rooms/:roomId/state", async (req, res) => {
     log.server.error("Failed to get room state", { error: String(err) });
     res.status(500).json({ error: "Failed to get room state" });
   }
+});
+
+// Public: number of distinct people currently in a room (shown on the landing page)
+app.get("/stats", (req, res) => {
+  const ip = getIp(req);
+
+  if (!restGetLimiter.consume(ip)) {
+    res.status(429).json({ error: "Too many requests" });
+    return;
+  }
+
+  const people = new Set<string>();
+  for (const socket of io.of("/").sockets.values()) {
+    if (socket.data.uniqueId) people.add(socket.data.uniqueId);
+  }
+  res.json({ focusingNow: people.size });
 });
 
 app.post("/suggestions", async (req, res) => {

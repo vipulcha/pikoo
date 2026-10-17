@@ -6,6 +6,7 @@ import { Timer } from "@/components/Timer";
 import { Controls } from "@/components/Controls";
 import { ParticipantCount } from "@/components/ParticipantCount";
 import { ShareButton } from "@/components/ShareButton";
+import { SettingSlider } from "@/components/SettingSlider";
 import { SuggestionButton } from "@/components/SuggestionButton";
 import { NamePrompt, getSavedName, saveName, getUserId, clearSavedName } from "@/components/NamePrompt";
 import { ChatPanel } from "@/components/ChatPanel";
@@ -86,6 +87,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   }, []);
 
   const handleNameSubmit = (name: string) => {
+    actions.clearNameTakenError();
     setUserName(name);
     setNameError(undefined);
     setShowNamePrompt(false);
@@ -282,34 +284,16 @@ export default function RoomPage({ params }: RoomPageProps) {
     }
   }, [showSessionPrompt, room?.timer?.phase]);
 
-  // Show welcome prompt for new users (no name) immediately, or users with no todos after room loads
+  // Show welcome prompt only to first-time visitors (no saved name).
+  // Returning users go straight to the room; they can add tasks from the task panel.
   useEffect(() => {
     if (hasShownWelcome || !uniqueId) return;
 
-    const savedName = getSavedName();
-
-    // If no saved name, show welcome prompt immediately
-    if (!savedName) {
+    if (!getSavedName()) {
       setShowWelcomePrompt(true);
       setHasShownWelcome(true);
-      return;
     }
-
-    // If we have a name but no todos, show after room loads
-    if (room) {
-      const myTodos = room.userTodos?.[uniqueId];
-      const hasTodos = myTodos && myTodos.todos.length > 0;
-
-      if (!hasTodos) {
-        const timer = setTimeout(() => {
-          setShowWelcomePrompt(true);
-          setHasShownWelcome(true);
-        }, 500);
-
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [room, uniqueId, hasShownWelcome]);
+  }, [uniqueId, hasShownWelcome]);
 
   // Auto-set the first todo as active when added from welcome prompt
   // Wait for the REAL ID from server (not temp_xxx) to avoid race condition
@@ -466,6 +450,11 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   const { timer, settings, participants, userTodos } = room;
 
+  // Host mode: only the creator controls the timer, and only while they're in the room
+  const hostId = settings.mode === "host" ? room.hostId : null;
+  const host = hostId ? participants.find(p => p.uniqueId === hostId) : undefined;
+  const controlsLocked = !!host && hostId !== uniqueId;
+
   // Get current user's todos
   const myTodos = userTodos?.[uniqueId] || null;
 
@@ -548,14 +537,17 @@ export default function RoomPage({ params }: RoomPageProps) {
         </Link>
 
         <div className="flex items-center gap-1.5 sm:gap-3">
-          <ParticipantCount participants={participants} isConnected={isConnected} />
+          <ParticipantCount participants={participants} isConnected={isConnected} hostId={hostId} />
           <ShareButton roomId={roomId} />
           <SuggestionButton roomId={roomId} name={userName} />
           <AudioPlayer />
           {/* Settings button */}
           <button
             onClick={() => setShowSettings(!showSettings)}
+            disabled={controlsLocked}
+            title={controlsLocked ? "Only the host can change timer settings" : "Timer settings"}
             className={`
+              disabled:opacity-40 disabled:cursor-not-allowed
               px-3 py-1.5 rounded-full transition-all duration-200 flex items-center gap-1.5
               text-sm font-medium
               ${showSettings
@@ -571,6 +563,14 @@ export default function RoomPage({ params }: RoomPageProps) {
           </button>
         </div>
       </header>
+
+      {/* Connection lost banner (room already loaded, so we're reconnecting) */}
+      {!isConnected && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 bg-amber-500/90 text-black text-sm font-medium rounded-full shadow-lg animate-fade-in">
+          <span className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+          Connection lost. Reconnecting...
+        </div>
+      )}
 
       {/* Error toast */}
       {error && (
@@ -596,114 +596,36 @@ export default function RoomPage({ params }: RoomPageProps) {
             </div>
 
             <div className="space-y-5">
-              {/* Focus duration */}
-              <div>
-                <label className="block text-sm text-white/60 mb-2">Focus</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="1"
-                    max="60"
-                    value={settings.focusSec / 60}
-                    onChange={(e) => handleSettingChange("focusSec", Number(e.target.value) * 60)}
-                    className="flex-1 accent-rose-500"
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={settings.focusSec / 60}
-                    onChange={(e) => {
-                      const val = Math.max(1, Math.min(120, Number(e.target.value) || 1));
-                      handleSettingChange("focusSec", val * 60);
-                    }}
-                    className="w-16 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-rose-500/50 no-spinner"
-                  />
-                  <span className="text-white/60 text-sm">m</span>
-                </div>
-              </div>
-
-              {/* Break duration */}
-              <div>
-                <label className="block text-sm text-white/60 mb-2">Break</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="1"
-                    max="30"
-                    value={settings.breakSec / 60}
-                    onChange={(e) => handleSettingChange("breakSec", Number(e.target.value) * 60)}
-                    className="flex-1 accent-emerald-500"
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={settings.breakSec / 60}
-                    onChange={(e) => {
-                      const val = Math.max(1, Math.min(120, Number(e.target.value) || 1));
-                      handleSettingChange("breakSec", val * 60);
-                    }}
-                    className="w-16 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-emerald-500/50 no-spinner"
-                  />
-                  <span className="text-white/60 text-sm">m</span>
-                </div>
-              </div>
-
-              {/* Long break duration */}
-              <div>
-                <label className="block text-sm text-white/60 mb-2">Long Break</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="1"
-                    max="45"
-                    value={settings.longBreakSec / 60}
-                    onChange={(e) => handleSettingChange("longBreakSec", Number(e.target.value) * 60)}
-                    className="flex-1 accent-blue-500"
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={settings.longBreakSec / 60}
-                    onChange={(e) => {
-                      const val = Math.max(1, Math.min(120, Number(e.target.value) || 1));
-                      handleSettingChange("longBreakSec", val * 60);
-                    }}
-                    className="w-16 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-blue-500/50 no-spinner"
-                  />
-                  <span className="text-white/60 text-sm">m</span>
-                </div>
-              </div>
-
-              {/* Long break interval */}
-              <div>
-                <label className="block text-sm text-white/60 mb-2">Long Break After</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="2"
-                    max="8"
-                    value={settings.longBreakEvery}
-                    onChange={(e) => handleSettingChange("longBreakEvery", Number(e.target.value))}
-                    className="flex-1 accent-purple-500"
-                  />
-                  <input
-                    type="number"
-                    min="2"
-                    max="8"
-                    value={settings.longBreakEvery}
-                    onChange={(e) => {
-                      const val = Math.max(2, Math.min(8, Number(e.target.value) || 2));
-                      handleSettingChange("longBreakEvery", val);
-                    }}
-                    className="w-14 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-purple-500/50"
-                  />
-                  <span className="text-white/60 text-sm">x</span>
-                </div>
-              </div>
+              <SettingSlider label="Focus" value={settings.focusSec / 60} min={1} sliderMax={60} inputMax={120} unit="m" accent="rose" onCommit={(v) => handleSettingChange("focusSec", v * 60)} />
+              <SettingSlider label="Break" value={settings.breakSec / 60} min={1} sliderMax={30} inputMax={120} unit="m" accent="emerald" onCommit={(v) => handleSettingChange("breakSec", v * 60)} />
+              <SettingSlider label="Long Break" value={settings.longBreakSec / 60} min={1} sliderMax={45} inputMax={120} unit="m" accent="blue" onCommit={(v) => handleSettingChange("longBreakSec", v * 60)} />
+              <SettingSlider label="Long Break After" value={settings.longBreakEvery} min={2} sliderMax={8} inputMax={8} unit="x" accent="purple" onCommit={(v) => handleSettingChange("longBreakEvery", v)} />
             </div>
+
+            {/* Auto-start next phase */}
+            <label className="mt-5 flex items-center justify-between gap-3 cursor-pointer">
+              <span>
+                <span className="block text-sm text-white/80">Auto-start next phase</span>
+                <span className="block text-xs text-white/40">Breaks and focus sessions start on their own</span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!!settings.autoStart}
+                onClick={() => actions.updateSettings({ autoStart: !settings.autoStart })}
+                className={`
+                  relative shrink-0 w-10 h-6 rounded-full transition-colors
+                  ${settings.autoStart ? "bg-rose-500" : "bg-white/15"}
+                `}
+              >
+                <span
+                  className={`
+                    absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform
+                    ${settings.autoStart ? "translate-x-4" : ""}
+                  `}
+                />
+              </button>
+            </label>
 
             <p className="mt-4 text-xs text-white/40 text-center">
               Changes sync to all participants
@@ -742,6 +664,7 @@ export default function RoomPage({ params }: RoomPageProps) {
               phase={timer.phase}
               running={timer.running}
               cycleCount={timer.cycleCount}
+              totalSec={timer.phase === "focus" ? settings.focusSec : timer.phase === "break" ? settings.breakSec : settings.longBreakSec}
             />
           </div>
 
@@ -753,7 +676,13 @@ export default function RoomPage({ params }: RoomPageProps) {
               onPause={actions.pause}
               onReset={actions.reset}
               onSkip={() => actions.skip("manual")}
+              disabled={controlsLocked}
             />
+            {controlsLocked && (
+              <p className="mt-4 text-center text-sm text-white/50">
+                Only {host?.name} (host) can control the timer
+              </p>
+            )}
           </div>
 
 
@@ -780,6 +709,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         isOpen={isChatOpen}
         onToggle={handleToggleChat}
         hasUnread={hasUnreadMessages}
+        currentUserId={uniqueId}
       />
 
       {/* Others' Todos Panel */}

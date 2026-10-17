@@ -11,6 +11,7 @@ export interface RoomSettings {
   longBreakSec: number;
   longBreakEvery: number;
   mode: RoomMode;
+  autoStart?: boolean; // Missing on older rooms
 }
 
 export interface TimerState {
@@ -31,6 +32,7 @@ export interface Participant {
 export interface ChatMessage {
   id: string;
   senderId: string;
+  senderUniqueId?: string; // Missing on older messages
   senderName: string;
   text: string;
   timestamp: number;
@@ -66,7 +68,7 @@ export interface RoomState {
   id: string;
   settings: RoomSettings;
   timer: TimerState;
-  hostId: string | null;
+  hostId: string | null; // uniqueId of the room creator
   createdAt: number;
   participants: Participant[];
   messages: ChatMessage[];
@@ -80,6 +82,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   longBreakSec: 900,
   longBreakEvery: 4,
   mode: "collab",
+  autoStart: false,
 };
 
 export const SOCKET_EVENTS = {

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRoom } from "@/lib/api";
 import { RoomSettings, DEFAULT_SETTINGS } from "@/lib/types";
-import { NamePrompt, getSavedName } from "@/components/NamePrompt";
+import { NamePrompt, getSavedName, getUserId } from "@/components/NamePrompt";
 
 export function CreateRoomPanel() {
   const router = useRouter();
@@ -30,7 +30,7 @@ export function CreateRoomPanel() {
   const proceedToCreateRoom = async () => {
     setIsCreating(true);
     try {
-      const { roomId } = await createRoom(settings);
+      const { roomId } = await createRoom(settings, getUserId());
       router.push(`/r/${roomId}`);
     } catch (err) {
       console.error("Failed to create room:", err);
@@ -230,7 +230,7 @@ export function CreateRoomButton() {
   const proceedToCreateRoom = async () => {
     setIsCreating(true);
     try {
-      const { roomId } = await createRoom();
+      const { roomId } = await createRoom(undefined, getUserId());
       router.push(`/r/${roomId}`);
     } catch (err) {
       console.error("Failed to create room:", err);

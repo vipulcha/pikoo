@@ -7,6 +7,7 @@ interface TimerProps {
   phase: Phase;
   running: boolean;
   cycleCount: number;
+  totalSec: number;  // Full length of the current phase
 }
 
 function formatTime(seconds: number): { minutes: string; secs: string } {
@@ -18,8 +19,9 @@ function formatTime(seconds: number): { minutes: string; secs: string } {
   };
 }
 
-export function Timer({ remaining, phase, running, cycleCount }: TimerProps) {
+export function Timer({ remaining, phase, running, cycleCount, totalSec }: TimerProps) {
   const { minutes, secs } = formatTime(remaining);
+  const progress = totalSec > 0 ? Math.min(1, Math.max(0, 1 - remaining / totalSec)) : 0;
 
   return (
     <div className="flex flex-col items-center">
@@ -69,8 +71,21 @@ export function Timer({ remaining, phase, running, cycleCount }: TimerProps) {
         </div>
       </div>
 
+      {/* Phase progress */}
+      <div className="mt-6 w-48 sm:w-80 md:w-96 h-1 rounded-full bg-white/10 overflow-hidden">
+        <div
+          className={`
+            h-full rounded-full transition-[width] duration-1000 ease-linear
+            ${phase === "focus" ? "bg-rose-400" : ""}
+            ${phase === "break" ? "bg-emerald-400" : ""}
+            ${phase === "long_break" ? "bg-blue-400" : ""}
+          `}
+          style={{ width: `${progress * 100}%` }}
+        />
+      </div>
+
       {/* Status indicator */}
-      <div className="mt-8 flex items-center gap-2">
+      <div className="mt-6 flex items-center gap-2">
         <span 
           className={`
             w-2 h-2 rounded-full

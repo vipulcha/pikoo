@@ -9,9 +9,10 @@ interface ChatPanelProps {
   isOpen: boolean;
   onToggle: () => void;
   hasUnread: boolean;
+  currentUserId: string;
 }
 
-export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, hasUnread }: ChatPanelProps) {
+export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, hasUnread, currentUserId }: ChatPanelProps) {
   const [inputText, setInputText] = useState("");
   const isMounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -100,7 +101,15 @@ export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, hasUnread
               <p className="text-xs mt-1">Start the conversation!</p>
             </div>
           ) : (
-            messages.map((msg) => (
+            messages.map((msg) => msg.senderUniqueId === currentUserId ? (
+              <div key={msg.id} className="flex flex-col items-end">
+                {/* Own message */}
+                <div className="max-w-[80%] px-3 py-2 rounded-2xl rounded-br-md bg-rose-500/25 border border-rose-500/30">
+                  <p className="text-sm text-white/90 break-words">{msg.text}</p>
+                </div>
+                <span className="text-xs text-white/30 mt-1">{formatTime(msg.timestamp)}</span>
+              </div>
+            ) : (
               <div key={msg.id} className="group">
                 <div className="flex items-start gap-2">
                   {/* Avatar */}

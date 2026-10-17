@@ -73,6 +73,7 @@ export function sanitizeSettings(raw: unknown): Record<string, unknown> | null {
   if (typeof obj.longBreakSec === "number") clean.longBreakSec = clamp(obj.longBreakSec, 60, 7200);
   if (typeof obj.longBreakEvery === "number") clean.longBreakEvery = clamp(Math.floor(obj.longBreakEvery), 1, 20);
   if (obj.mode === "collab" || obj.mode === "host") clean.mode = obj.mode;
+  if (typeof obj.autoStart === "boolean") clean.autoStart = obj.autoStart;
 
   return Object.keys(clean).length > 0 ? clean : null;
 }

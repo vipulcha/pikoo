@@ -11,6 +11,7 @@ export interface RoomSettings {
   longBreakSec: number;   // default 900 (15m)
   longBreakEvery: number; // default 4 (after 4 focus cycles)
   mode: RoomMode;         // collab: anyone can control; host: only host
+  autoStart?: boolean;    // start the next phase automatically when one ends (missing on older rooms)
 }
 
 export interface TimerState {
@@ -31,6 +32,7 @@ export interface Participant {
 export interface ChatMessage {
   id: string;                        // unique message id
   senderId: string;                  // socket id of sender
+  senderUniqueId?: string;           // persistent user id of sender (missing on older messages)
   senderName: string;                // display name of sender
   text: string;                      // message content
   timestamp: number;                 // epoch ms
@@ -66,7 +68,7 @@ export interface RoomState {
   id: string;
   settings: RoomSettings;
   timer: TimerState;
-  hostId: string | null;             // socket id of host (if mode is "host")
+  hostId: string | null;             // uniqueId of the room creator (controls the timer in "host" mode)
   createdAt: number;
   participants: Participant[];       // participants with names
   messages: ChatMessage[];           // chat messages (max 100)
@@ -81,6 +83,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   longBreakSec: 900,    // 15 minutes
   longBreakEvery: 4,
   mode: "collab",
+  autoStart: false,
 };
 
 // Get initial timer state for a phase

@@ -315,6 +315,12 @@ export async function skipPhase(
   room.timer.remainingSecWhenPaused = duration;
   room.timer.lastUpdatedAt = actionTime;
 
+  // A phase that ran out (guarded auto-skip) rolls straight into the next one if enabled
+  if (guard && room.settings.autoStart) {
+    room.timer.running = true;
+    room.timer.phaseEndsAt = Date.now() + duration * 1000;
+  }
+
   await saveRoom(room);
 
   return room.timer;
@@ -345,8 +351,9 @@ export async function addParticipant(
     return { success: true, participants: room.participants };
   }
 
-  // Check if name is taken by a DIFFERENT user (different uniqueId)
-  const nameTaken = room.participants.find(
+  // Check if name is taken by a DIFFERENT user (different uniqueId).
+  // "Anonymous" is the placeholder for people who haven't picked a name yet, so it can repeat.
+  const nameTaken = participantName !== "Anonymous" && room.participants.find(
     p => p.name.toLowerCase() === participantName.toLowerCase() && p.uniqueId !== uniqueId
   );
   if (nameTaken) {
@@ -388,10 +395,6 @@ export async function removeParticipant(
 
     if (beforeCount === afterCount) {
       return room.participants;
-    }
-
-    if (room.hostId === participantId) {
-      room.hostId = room.participants[0]?.id || null;
     }
 
     await saveRoom(room);
@@ -474,13 +477,17 @@ export async function updateSettings(
     return room.settings;
   }
 
+  const prevDuration = getPhaseDuration(room.timer.phase, room.settings);
   room.settings = { ...room.settings, ...settings };
   room.timer.lastUpdatedAt = actionTime;
 
-  // If timer is paused and we changed a duration setting, update the timer
+  // If timer is paused and the current phase's length changed, restart it at the new length.
+  // Other changes (e.g. break length during focus) leave the paused countdown alone.
   if (!room.timer.running) {
     const newDuration = getPhaseDuration(room.timer.phase, room.settings);
-    room.timer.remainingSecWhenPaused = newDuration;
+    if (newDuration !== prevDuration) {
+      room.timer.remainingSecWhenPaused = newDuration;
+    }
   }
 
   await saveRoom(room);

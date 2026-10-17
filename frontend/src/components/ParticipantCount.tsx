@@ -6,16 +6,16 @@ import { Participant } from "@/lib/types";
 interface ParticipantCountProps {
   participants: Participant[];
   isConnected: boolean;
+  hostId?: string | null;  // Only set in host mode
 }
 
 interface GroupedParticipant {
   uniqueId: string;
   name: string;
   connectionCount: number;
-  isFirst: boolean;  // First participant is the host
 }
 
-export function ParticipantCount({ participants, isConnected }: ParticipantCountProps) {
+export function ParticipantCount({ participants, isConnected, hostId }: ParticipantCountProps) {
   const [showList, setShowList] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -36,13 +36,9 @@ export function ParticipantCount({ participants, isConnected }: ParticipantCount
   // Group participants by uniqueId (same user with multiple tabs = 1 entry)
   const groupedParticipants = useMemo(() => {
     const groups = new Map<string, GroupedParticipant>();
-    let firstUniqueId: string | null = null;
     
     for (const p of participants) {
       // Track the first uniqueId (host)
-      if (!firstUniqueId) {
-        firstUniqueId = p.uniqueId;
-      }
       
       const existing = groups.get(p.uniqueId);
       if (existing) {
@@ -52,7 +48,6 @@ export function ParticipantCount({ participants, isConnected }: ParticipantCount
           uniqueId: p.uniqueId,
           name: p.name,
           connectionCount: 1,
-          isFirst: p.uniqueId === firstUniqueId,
         });
       }
     }
@@ -111,7 +106,7 @@ export function ParticipantCount({ participants, isConnected }: ParticipantCount
                   {participant.name}
                 </span>
                 <span className="flex items-center gap-1">
-                  {participant.isFirst && (
+                  {hostId && participant.uniqueId === hostId && (
                     <span className="text-xs text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded">host</span>
                   )}
                   {participant.connectionCount > 1 && (

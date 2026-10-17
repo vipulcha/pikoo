@@ -2,11 +2,11 @@ import { RoomSettings, RoomState } from "./types";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 
-export async function createRoom(settings?: Partial<RoomSettings>): Promise<{ roomId: string; room: RoomState }> {
+export async function createRoom(settings?: Partial<RoomSettings>, creatorId?: string): Promise<{ roomId: string; room: RoomState }> {
   const res = await fetch(`${BACKEND_URL}/rooms`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ settings }),
+    body: JSON.stringify({ settings, creatorId }),
   });
   
   if (!res.ok) {
@@ -27,6 +27,16 @@ export async function submitSuggestion(suggestion: { text: string; name?: string
     const data = await res.json().catch(() => null);
     throw new Error(data?.error || "Failed to send suggestion");
   }
+}
+
+export async function getStats(): Promise<{ focusingNow: number }> {
+  const res = await fetch(`${BACKEND_URL}/stats`);
+
+  if (!res.ok) {
+    throw new Error("Failed to get stats");
+  }
+
+  return res.json();
 }
 
 export async function getRoomState(roomId: string): Promise<RoomState | null> {
