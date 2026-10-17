@@ -1,6 +1,7 @@
 const MAX_NAME_LEN = 30;
 const MAX_MSG_LEN = 500;
 const MAX_TODO_LEN = 200;
+const MAX_SUGGESTION_LEN = 2000;
 const MAX_ROOM_ID_LEN = 21;
 const MAX_UNIQUE_ID_LEN = 64;
 
@@ -29,6 +30,13 @@ export function sanitizeMessage(raw: unknown): string | null {
 export function sanitizeTodoText(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const clean = trimAndClean(raw, MAX_TODO_LEN);
+  if (clean.length === 0) return null;
+  return clean;
+}
+
+export function sanitizeSuggestion(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const clean = trimAndClean(raw, MAX_SUGGESTION_LEN);
   if (clean.length === 0) return null;
   return clean;
 }

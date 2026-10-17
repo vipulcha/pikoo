@@ -6,12 +6,12 @@ import helmet from "helmet";
 import { nanoid } from "nanoid";
 import dotenv from "dotenv";
 
-import { initRedis, createRoom, getRoom } from "./store.js";
+import { initRedis, createRoom, getRoom, addSuggestion, getSuggestions } from "./store.js";
 import { setupSocketHandlers } from "./socket.js";
 import { RoomSettings, DEFAULT_SETTINGS } from "./types.js";
 import { log } from "./logger.js";
-import { roomCreateLimiter, restGetLimiter, connectionLimiter } from "./rate-limit.js";
-import { sanitizeSettings } from "./sanitize.js";
+import { roomCreateLimiter, restGetLimiter, connectionLimiter, suggestionLimiter } from "./rate-limit.js";
+import { sanitizeSettings, sanitizeSuggestion, sanitizeName, sanitizeRoomId } from "./sanitize.js";
 
 dotenv.config();
 
@@ -173,6 +173,52 @@ app.get("/rooms/:roomId/state", async (req, res) => {
   } catch (err) {
     log.server.error("Failed to get room state", { error: String(err) });
     res.status(500).json({ error: "Failed to get room state" });
+  }
+});
+
+app.post("/suggestions", async (req, res) => {
+  const ip = getIp(req);
+
+  if (!suggestionLimiter.consume(ip)) {
+    res.status(429).json({ error: "Too many suggestions, please wait a bit" });
+    return;
+  }
+
+  const text = sanitizeSuggestion(req.body?.text);
+  if (!text) {
+    res.status(400).json({ error: "Suggestion cannot be empty" });
+    return;
+  }
+
+  try {
+    await addSuggestion({
+      text,
+      name: sanitizeName(req.body?.name) ?? undefined,
+      roomId: sanitizeRoomId(req.body?.roomId) ?? undefined,
+      createdAt: Date.now(),
+    });
+    log.server.info("Suggestion received", { length: text.length });
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    log.server.error("Failed to save suggestion", { error: String(err) });
+    res.status(500).json({ error: "Failed to save suggestion" });
+  }
+});
+
+// Read suggestions — gated behind DEBUG_SECRET in production
+app.get("/suggestions", async (req, res) => {
+  if (IS_PROD) {
+    const token = req.query.token;
+    if (!DEBUG_SECRET || token !== DEBUG_SECRET) {
+      return res.status(404).json({ error: "Not found" });
+    }
+  }
+
+  try {
+    res.json(await getSuggestions());
+  } catch (err) {
+    log.server.error("Failed to get suggestions", { error: String(err) });
+    res.status(500).json({ error: "Failed to get suggestions" });
   }
 });
 

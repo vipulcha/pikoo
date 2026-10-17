@@ -721,3 +721,34 @@ export async function reorderTodos(
   await saveRoom(room);
   return room.userTodos;
 }
+// ============================================
+// Suggestions (user feedback, kept without TTL)
+// ============================================
+
+const MAX_SUGGESTIONS = 1000;
+const memorySuggestions: Suggestion[] = [];
+
+export interface Suggestion {
+  text: string;
+  name?: string;
+  roomId?: string;
+  createdAt: number;
+}
+
+export async function addSuggestion(suggestion: Suggestion): Promise<void> {
+  if (redis) {
+    await redis.lpush("suggestions", JSON.stringify(suggestion));
+    await redis.ltrim("suggestions", 0, MAX_SUGGESTIONS - 1);
+  } else {
+    memorySuggestions.unshift(suggestion);
+    memorySuggestions.length = Math.min(memorySuggestions.length, MAX_SUGGESTIONS);
+  }
+}
+
+export async function getSuggestions(): Promise<Suggestion[]> {
+  if (redis) {
+    const items = await redis.lrange("suggestions", 0, -1);
+    return items.map((item) => JSON.parse(item) as Suggestion);
+  }
+  return memorySuggestions;
+}

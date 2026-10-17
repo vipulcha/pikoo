@@ -16,6 +16,19 @@ export async function createRoom(settings?: Partial<RoomSettings>): Promise<{ ro
   return res.json();
 }
 
+export async function submitSuggestion(suggestion: { text: string; name?: string; roomId?: string }): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/suggestions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(suggestion),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error || "Failed to send suggestion");
+  }
+}
+
 export async function getRoomState(roomId: string): Promise<RoomState | null> {
   const res = await fetch(`${BACKEND_URL}/rooms/${roomId}/state`);
   
