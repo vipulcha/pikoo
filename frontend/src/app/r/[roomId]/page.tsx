@@ -758,6 +758,7 @@ export default function RoomPage({ params }: RoomPageProps) {
               phase={timer.phase}
               running={timer.running}
               cycleCount={timer.cycleCount}
+              totalSec={timer.phase === "focus" ? settings.focusSec : timer.phase === "break" ? settings.breakSec : settings.longBreakSec}
             />
           </div>
 
