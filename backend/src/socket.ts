@@ -28,6 +28,7 @@ import {
 } from "./store.js";
 import { ChatMessage, UserTodos } from "./types.js";
 import { log } from "./logger.js";
+import { withRoomLock } from "./room-lock.js";
 import { socketEventLimiter, chatMessageLimiter } from "./rate-limit.js";
 import {
   sanitizeName,
@@ -140,10 +141,20 @@ export function setupSocketHandlers(io: Server): void {
     let currentUserName: string = "Anonymous";
     let currentUniqueId: string = "";
 
+    // Register a handler that runs under its room's lock (see room-lock.ts)
+    const on = <P>(event: string, handler: (payload: P) => Promise<void>) => {
+      socket.on(event, (payload: P) => {
+        const roomId = event === SOCKET_EVENTS.JOIN_ROOM
+          ? sanitizeRoomId((payload as { roomId?: unknown } | undefined)?.roomId)
+          : currentRoomId;
+        return roomId ? withRoomLock(roomId, () => handler(payload)) : handler(payload);
+      });
+    };
+
     // ========================================
     // Join Room
     // ========================================
-    socket.on(SOCKET_EVENTS.JOIN_ROOM, async (payload: JoinRoomPayload) => {
+    on(SOCKET_EVENTS.JOIN_ROOM, async (payload: JoinRoomPayload) => {
       if (rateLimited(socket)) return;
 
       const roomId = sanitizeRoomId(payload?.roomId);
@@ -201,7 +212,7 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Update Name
     // ========================================
-    socket.on(SOCKET_EVENTS.UPDATE_NAME, async (payload: UpdateNamePayload) => {
+    on(SOCKET_EVENTS.UPDATE_NAME, async (payload: UpdateNamePayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
@@ -255,7 +266,7 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Timer Controls
     // ========================================
-    socket.on(SOCKET_EVENTS.TIMER_START, async (payload?: { timestamp?: number }) => {
+    on(SOCKET_EVENTS.TIMER_START, async () => {
       if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
@@ -268,7 +279,7 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const timer = await startTimer(currentRoomId, socket.id, currentUserName, payload?.timestamp);
+        const timer = await startTimer(currentRoomId, socket.id, currentUserName);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
           const updatedRoom = await getRoom(currentRoomId);
@@ -281,7 +292,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TIMER_PAUSE, async (payload?: { timestamp?: number }) => {
+    on(SOCKET_EVENTS.TIMER_PAUSE, async () => {
       if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
@@ -294,7 +305,7 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const timer = await pauseTimer(currentRoomId, socket.id, currentUserName, payload?.timestamp);
+        const timer = await pauseTimer(currentRoomId, socket.id, currentUserName);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
           const updatedRoom = await getRoom(currentRoomId);
@@ -307,7 +318,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TIMER_RESET, async (payload?: { timestamp?: number }) => {
+    on(SOCKET_EVENTS.TIMER_RESET, async () => {
       if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
@@ -320,7 +331,7 @@ export function setupSocketHandlers(io: Server): void {
           return;
         }
 
-        const timer = await resetTimer(currentRoomId, socket.id, currentUserName, payload?.timestamp);
+        const timer = await resetTimer(currentRoomId, socket.id, currentUserName);
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
           const updatedRoom = await getRoom(currentRoomId);
@@ -333,7 +344,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TIMER_SKIP, async (payload?: { source?: "auto" | "manual", timestamp?: number }) => {
+    on(SOCKET_EVENTS.TIMER_SKIP, async (payload?: { source?: "auto" | "manual" }) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
@@ -369,8 +380,7 @@ export function setupSocketHandlers(io: Server): void {
               expectedPhaseEndsAt: room.timer.phaseEndsAt,
               expectedRunning: room.timer.running,
             }
-            : undefined,
-          payload?.timestamp
+            : undefined
         );
         if (timer) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
@@ -389,7 +399,7 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Settings Update
     // ========================================
-    socket.on(SOCKET_EVENTS.UPDATE_SETTINGS, async (payload: Partial<RoomSettings> & { timestamp?: number }) => {
+    on(SOCKET_EVENTS.UPDATE_SETTINGS, async (payload: Partial<RoomSettings>) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
@@ -405,7 +415,7 @@ export function setupSocketHandlers(io: Server): void {
         const cleanSettings = sanitizeSettings(payload);
         if (!cleanSettings) return;
 
-        const settings = await updateSettings(currentRoomId, cleanSettings as Partial<RoomSettings>, payload.timestamp);
+        const settings = await updateSettings(currentRoomId, cleanSettings as Partial<RoomSettings>);
         if (settings) {
           const updatedRoom = await getRoom(currentRoomId);
           io.to(currentRoomId).emit(SOCKET_EVENTS.ROOM_STATE, updatedRoom);
@@ -419,7 +429,7 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Chat Messages
     // ========================================
-    socket.on(SOCKET_EVENTS.SEND_MESSAGE, async (payload: SendMessagePayload) => {
+    on(SOCKET_EVENTS.SEND_MESSAGE, async (payload: SendMessagePayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId) return;
 
@@ -453,7 +463,7 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Todo Operations
     // ========================================
-    socket.on(SOCKET_EVENTS.TODO_ADD, async (payload: TodoAddPayload) => {
+    on(SOCKET_EVENTS.TODO_ADD, async (payload: TodoAddPayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
@@ -470,7 +480,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TODO_UPDATE, async (payload: TodoUpdatePayload) => {
+    on(SOCKET_EVENTS.TODO_UPDATE, async (payload: TodoUpdatePayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
@@ -496,7 +506,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TODO_DELETE, async (payload: TodoDeletePayload) => {
+    on(SOCKET_EVENTS.TODO_DELETE, async (payload: TodoDeletePayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
@@ -512,7 +522,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TODO_SET_ACTIVE, async (payload: TodoSetActivePayload) => {
+    on(SOCKET_EVENTS.TODO_SET_ACTIVE, async (payload: TodoSetActivePayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
@@ -529,7 +539,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TODO_SET_VISIBILITY, async (payload: TodoSetVisibilityPayload) => {
+    on(SOCKET_EVENTS.TODO_SET_VISIBILITY, async (payload: TodoSetVisibilityPayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
@@ -545,7 +555,7 @@ export function setupSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TODO_REORDER, async (payload: TodoReorderPayload) => {
+    on(SOCKET_EVENTS.TODO_REORDER, async (payload: TodoReorderPayload) => {
       if (rateLimited(socket)) return;
       if (!currentRoomId || !currentUniqueId) return;
 
@@ -566,7 +576,7 @@ export function setupSocketHandlers(io: Server): void {
     // ========================================
     // Disconnect
     // ========================================
-    socket.on("disconnect", async (reason) => {
+    on("disconnect", async (reason: string) => {
       log.socket.info("Client disconnected", {
         socketId: socket.id.slice(-6),
         reason,
