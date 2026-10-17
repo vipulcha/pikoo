@@ -31,6 +31,7 @@ export interface Participant {
 export interface ChatMessage {
   id: string;                        // unique message id
   senderId: string;                  // socket id of sender
+  senderUniqueId?: string;           // persistent user id of sender (missing on older messages)
   senderName: string;                // display name of sender
   text: string;                      // message content
   timestamp: number;                 // epoch ms

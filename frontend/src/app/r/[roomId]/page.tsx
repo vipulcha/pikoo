@@ -803,6 +803,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         isOpen={isChatOpen}
         onToggle={handleToggleChat}
         hasUnread={hasUnreadMessages}
+        currentUserId={uniqueId}
       />
 
       {/* Others' Todos Panel */}

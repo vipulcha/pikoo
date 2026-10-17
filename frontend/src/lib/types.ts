@@ -31,6 +31,7 @@ export interface Participant {
 export interface ChatMessage {
   id: string;
   senderId: string;
+  senderUniqueId?: string; // Missing on older messages
   senderName: string;
   text: string;
   timestamp: number;

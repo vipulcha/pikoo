@@ -434,6 +434,7 @@ export function setupSocketHandlers(io: Server): void {
         const message: ChatMessage = {
           id: `${socket.id}-${Date.now()}`,
           senderId: socket.id,
+          senderUniqueId: currentUniqueId,
           senderName: currentUserName,
           text,
           timestamp: Date.now(),
