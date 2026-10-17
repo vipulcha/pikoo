@@ -351,8 +351,9 @@ export async function addParticipant(
     return { success: true, participants: room.participants };
   }
 
-  // Check if name is taken by a DIFFERENT user (different uniqueId)
-  const nameTaken = room.participants.find(
+  // Check if name is taken by a DIFFERENT user (different uniqueId).
+  // "Anonymous" is the placeholder for people who haven't picked a name yet, so it can repeat.
+  const nameTaken = participantName !== "Anonymous" && room.participants.find(
     p => p.name.toLowerCase() === participantName.toLowerCase() && p.uniqueId !== uniqueId
   );
   if (nameTaken) {

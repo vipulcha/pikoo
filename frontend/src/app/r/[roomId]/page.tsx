@@ -87,6 +87,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   }, []);
 
   const handleNameSubmit = (name: string) => {
+    actions.clearNameTakenError();
     setUserName(name);
     setNameError(undefined);
     setShowNamePrompt(false);

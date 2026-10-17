@@ -27,6 +27,7 @@ interface UseTimerReturn {
     reorderTodos: (todoIds: string[]) => void;
     setActiveTodo: (todoId: string | null) => void;
     setTodoVisibility: (isPublic: boolean) => void;
+    clearNameTakenError: () => void;
   };
 }
 
@@ -39,7 +40,9 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
   const [newMessageReceived, setNewMessageReceived] = useState(0);
   const socketRef = useRef<Socket | null>(null);
   const userNameRef = useRef(userName);
-  const hasJoinedRef = useRef(false);
+  // "pending" until the server confirms the join with ROOM_STATE; "failed" after NAME_TAKEN
+  const joinStatusRef = useRef<"idle" | "pending" | "joined" | "failed">("idle");
+  const joinedNameRef = useRef(userName);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Calculate remaining time from timer state
@@ -119,8 +122,9 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       setError(null);
       setNameTakenError(false);
       // Use ref to get current userName (avoids dependency on userName)
+      joinStatusRef.current = "pending";
+      joinedNameRef.current = userNameRef.current;
       socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name: userNameRef.current, uniqueId });
-      hasJoinedRef.current = true;
     };
 
     const handleDisconnect = (reason: Socket.DisconnectReason) => {
@@ -132,6 +136,13 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     };
 
     const handleRoomState = (state: RoomState) => {
+      if (joinStatusRef.current === "pending") {
+        joinStatusRef.current = "joined";
+        // Name was picked while the join was in flight; apply it now
+        if (userNameRef.current && userNameRef.current !== joinedNameRef.current) {
+          socket.emit(SOCKET_EVENTS.UPDATE_NAME, { name: userNameRef.current });
+        }
+      }
       // console.log("[ROOM_STATE] Received full room state, userTodos:", JSON.stringify(state.userTodos, null, 2));
       setRoom((prev) => {
         // Initial load
@@ -271,6 +282,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
 
     const handleError = ({ message, code }: { message: string; code?: string }) => {
       if (code === "NAME_TAKEN") {
+        if (joinStatusRef.current === "pending") joinStatusRef.current = "failed";
         setNameTakenError(true);
         setError(message);
       } else {
@@ -303,7 +315,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       socket.off(SOCKET_EVENTS.TODOS_UPDATE, handleTodosUpdate);
       socket.off(SOCKET_EVENTS.ERROR, handleError);
       disconnectSocket();
-      hasJoinedRef.current = false;
+      joinStatusRef.current = "idle";
     };
   }, [roomId, uniqueId, calculateRemaining]); // Note: userName removed - we use UPDATE_NAME instead
 
@@ -312,11 +324,19 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     // Update the ref
     userNameRef.current = userName;
 
-    // Only send update if we've already joined the room
-    if (hasJoinedRef.current && socketRef.current && userName) {
-      socketRef.current.emit(SOCKET_EVENTS.UPDATE_NAME, { name: userName });
+    const socket = socketRef.current;
+    if (!socket || !userName) return;
+
+    if (joinStatusRef.current === "joined") {
+      socket.emit(SOCKET_EVENTS.UPDATE_NAME, { name: userName });
+    } else if (joinStatusRef.current === "failed" && socket.connected) {
+      // The join was rejected (name taken), so retry it with the new name
+      joinStatusRef.current = "pending";
+      joinedNameRef.current = userName;
+      socket.emit(SOCKET_EVENTS.JOIN_ROOM, { roomId, name: userName, uniqueId });
     }
-  }, [userName]);
+    // "pending": handleRoomState sends the new name once the join completes
+  }, [userName, roomId, uniqueId]);
 
   // Helper to update user's todos optimistically
   const updateMyTodosOptimistically = useCallback((
@@ -609,6 +629,12 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       }));
       // Then emit to server
       socketRef.current?.emit(SOCKET_EVENTS.TODO_SET_VISIBILITY, { isPublic });
+    },
+
+    // Call before retrying with a new name, so a second NAME_TAKEN is noticed again
+    clearNameTakenError: () => {
+      setNameTakenError(false);
+      setError(null);
     },
   };
 
