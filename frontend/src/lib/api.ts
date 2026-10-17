@@ -29,6 +29,16 @@ export async function submitSuggestion(suggestion: { text: string; name?: string
   }
 }
 
+export async function getStats(): Promise<{ focusingNow: number }> {
+  const res = await fetch(`${BACKEND_URL}/stats`);
+
+  if (!res.ok) {
+    throw new Error("Failed to get stats");
+  }
+
+  return res.json();
+}
+
 export async function getRoomState(roomId: string): Promise<RoomState | null> {
   const res = await fetch(`${BACKEND_URL}/rooms/${roomId}/state`);
   

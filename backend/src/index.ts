@@ -177,6 +177,22 @@ app.get("/rooms/:roomId/state", async (req, res) => {
   }
 });
 
+// Public: number of distinct people currently in a room (shown on the landing page)
+app.get("/stats", (req, res) => {
+  const ip = getIp(req);
+
+  if (!restGetLimiter.consume(ip)) {
+    res.status(429).json({ error: "Too many requests" });
+    return;
+  }
+
+  const people = new Set<string>();
+  for (const socket of io.of("/").sockets.values()) {
+    if (socket.data.uniqueId) people.add(socket.data.uniqueId);
+  }
+  res.json({ focusingNow: people.size });
+});
+
 app.post("/suggestions", async (req, res) => {
   const ip = getIp(req);
 

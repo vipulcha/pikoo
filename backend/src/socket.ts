@@ -174,6 +174,7 @@ export function setupSocketHandlers(io: Server): void {
         }
 
         socket.join(roomId);
+        socket.data.uniqueId = uniqueId;
         currentRoomId = roomId;
         currentUserName = name;
         currentUniqueId = uniqueId;
