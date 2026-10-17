@@ -721,6 +721,31 @@ export default function RoomPage({ params }: RoomPageProps) {
               </div>
             </div>
 
+            {/* Auto-start next phase */}
+            <label className="mt-5 flex items-center justify-between gap-3 cursor-pointer">
+              <span>
+                <span className="block text-sm text-white/80">Auto-start next phase</span>
+                <span className="block text-xs text-white/40">Breaks and focus sessions start on their own</span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!!settings.autoStart}
+                onClick={() => actions.updateSettings({ autoStart: !settings.autoStart })}
+                className={`
+                  relative shrink-0 w-10 h-6 rounded-full transition-colors
+                  ${settings.autoStart ? "bg-rose-500" : "bg-white/15"}
+                `}
+              >
+                <span
+                  className={`
+                    absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform
+                    ${settings.autoStart ? "translate-x-4" : ""}
+                  `}
+                />
+              </button>
+            </label>
+
             <p className="mt-4 text-xs text-white/40 text-center">
               Changes sync to all participants
             </p>

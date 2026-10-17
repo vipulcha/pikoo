@@ -11,6 +11,7 @@ export interface RoomSettings {
   longBreakSec: number;
   longBreakEvery: number;
   mode: RoomMode;
+  autoStart?: boolean; // Missing on older rooms
 }
 
 export interface TimerState {
@@ -81,6 +82,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   longBreakSec: 900,
   longBreakEvery: 4,
   mode: "collab",
+  autoStart: false,
 };
 
 export const SOCKET_EVENTS = {

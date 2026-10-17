@@ -315,6 +315,12 @@ export async function skipPhase(
   room.timer.remainingSecWhenPaused = duration;
   room.timer.lastUpdatedAt = actionTime;
 
+  // A phase that ran out (guarded auto-skip) rolls straight into the next one if enabled
+  if (guard && room.settings.autoStart) {
+    room.timer.running = true;
+    room.timer.phaseEndsAt = Date.now() + duration * 1000;
+  }
+
   await saveRoom(room);
 
   return room.timer;

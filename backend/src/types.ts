@@ -11,6 +11,7 @@ export interface RoomSettings {
   longBreakSec: number;   // default 900 (15m)
   longBreakEvery: number; // default 4 (after 4 focus cycles)
   mode: RoomMode;         // collab: anyone can control; host: only host
+  autoStart?: boolean;    // start the next phase automatically when one ends (missing on older rooms)
 }
 
 export interface TimerState {
@@ -82,6 +83,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   longBreakSec: 900,    // 15 minutes
   longBreakEvery: 4,
   mode: "collab",
+  autoStart: false,
 };
 
 // Get initial timer state for a phase
