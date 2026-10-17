@@ -504,7 +504,11 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
               default: return s.focusSec;
             }
           };
-          updatedTimer.remainingSecWhenPaused = getPhaseDurationSimple(updatedTimer.phase, newSettings);
+          const prevDuration = getPhaseDurationSimple(updatedTimer.phase, prev.settings);
+          const newDuration = getPhaseDurationSimple(updatedTimer.phase, newSettings);
+          if (newDuration !== prevDuration) {
+            updatedTimer.remainingSecWhenPaused = newDuration;
+          }
         }
 
         setRemaining(calculateRemaining(updatedTimer));

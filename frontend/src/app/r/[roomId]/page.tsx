@@ -6,6 +6,7 @@ import { Timer } from "@/components/Timer";
 import { Controls } from "@/components/Controls";
 import { ParticipantCount } from "@/components/ParticipantCount";
 import { ShareButton } from "@/components/ShareButton";
+import { SettingSlider } from "@/components/SettingSlider";
 import { SuggestionButton } from "@/components/SuggestionButton";
 import { NamePrompt, getSavedName, saveName, getUserId, clearSavedName } from "@/components/NamePrompt";
 import { ChatPanel } from "@/components/ChatPanel";
@@ -612,113 +613,10 @@ export default function RoomPage({ params }: RoomPageProps) {
             </div>
 
             <div className="space-y-5">
-              {/* Focus duration */}
-              <div>
-                <label className="block text-sm text-white/60 mb-2">Focus</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="1"
-                    max="60"
-                    value={settings.focusSec / 60}
-                    onChange={(e) => handleSettingChange("focusSec", Number(e.target.value) * 60)}
-                    className="flex-1 accent-rose-500"
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={settings.focusSec / 60}
-                    onChange={(e) => {
-                      const val = Math.max(1, Math.min(120, Number(e.target.value) || 1));
-                      handleSettingChange("focusSec", val * 60);
-                    }}
-                    className="w-16 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-rose-500/50 no-spinner"
-                  />
-                  <span className="text-white/60 text-sm">m</span>
-                </div>
-              </div>
-
-              {/* Break duration */}
-              <div>
-                <label className="block text-sm text-white/60 mb-2">Break</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="1"
-                    max="30"
-                    value={settings.breakSec / 60}
-                    onChange={(e) => handleSettingChange("breakSec", Number(e.target.value) * 60)}
-                    className="flex-1 accent-emerald-500"
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={settings.breakSec / 60}
-                    onChange={(e) => {
-                      const val = Math.max(1, Math.min(120, Number(e.target.value) || 1));
-                      handleSettingChange("breakSec", val * 60);
-                    }}
-                    className="w-16 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-emerald-500/50 no-spinner"
-                  />
-                  <span className="text-white/60 text-sm">m</span>
-                </div>
-              </div>
-
-              {/* Long break duration */}
-              <div>
-                <label className="block text-sm text-white/60 mb-2">Long Break</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="1"
-                    max="45"
-                    value={settings.longBreakSec / 60}
-                    onChange={(e) => handleSettingChange("longBreakSec", Number(e.target.value) * 60)}
-                    className="flex-1 accent-blue-500"
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={settings.longBreakSec / 60}
-                    onChange={(e) => {
-                      const val = Math.max(1, Math.min(120, Number(e.target.value) || 1));
-                      handleSettingChange("longBreakSec", val * 60);
-                    }}
-                    className="w-16 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-blue-500/50 no-spinner"
-                  />
-                  <span className="text-white/60 text-sm">m</span>
-                </div>
-              </div>
-
-              {/* Long break interval */}
-              <div>
-                <label className="block text-sm text-white/60 mb-2">Long Break After</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="2"
-                    max="8"
-                    value={settings.longBreakEvery}
-                    onChange={(e) => handleSettingChange("longBreakEvery", Number(e.target.value))}
-                    className="flex-1 accent-purple-500"
-                  />
-                  <input
-                    type="number"
-                    min="2"
-                    max="8"
-                    value={settings.longBreakEvery}
-                    onChange={(e) => {
-                      const val = Math.max(2, Math.min(8, Number(e.target.value) || 2));
-                      handleSettingChange("longBreakEvery", val);
-                    }}
-                    className="w-14 px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-center font-mono text-sm focus:outline-none focus:border-purple-500/50"
-                  />
-                  <span className="text-white/60 text-sm">x</span>
-                </div>
-              </div>
+              <SettingSlider label="Focus" value={settings.focusSec / 60} min={1} sliderMax={60} inputMax={120} unit="m" accent="rose" onCommit={(v) => handleSettingChange("focusSec", v * 60)} />
+              <SettingSlider label="Break" value={settings.breakSec / 60} min={1} sliderMax={30} inputMax={120} unit="m" accent="emerald" onCommit={(v) => handleSettingChange("breakSec", v * 60)} />
+              <SettingSlider label="Long Break" value={settings.longBreakSec / 60} min={1} sliderMax={45} inputMax={120} unit="m" accent="blue" onCommit={(v) => handleSettingChange("longBreakSec", v * 60)} />
+              <SettingSlider label="Long Break After" value={settings.longBreakEvery} min={2} sliderMax={8} inputMax={8} unit="x" accent="purple" onCommit={(v) => handleSettingChange("longBreakEvery", v)} />
             </div>
 
             {/* Auto-start next phase */}

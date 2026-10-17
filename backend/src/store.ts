@@ -476,13 +476,17 @@ export async function updateSettings(
     return room.settings;
   }
 
+  const prevDuration = getPhaseDuration(room.timer.phase, room.settings);
   room.settings = { ...room.settings, ...settings };
   room.timer.lastUpdatedAt = actionTime;
 
-  // If timer is paused and we changed a duration setting, update the timer
+  // If timer is paused and the current phase's length changed, restart it at the new length.
+  // Other changes (e.g. break length during focus) leave the paused countdown alone.
   if (!room.timer.running) {
     const newDuration = getPhaseDuration(room.timer.phase, room.settings);
-    room.timer.remainingSecWhenPaused = newDuration;
+    if (newDuration !== prevDuration) {
+      room.timer.remainingSecWhenPaused = newDuration;
+    }
   }
 
   await saveRoom(room);
