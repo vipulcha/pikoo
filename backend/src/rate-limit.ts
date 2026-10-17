@@ -68,6 +68,13 @@ export const roomCreateLimiter = new TokenBucket({
   label: "room-create",
 });
 
+// REST: suggestions — 3 per minute per IP
+export const suggestionLimiter = new TokenBucket({
+  maxTokens: 3,
+  refillRate: 3 / 60,
+  label: "suggestion",
+});
+
 // REST: general GET — 60 requests per minute per IP
 export const restGetLimiter = new TokenBucket({
   maxTokens: 60,

@@ -6,6 +6,7 @@ import { Timer } from "@/components/Timer";
 import { Controls } from "@/components/Controls";
 import { ParticipantCount } from "@/components/ParticipantCount";
 import { ShareButton } from "@/components/ShareButton";
+import { SuggestionButton } from "@/components/SuggestionButton";
 import { NamePrompt, getSavedName, saveName, getUserId, clearSavedName } from "@/components/NamePrompt";
 import { ChatPanel } from "@/components/ChatPanel";
 import { AudioPlayer } from "@/components/AudioPlayer";
@@ -549,6 +550,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         <div className="flex items-center gap-1.5 sm:gap-3">
           <ParticipantCount participants={participants} isConnected={isConnected} />
           <ShareButton roomId={roomId} />
+          <SuggestionButton roomId={roomId} name={userName} />
           <AudioPlayer />
           {/* Settings button */}
           <button
