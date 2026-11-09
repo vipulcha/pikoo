@@ -2,6 +2,10 @@ import { CreateRoomPanel, CreateRoomButton } from "@/components/CreateRoomPanel"
 import { LiveCount } from "@/components/LiveCount";
 import { JoinRoomForm } from "@/components/JoinRoomForm";
 import { SuggestionButton } from "@/components/SuggestionButton";
+import { SiteFooter } from "@/components/SiteFooter";
+import { HOME_FAQS } from "@/lib/guides";
+import { SITE_SUMMARY } from "@/lib/site";
+import { homeGraph, jsonLd } from "@/lib/structured-data";
 
 const STARS = [...Array(50)].map((_, i) => ({
   id: i,
@@ -40,24 +44,12 @@ const BUILT_FOR = ["Study sessions", "Body doubling", "Remote work sprints", "Co
 const STEPS = ["Create a room", "Share the link", "Focus together"];
 
 export default function Home() {
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "WebApplication",
-    name: "Pikoo",
-    url: "https://pikoo.live",
-    description:
-      "Shared Pomodoro rooms with session goals, lo-fi music, and real-time presence. Built for studying, body doubling, and remote work.",
-    applicationCategory: "ProductivityApplication",
-    operatingSystem: "Web",
-    offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-  };
-
   return (
     <div className="min-h-screen bg-black text-white overflow-hidden">
       {/* JSON-LD structured data */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd(homeGraph(HOME_FAQS)) }}
       />
 
       {/* Space background with stars */}
@@ -148,6 +140,9 @@ export default function Home() {
           {/* Soft dark halo so stars and planets behind the text don't hurt readability */}
           <div className="absolute -inset-x-16 -inset-y-10 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.5)_45%,transparent_75%)] pointer-events-none" />
           <h1 className="relative text-5xl sm:text-7xl font-bold tracking-tight mb-6 opacity-0 animate-slide-up drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">
+            <span className="block mb-5 text-xs sm:text-sm font-semibold uppercase tracking-[0.25em] text-rose-300/80 drop-shadow-none">
+              Free shared Pomodoro timer
+            </span>
             <span className="text-white">Focus together. </span>
             <span className="animate-shimmer">Instantly.</span>
           </h1>
@@ -267,6 +262,36 @@ export default function Home() {
           <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
         </div>
 
+        {/* What is Pikoo: a short, self-contained answer for search snippets and AI assistants */}
+        <section id="what-is-pikoo" className="py-20 sm:py-24 px-6">
+          <div className="max-w-2xl mx-auto">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-5">What is Pikoo?</h2>
+            <p data-answer className="text-lg text-white/70 leading-relaxed">{SITE_SUMMARY}</p>
+          </div>
+        </section>
+
+        {/* FAQ (mirrored in the FAQPage structured data) */}
+        <section id="faq" className="pb-20 sm:pb-28 px-6">
+          <div className="max-w-2xl mx-auto">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-8">Frequently asked questions</h2>
+            <div className="divide-y divide-white/10 border-y border-white/10">
+              {HOME_FAQS.map((f) => (
+                <details key={f.q} className="group py-5" open>
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold [&::-webkit-details-marker]:hidden">
+                    <h3>{f.q}</h3>
+                    <span className="text-white/40 transition-transform group-open:rotate-45 text-xl leading-none" aria-hidden>+</span>
+                  </summary>
+                  <p className="mt-3 text-white/65 leading-relaxed">{f.a}</p>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <div className="mx-auto max-w-xl px-6">
+          <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+        </div>
+
         {/* Social proof + bottom CTA */}
         <section className="py-20 sm:py-28 px-6">
           <div className="max-w-md mx-auto text-center">
@@ -277,13 +302,9 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Footer */}
-        <footer className="border-t border-white/5 px-6 py-8">
-          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-white/40">
-            <span>Pikoo · Free shared Pomodoro timer</span>
-            <SuggestionButton />
-          </div>
-        </footer>
+        <SiteFooter>
+          <SuggestionButton />
+        </SiteFooter>
       </div>
     </div>
   );

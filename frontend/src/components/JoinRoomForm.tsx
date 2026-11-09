@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-// Accepts a full room link (https://pikoo.live/r/abc123) or just the code (abc123)
+// Accepts a full room link (https://<site>/r/abc123) or just the code (abc123)
 function parseRoomId(input: string): string | null {
   const trimmed = input.trim();
   const match = trimmed.match(/\/r\/([A-Za-z0-9_-]+)/);
