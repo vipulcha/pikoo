@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Socket } from "socket.io-client";
-import { RoomState, RoomSettings, TimerState, Participant, ChatMessage, UserTodos, SOCKET_EVENTS } from "../types";
+import { RoomState, RoomSettings, TimerState, Participant, ChatMessage, UserTodos, SOCKET_EVENTS, MAX_ADD_TIME_SEC, MAX_REMAINING_SEC } from "../types";
 import { connectSocket, disconnectSocket, getSocket } from "../socket";
 import { notifyRoomJoin } from "../audio";
 import { serverNow, syncClock } from "../clock";
@@ -20,6 +20,7 @@ interface UseTimerReturn {
     pause: () => void;
     reset: () => void;
     skip: (source?: "auto" | "manual") => void;
+    addTime: (seconds: number) => void;
     updateSettings: (settings: Partial<RoomSettings>) => void;
     sendMessage: (text: string) => void;
     // Todo actions
@@ -501,6 +502,26 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       }
 
       socketRef.current?.emit(SOCKET_EVENTS.TIMER_SKIP, { source });
+    },
+
+    addTime: (seconds: number) => {
+      const secs = Math.floor(seconds);
+      if (!Number.isFinite(secs) || secs < 1 || secs > MAX_ADD_TIME_SEC) return;
+      const timestamp = serverNow();
+
+      // Optimistic update (same capping rule as the server)
+      updateTimerOptimistically((current) => {
+        const remainingNow = current.running && current.phaseEndsAt
+          ? Math.max(0, Math.ceil((current.phaseEndsAt - timestamp) / 1000))
+          : current.remainingSecWhenPaused;
+        const added = Math.min(secs, MAX_REMAINING_SEC - remainingNow);
+        if (added <= 0) return current;
+        return current.running && current.phaseEndsAt
+          ? { ...current, phaseEndsAt: current.phaseEndsAt + added * 1000, lastUpdatedAt: timestamp }
+          : { ...current, remainingSecWhenPaused: remainingNow + added, lastUpdatedAt: timestamp };
+      });
+
+      socketRef.current?.emit(SOCKET_EVENTS.TIMER_ADD_TIME, { seconds: secs });
     },
 
     updateSettings: (settings: Partial<RoomSettings>) => {

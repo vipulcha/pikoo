@@ -4,6 +4,7 @@ import { use, useState, useEffect, useRef } from "react";
 import { useTimer } from "@/lib/hooks/useTimer";
 import { Timer } from "@/components/Timer";
 import { Controls } from "@/components/Controls";
+import { AddTimeButtons } from "@/components/AddTimeButtons";
 import { ParticipantCount } from "@/components/ParticipantCount";
 import { ShareButton } from "@/components/ShareButton";
 import { SettingSlider } from "@/components/SettingSlider";
@@ -602,6 +603,11 @@ export default function RoomPage({ params }: RoomPageProps) {
               onPause={actions.pause}
               onReset={actions.reset}
               onSkip={() => actions.skip("manual")}
+              disabled={controlsLocked}
+            />
+            <AddTimeButtons
+              phase={timer.phase}
+              onAdd={actions.addTime}
               disabled={controlsLocked}
             />
             {controlsLocked && (

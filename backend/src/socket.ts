@@ -13,6 +13,8 @@ import {
   pauseTimer,
   resetTimer,
   skipPhase,
+  addTime,
+  MAX_ADD_TIME_SEC,
   addParticipant,
   removeParticipant,
   updateParticipantName,
@@ -452,6 +454,39 @@ export function setupSocketHandlers(io: Server): void {
         }
       } catch (err) {
         log.socket.error("Timer reset error", { error: String(err) });
+      }
+    });
+
+    on(SOCKET_EVENTS.TIMER_ADD_TIME, async (payload?: { seconds?: unknown }) => {
+      if (rateLimited(socket)) return;
+      if (!currentRoomId) return;
+
+      const seconds = Math.floor(Number(payload?.seconds));
+      if (!Number.isFinite(seconds) || seconds < 1 || seconds > MAX_ADD_TIME_SEC) {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: "Invalid amount of time" });
+        return;
+      }
+
+      try {
+        const room = await getRoom(currentRoomId);
+        if (!room) return;
+
+        if (!canControl(room, currentUniqueId)) {
+          socket.emit(SOCKET_EVENTS.ERROR, { message: "Only the host can control the timer" });
+          return;
+        }
+
+        const timer = await addTime(currentRoomId, socket.id, currentUserName, seconds);
+        if (timer) {
+          io.to(currentRoomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
+          scheduleAutoAdvance(io, currentRoomId, timer);
+          const updatedRoom = await getRoom(currentRoomId);
+          if (updatedRoom) {
+            await emitRoomState(io, currentRoomId, updatedRoom);
+          }
+        }
+      } catch (err) {
+        log.socket.error("Timer add time error", { error: String(err) });
       }
     });
 
