@@ -53,7 +53,7 @@ export interface UserTodos {
   isPublic: boolean;                 // share with others?
 }
 
-export type ActivityType = "timer_start" | "timer_pause" | "timer_reset" | "timer_skip" | "join" | "leave";
+export type ActivityType = "timer_start" | "timer_pause" | "timer_reset" | "timer_skip" | "timer_add_time" | "join" | "leave";
 
 export interface ActivityLog {
   id: string;
@@ -121,6 +121,7 @@ export const SOCKET_EVENTS = {
   TIMER_PAUSE: "timer_pause",
   TIMER_RESET: "timer_reset",
   TIMER_SKIP: "timer_skip",
+  TIMER_ADD_TIME: "timer_add_time",
   UPDATE_SETTINGS: "update_settings",
   SEND_MESSAGE: "send_message",
 

@@ -53,7 +53,7 @@ export interface UserTodos {
   isPublic: boolean;
 }
 
-export type ActivityType = "timer_start" | "timer_pause" | "timer_reset" | "timer_skip" | "join" | "leave";
+export type ActivityType = "timer_start" | "timer_pause" | "timer_reset" | "timer_skip" | "timer_add_time" | "join" | "leave";
 
 export interface ActivityLog {
   id: string;
@@ -93,6 +93,7 @@ export const SOCKET_EVENTS = {
   TIMER_PAUSE: "timer_pause",
   TIMER_RESET: "timer_reset",
   TIMER_SKIP: "timer_skip",
+  TIMER_ADD_TIME: "timer_add_time",
   UPDATE_SETTINGS: "update_settings",
   SEND_MESSAGE: "send_message",
 
@@ -124,3 +125,6 @@ export const PHASE_COLORS: Record<Phase, { bg: string; text: string; accent: str
   long_break: { bg: "from-blue-950 to-slate-950", text: "text-blue-100", accent: "bg-blue-500" },
 };
 
+// Limits for "add time" (mirrored on the backend)
+export const MAX_ADD_TIME_SEC = 120 * 60;   // one request adds at most 2h
+export const MAX_REMAINING_SEC = 4 * 60 * 60; // a phase can never hold more than 4h

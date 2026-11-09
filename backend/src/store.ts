@@ -237,6 +237,42 @@ export async function resetTimer(
   return room.timer;
 }
 
+// One request adds at most 2h, and a phase can never hold more than 4h
+export const MAX_ADD_TIME_SEC = 120 * 60;
+export const MAX_REMAINING_SEC = 4 * 60 * 60;
+
+export async function addTime(
+  roomId: string,
+  userId: string,
+  userName: string,
+  seconds: number
+): Promise<TimerState | null> {
+  const room = await getRoom(roomId);
+  if (!room) return null;
+
+  const now = Date.now();
+  const current = room.timer.running && room.timer.phaseEndsAt
+    ? Math.max(0, Math.ceil((room.timer.phaseEndsAt - now) / 1000))
+    : room.timer.remainingSecWhenPaused;
+  const added = Math.min(seconds, MAX_REMAINING_SEC - current);
+  if (added <= 0) return room.timer;
+
+  if (room.timer.running && room.timer.phaseEndsAt) {
+    room.timer.phaseEndsAt += added * 1000;
+  } else {
+    room.timer.remainingSecWhenPaused = current + added;
+  }
+  room.timer.lastUpdatedAt = now;
+
+  const mins = Math.floor(added / 60);
+  const secs = added % 60;
+  const label = secs === 0 ? `${mins} min` : mins === 0 ? `${secs} sec` : `${mins}m ${secs}s`;
+  pushActivity(room, "timer_add_time", userId, userName, `added ${label} (${room.timer.phase})`, now);
+
+  await saveRoom(room);
+  return room.timer;
+}
+
 export async function skipPhase(
   roomId: string,
   userId: string,

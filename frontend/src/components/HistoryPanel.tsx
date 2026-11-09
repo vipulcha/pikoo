@@ -22,6 +22,7 @@ export function HistoryPanel({ history }: HistoryPanelProps) {
             case "timer_pause": return "⏸️";
             case "timer_reset": return "🔄";
             case "timer_skip": return "⏭️";
+            case "timer_add_time": return "⏱️";
             case "join": return "👋";
             case "leave": return "🚪";
             default: return "📝";
@@ -34,6 +35,7 @@ export function HistoryPanel({ history }: HistoryPanelProps) {
             case "timer_pause": return `paused the timer (${log.details})`;
             case "timer_reset": return `reset the timer`;
             case "timer_skip": return log.details || `skipped phase`;
+            case "timer_add_time": return log.details || `added time`;
             case "join": return `joined the room`;
             case "leave": return `left the room`;
             default: return "performed an action";
