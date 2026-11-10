@@ -191,7 +191,7 @@ export function CreateRoomPanel() {
           {error && <p className="text-sm text-rose-400">{error}</p>}
 
           {!showSettings && (
-            <div className="flex items-center justify-center gap-3 text-sm text-white/55">
+            <div className="flex items-center justify-center gap-3 text-xs sm:text-sm text-white/55 whitespace-nowrap">
               <span className="inline-flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 No sign-up required

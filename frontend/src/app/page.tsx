@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { CreateRoomPanel, CreateRoomButton } from "@/components/CreateRoomPanel";
-import { LiveCount } from "@/components/LiveCount";
 import { GlobalStats } from "@/components/GlobalStats";
 import { LibraryList } from "@/components/LibraryList";
 import { NextSessionLine } from "@/components/DailySessions";
@@ -55,6 +54,7 @@ const FEATURES: { title: string; desc: string; icon: string; href?: string }[] =
     href: "/obs",
   },
 ];
+
 
 const BUILT_FOR = ["Study sessions", "Body doubling", "Remote work sprints", "Coworking with a friend"];
 const STEPS = ["Create a room", "Share the link", "Focus together"];
@@ -150,78 +150,76 @@ export default function Home() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-10">
+      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-8">
         {/* Headline */}
-        <div className="text-center mb-10 relative">
+        <div className="text-center mb-8 relative">
           {/* Soft dark halo so stars and planets behind the text don't hurt readability */}
           <div className="absolute -inset-x-16 -inset-y-10 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.5)_45%,transparent_75%)] pointer-events-none" />
-          <h1 className="relative text-5xl sm:text-7xl font-bold tracking-tight mb-6 opacity-0 animate-slide-up drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">
-            <span className="block mb-5 text-xs sm:text-sm font-semibold uppercase tracking-[0.25em] text-rose-300/80 drop-shadow-none">
+          <h1 className="relative text-5xl sm:text-7xl font-bold tracking-tight mb-5 opacity-0 animate-slide-up drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">
+            <span className="block mb-4 text-xs sm:text-sm font-semibold uppercase tracking-[0.25em] text-rose-300/80 drop-shadow-none">
               Free shared Pomodoro timer
             </span>
             <span className="text-white">Focus together. </span>
             <span className="animate-shimmer">Instantly.</span>
           </h1>
-          <p className="relative text-white/80 text-lg sm:text-xl max-w-lg mx-auto opacity-0 animate-slide-up animation-delay-200">
-            Shared Pomodoro rooms with session goals, lo-fi music, and real-time presence. Built for studying, body doubling, and remote work.
+          <p className="relative text-white/80 text-lg sm:text-xl max-w-xl mx-auto opacity-0 animate-slide-up animation-delay-200">
+            Start a private room with friends, or slip into a silent room with people studying right now. Free, no sign-up.
           </p>
-          <LiveCount />
+          <a href="#silent-rooms" className="relative lg:hidden mt-5 inline-flex items-center gap-2 h-9 px-4 rounded-full border border-emerald-400/30 bg-emerald-400/10 text-sm text-emerald-200 opacity-0 animate-slide-up animation-delay-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            Jump into a silent room ↓
+          </a>
         </div>
 
-        {/* Three-column hero row */}
-        <div className="w-full max-w-6xl px-4 sm:px-8 grid grid-cols-1 lg:grid-cols-[1fr_minmax(0,28rem)_1fr] items-center gap-12 lg:gap-16 opacity-0 animate-slide-up animation-delay-400">
+        {/* Two ways in: your own room, or the public silent library */}
+        <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-5 opacity-0 animate-slide-up animation-delay-400">
 
-          {/* Built for (left) */}
-          <div className="hidden lg:block text-right">
-            <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-5">Built for</p>
-            <ul className="space-y-3.5">
-              {BUILT_FOR.map((item) => (
-                <li key={item} className="text-white/70 text-[15px] font-medium">{item}</li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Centre: create, or join an existing room */}
-          <div className="w-full max-w-md mx-auto">
-            <CreateRoomPanel />
-            <div className="mt-8 flex items-center gap-3 text-xs text-white/35 uppercase tracking-widest">
-              <span className="h-px flex-1 bg-white/10" />
-              or join a room
-              <span className="h-px flex-1 bg-white/10" />
+          <section aria-labelledby="private-room-title" className="flex flex-col rounded-3xl border border-white/10 bg-black/60 backdrop-blur-xl p-6 sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-300/90">Private room</p>
+            <h2 id="private-room-title" className="mt-2 text-2xl font-semibold tracking-tight">Focus with your people</h2>
+            <p className="mt-2 text-sm text-white/60 leading-relaxed">
+              Your own timer, shared by link. Everyone stays in sync, with goals, chat and music. Great for friends, study groups and teams.
+            </p>
+            <div className="mt-6">
+              <CreateRoomPanel />
             </div>
-            <div className="mt-4">
-              <JoinRoomForm />
-            </div>
-          </div>
-
-          {/* How it works (right) */}
-          <div className="hidden lg:block text-left">
-            <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-5">How it works</p>
-            <ol className="space-y-3.5">
+            <ol className="mt-6 hidden sm:grid grid-cols-3 gap-2 text-center">
               {STEPS.map((step, i) => (
-                <li key={step} className="flex items-center gap-3 text-white/70 text-[15px] font-medium">
-                  <span className="font-mono text-rose-400/80 tabular-nums text-xs">0{i + 1}</span>
-                  {step}
+                <li key={step} className="rounded-xl bg-white/[0.03] border border-white/5 px-2 py-2.5">
+                  <span className="block font-mono text-[11px] text-rose-400/80">0{i + 1}</span>
+                  <span className="block mt-0.5 text-xs text-white/65">{step}</span>
                 </li>
               ))}
             </ol>
-          </div>
-        </div>
+            <div className="mt-auto pt-6">
+              <p className="mb-2 text-xs text-white/40">Got a link from a friend?</p>
+              <JoinRoomForm />
+            </div>
+          </section>
 
-        {/* Public silent rooms, above the fold */}
-        <section id="silent-rooms" aria-labelledby="silent-rooms-title" className="mt-10 w-full max-w-3xl px-4 opacity-0 animate-slide-up animation-delay-400">
-          <h2 id="silent-rooms-title" className="mb-3 flex items-center justify-center gap-2 text-sm font-semibold text-white/85">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            Or join a silent public room right now
-          </h2>
-          <LibraryList strip />
-          <div className="mt-3 text-center"><NextSessionLine /></div>
-        </section>
+          <section id="silent-rooms" aria-labelledby="silent-rooms-title" className="scroll-mt-6 relative flex flex-col rounded-3xl border border-emerald-400/25 bg-black/60 backdrop-blur-xl p-6 sm:p-8 shadow-[0_0_60px_-20px_rgba(16,185,129,0.35)]">
+            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300/90">
+              Silent library
+              <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] tracking-wider text-emerald-200">New</span>
+            </p>
+            <h2 id="silent-rooms-title" className="mt-2 text-2xl font-semibold tracking-tight">Focus with strangers</h2>
+            <p className="mt-2 text-sm text-white/60 leading-relaxed">
+              Public rooms on a fixed Pomodoro clock. No chat, no camera, no names. Just you and everyone else, working quietly together.
+            </p>
+            <div className="mt-6">
+              <LibraryList rows />
+            </div>
+            <div className="mt-auto pt-5 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <NextSessionLine />
+              <Link href="/library" className="text-white/50 hover:text-white transition-colors">How it works →</Link>
+            </div>
+          </section>
+        </div>
 
         {/* Scroll hint */}
         <a
           href="#features"
-          className="mt-8 hidden sm:flex flex-col items-center gap-1 text-xs text-white/35 hover:text-white/60 transition-colors opacity-0 animate-slide-up animation-delay-400"
+          className="mt-10 hidden sm:flex flex-col items-center gap-1 text-xs text-white/35 hover:text-white/60 transition-colors opacity-0 animate-slide-up animation-delay-400"
         >
           What&apos;s inside
           <svg className="w-4 h-4 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -264,8 +262,8 @@ export default function Home() {
               ))}
             </div>
 
-            {/* Mobile-only: Built for + How it works */}
-            <div className="lg:hidden mt-14 grid grid-cols-1 min-[420px]:grid-cols-2 gap-10">
+            {/* Built for + How it works */}
+            <div className="mt-14 mx-auto max-w-2xl grid grid-cols-1 min-[420px]:grid-cols-2 gap-10">
               <div>
                 <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-4">Built for</p>
                 <ul className="space-y-2">
