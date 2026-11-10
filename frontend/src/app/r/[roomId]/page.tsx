@@ -5,6 +5,8 @@ import { useTimer } from "@/lib/hooks/useTimer";
 import { Timer } from "@/components/Timer";
 import { Controls } from "@/components/Controls";
 import { AddTimeButtons } from "@/components/AddTimeButtons";
+import { InviteNudge, SessionSummary } from "@/components/GrowthCards";
+import { useFocusStats } from "@/lib/hooks/useFocusStats";
 import { ParticipantCount } from "@/components/ParticipantCount";
 import { ShareButton } from "@/components/ShareButton";
 import { SettingSlider } from "@/components/SettingSlider";
@@ -66,6 +68,8 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
   const notificationPromptShownRef = useRef(false); // Show the prompt at most once per page visit
   const prevPhaseRef = useRef<Phase | null>(null);
+  const [inviteDismissed, setInviteDismissed] = useState(false);
+  const [dismissedSummaryId, setDismissedSummaryId] = useState<string | null>(null);
   const processedTransitionRef = useRef<string | null>(null); // Track processed transitions to avoid duplicates
 
   // Check for saved name and get uniqueId on mount
@@ -96,6 +100,8 @@ export default function RoomPage({ params }: RoomPageProps) {
     userName || "",
     uniqueId
   );
+
+  const { stats: focusStats, finishedId } = useFocusStats(room?.timer, room?.history);
 
   // Handle name taken error - show prompt again
   useEffect(() => {
@@ -614,6 +620,20 @@ export default function RoomPage({ params }: RoomPageProps) {
               <p className="mt-4 text-center text-sm text-white/50">
                 Only {host?.name} (host) can control the timer
               </p>
+            )}
+            {finishedId && finishedId !== dismissedSummaryId && timer.phase !== "focus" ? (
+              <SessionSummary
+                roomId={roomId}
+                stats={focusStats}
+                others={Math.max(0, new Set(participants.map((p) => p.uniqueId)).size - 1)}
+                phase={timer.phase}
+                onDismiss={() => setDismissedSummaryId(finishedId)}
+              />
+            ) : (
+              !inviteDismissed &&
+              new Set(participants.map((p) => p.uniqueId)).size <= 1 && (
+                <InviteNudge roomId={roomId} onDismiss={() => setInviteDismissed(true)} />
+              )
             )}
           </div>
 

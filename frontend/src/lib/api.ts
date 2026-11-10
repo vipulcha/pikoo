@@ -67,3 +67,36 @@ export async function getRoomDebug(roomId: string): Promise<{
   
   return res.json();
 }
+export interface RoomPreview {
+  peopleFocusing: number;
+  phase: "focus" | "break" | "long_break";
+  running: boolean;
+  focusMin: number;
+  breakMin: number;
+  cycleCount: number;
+}
+
+// Server-side only: used for link previews of room URLs. Never blocks a page for long.
+export async function getRoomPreview(roomId: string): Promise<RoomPreview | null> {
+  if (!/^[A-Za-z0-9_-]{1,21}$/.test(roomId)) return null;
+  try {
+    const res = await fetch(`${BACKEND_URL}/rooms/${roomId}/preview`, {
+      next: { revalidate: 30 },
+      signal: AbortSignal.timeout(1500),
+    });
+    return res.ok ? ((await res.json()) as RoomPreview) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function describePreview(p: RoomPreview | null): { title: string; subtitle: string } {
+  if (!p) {
+    return { title: "Join my focus room", subtitle: "Focus together on one shared Pomodoro timer. Free, no sign-up." };
+  }
+  const who = p.peopleFocusing === 0 ? "Be the first one here" : p.peopleFocusing === 1 ? "1 person focusing now" : `${p.peopleFocusing} people focusing now`;
+  return {
+    title: "Join my focus room",
+    subtitle: `${who} · ${p.focusMin} min focus / ${p.breakMin} min break · free, no sign-up`,
+  };
+}

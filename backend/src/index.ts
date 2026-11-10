@@ -7,6 +7,7 @@ import { nanoid } from "nanoid";
 import dotenv from "dotenv";
 
 import { initRedis, createRoom, getRoom, addSuggestion, getSuggestions } from "./store.js";
+import { track, readDailyStats } from "./stats.js";
 import { setupSocketHandlers } from "./socket.js";
 import { RoomSettings, DEFAULT_SETTINGS } from "./types.js";
 import { log } from "./logger.js";
@@ -149,6 +150,7 @@ app.post("/rooms", async (req, res) => {
     const room = await createRoom(roomId, (settings || {}) as Partial<RoomSettings>, creatorId);
 
     metrics.roomsCreated++;
+    track("rooms_created", creatorId || undefined);
     log.server.info("Room created", { roomId });
     res.status(201).json({ roomId, room });
   } catch (err) {
@@ -175,6 +177,38 @@ app.get("/rooms/:roomId/state", async (req, res) => {
   } catch (err) {
     log.server.error("Failed to get room state", { error: String(err) });
     res.status(500).json({ error: "Failed to get room state" });
+  }
+});
+
+// Public: the minimum needed to render a link preview for a room (no names, chat or goals)
+app.get("/rooms/:roomId/preview", async (req, res) => {
+  const ip = getIp(req);
+
+  if (!restGetLimiter.consume(ip)) {
+    res.status(429).json({ error: "Too many requests" });
+    return;
+  }
+
+  try {
+    const room = await getRoom(req.params.roomId);
+    if (!room) return res.status(404).json({ error: "Room not found" });
+
+    const people = new Set<string>();
+    for (const s of await io.in(room.id).fetchSockets()) {
+      if (s.data.uniqueId) people.add(s.data.uniqueId);
+    }
+    res.set("Cache-Control", "public, max-age=30");
+    res.json({
+      peopleFocusing: people.size,
+      phase: room.timer.phase,
+      running: room.timer.running,
+      focusMin: Math.round(room.settings.focusSec / 60),
+      breakMin: Math.round(room.settings.breakSec / 60),
+      cycleCount: room.timer.cycleCount,
+    });
+  } catch (err) {
+    log.server.error("Failed to get room preview", { error: String(err) });
+    res.status(500).json({ error: "Failed to get room preview" });
   }
 });
 
@@ -280,7 +314,7 @@ app.get("/rooms/:roomId/debug", async (req, res) => {
 });
 
 // Lightweight metrics endpoint (also gated in production)
-app.get("/metrics", (req, res) => {
+app.get("/metrics", async (req, res) => {
   if (IS_PROD) {
     const token = req.query.token;
     if (!DEBUG_SECRET || token !== DEBUG_SECRET) {
@@ -297,6 +331,7 @@ app.get("/metrics", (req, res) => {
     rooms_created_total: metrics.roomsCreated,
     http_requests_total: metrics.httpRequests,
     memory_mb: Math.round(process.memoryUsage().rss / 1024 / 1024),
+    daily: await readDailyStats(Math.min(90, Math.max(1, Number(req.query.days) || 14))),
   });
 });
 
