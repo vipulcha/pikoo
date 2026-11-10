@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { LIBRARY_ROOMS, librarySchedule } from "@/lib/library";
+import { LIBRARY_ROOMS, librarySchedule, displayedLibraryCount } from "@/lib/library";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 
@@ -30,7 +30,8 @@ export function LibraryList({ compact = false, strip = false }: { compact?: bool
       <div className="grid gap-2 sm:grid-cols-3">
         {LIBRARY_ROOMS.map((room) => {
           const s = now ? librarySchedule(room, now) : null;
-          const count = counts[room.id];
+          const real = counts[room.id];
+          const count = real === undefined || !now ? undefined : displayedLibraryCount(room.id, real, now);
           return (
             <Link
               key={room.id}
@@ -59,7 +60,8 @@ export function LibraryList({ compact = false, strip = false }: { compact?: bool
       {LIBRARY_ROOMS.map((room) => {
         const s = now ? librarySchedule(room, now) : null;
         const mins = s ? Math.ceil(s.remainingSec / 60) : null;
-        const count = counts[room.id];
+        const real = counts[room.id];
+        const count = real === undefined || !now ? undefined : displayedLibraryCount(room.id, real, now);
         return (
           <Link
             key={room.id}

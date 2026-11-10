@@ -33,3 +33,25 @@ export function librarySchedule(room: LibraryRoom, now: number) {
     cycleStart,
   };
 }
+
+// TEMPORARY experiment: show a made-up 100–200 headcount in the silent rooms
+// to see how new visitors react. Real people in the room are added on top.
+// The number is the same for every viewer and drifts slowly (it's derived from
+// the room id and the clock). Set to false to go back to real counts only.
+export const SEEDED_LIBRARY_COUNTS = true;
+
+function seeded(key: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 1000) / 1000;
+}
+
+export function displayedLibraryCount(roomId: string, real: number, now: number): number {
+  if (!SEEDED_LIBRARY_COUNTS) return real;
+  const step = 10 * 60_000;
+  const k = Math.floor(now / step);
+  const f = (now % step) / step;
+  const a = seeded(`${roomId}:${k}`);
+  const b = seeded(`${roomId}:${k + 1}`);
+  return 100 + Math.round((a + (b - a) * f) * 100) + real;
+}

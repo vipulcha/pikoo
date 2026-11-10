@@ -7,7 +7,7 @@ import { AudioPlayer } from "@/components/AudioPlayer";
 import { NextSessionLine } from "@/components/DailySessions";
 import { SessionSummary } from "@/components/GrowthCards";
 import { getUserId } from "@/components/NamePrompt";
-import { LibraryRoom, LIBRARY_REACTIONS, librarySchedule } from "@/lib/library";
+import { LibraryRoom, LIBRARY_REACTIONS, librarySchedule, displayedLibraryCount } from "@/lib/library";
 import { serverNow, syncClock } from "@/lib/clock";
 import { useFocusCounter } from "@/lib/hooks/useFocusStats";
 import { notifyFocusEnd, notifyBreakEnd, getNotificationPermission, requestNotificationPermission } from "@/lib/audio";
@@ -102,7 +102,7 @@ export function LibraryRoomView({ room }: { room: LibraryRoom }) {
         <div className="flex shrink-0 items-center gap-2">
           <span className="whitespace-nowrap flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-sm text-white/75">
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            {count === null ? "…" : `${count} focusing`}
+            {count === null || now === null ? "…" : `${displayedLibraryCount(room.id, count, now)} focusing`}
           </span>
           <AudioPlayer />
           <button
