@@ -37,7 +37,7 @@ backend/    Express + Socket.IO + Redis (ioredis) → deployed on Railway
 - Private to-dos and per-browser secrets never leave the server; each client gets a filtered view.
 - Usage stats are anonymous daily counters (unique visitors via HyperLogLog, no names or IPs).
 
-More detail in [ARCHITECHTURE.md](ARCHITECHTURE.md).
+The original design notes are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Run it locally
 
@@ -70,3 +70,7 @@ All variables are documented in [`backend/.env.example`](backend/.env.example) a
 ## Contributing
 
 Issues and pull requests are welcome. Suggestions can also be sent from the **Suggest** button inside any room.
+
+## License
+
+[MIT](LICENSE)
