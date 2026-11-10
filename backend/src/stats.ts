@@ -5,6 +5,7 @@
 // counted with a HyperLogLog of the random per-browser uniqueId, so individual
 // ids can't be read back. Kept for 90 days in Redis, in memory otherwise.
 
+import { createHash } from "node:crypto";
 import { getRedis } from "./store.js";
 import { log } from "./logger.js";
 
@@ -87,4 +88,32 @@ export async function readTotals(): Promise<{ focusSessions: number; focusHours:
     focusHours: Math.floor(n("focus_minutes") / 60),
     roomsCreated: n("rooms_created"),
   };
+}
+
+// "Is this the first time we've seen this browser?" for the readable join logs.
+// Stores only a short hash of the random per-browser id (90-day expiry), so the
+// id itself still can't be read back.
+const memorySeen = new Set<string>();
+
+export async function isNewVisitor(uniqueId: string | undefined): Promise<boolean | null> {
+  if (!uniqueId) return null;
+  const hash = createHash("sha256").update(uniqueId).digest("hex").slice(0, 16);
+  const redis = getRedis();
+  if (!redis) {
+    if (memorySeen.has(hash)) return false;
+    memorySeen.add(hash);
+    return true;
+  }
+  try {
+    return (await redis.set(`seen:${hash}`, "1", "EX", RETENTION_SEC, "NX")) === "OK";
+  } catch {
+    return null;
+  }
+}
+
+// One easy-to-spot line per join, e.g. "👋 NEW person joined room physics-group as Riya"
+export async function logJoin(where: string, uniqueId: string | undefined, name?: string): Promise<void> {
+  const isNew = await isNewVisitor(uniqueId);
+  const who = isNew === true ? "👋 NEW person" : isNew === false ? "↩️ Returning person" : "Someone";
+  log.visitors.info(`${who} joined ${where}${name && name !== "Anonymous" ? ` as ${name}` : ""}`);
 }

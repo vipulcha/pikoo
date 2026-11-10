@@ -6,7 +6,7 @@
 // reactions. Each cycle divides an hour evenly, so sessions start on the hour.
 
 import { Server, Socket } from "socket.io";
-import { track } from "./stats.js";
+import { track, logJoin } from "./stats.js";
 
 export interface LibraryRoom {
   id: string;
@@ -53,6 +53,7 @@ export function setupLibraryHandlers(io: Server, socket: Socket, rateLimited: (s
     socket.data.libraryRoom = room.id;
     socket.join(channel(room.id));
     track("library_joins", uid);
+    void logJoin(`silent room ${room.id}`, uid);
     await broadcastCount(io, room.id);
   });
 

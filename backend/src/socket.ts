@@ -31,7 +31,7 @@ import {
   setSchedule,
 } from "./store.js";
 import { ChatMessage, UserTodos } from "./types.js";
-import { track } from "./stats.js";
+import { track, logJoin } from "./stats.js";
 import { setupLibraryHandlers } from "./library.js";
 import { log } from "./logger.js";
 import { withRoomLock } from "./room-lock.js";
@@ -322,6 +322,7 @@ export function setupSocketHandlers(io: Server): void {
         }
 
         track("room_joins", uniqueId);
+        void logJoin(`room ${roomId}`, uniqueId, name);
         log.socket.info("User joined room", { roomId, name, socketId: socket.id.slice(-6) });
       } catch (err) {
         log.socket.error("Join room error", { error: String(err), roomId });
