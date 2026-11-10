@@ -161,7 +161,7 @@ export function LibraryRoomView({ room }: { room: LibraryRoom }) {
         ))}
       </div>
 
-      {finishedKey && finishedKey !== dismissedKey && s?.phase === "break" && (
+      {finishedKey && finishedKey !== dismissedKey && s?.phase === "break" && (stats.lastSessionSec ?? 0) >= 60 && (
         <SessionSummary
           shareUrl={shareUrl}
           stats={stats}

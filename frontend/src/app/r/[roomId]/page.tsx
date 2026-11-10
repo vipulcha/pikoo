@@ -599,7 +599,7 @@ export default function RoomPage({ params }: RoomPageProps) {
                 Only {host?.name} (host) can control the timer
               </p>
             )}
-            {finishedId && finishedId !== dismissedSummaryId && timer.phase !== "focus" ? (
+            {finishedId && finishedId !== dismissedSummaryId && timer.phase !== "focus" && (focusStats.lastSessionSec ?? 0) >= 60 ? (
               <SessionSummary
                 shareUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/r/${roomId}`}
                 stats={focusStats}
