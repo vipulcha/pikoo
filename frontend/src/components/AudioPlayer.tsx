@@ -10,9 +10,11 @@ import {
   setNoiseVolume,
   getSoundFileUrl 
 } from "@/lib/audio";
+import { LOFI_STATIONS } from "@/lib/lofiStations";
 
 const STORAGE_KEY_SOUND = "pikoo_sound";
 const STORAGE_KEY_VOLUME = "pikoo_volume";
+const STORAGE_KEY_HINT = "pikoo:music-hint-seen";
 
 export function AudioPlayer() {
   const [isOpen, setIsOpen] = useState(false);
@@ -20,6 +22,10 @@ export function AudioPlayer() {
   const [volume, setVolume] = useState(0.5);
   const [isLoading, setIsLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [station, setStation] = useState<string | null>(null); // live lo-fi radio id
+  const [showHint, setShowHint] = useState(false);
+  const [hintPos, setHintPos] = useState<{ top: number; right: number } | null>(null);
+  const ytRef = useRef<HTMLIFrameElement | null>(null);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const buttonRef = useRef<HTMLDivElement>(null);
@@ -38,6 +44,25 @@ export function AudioPlayer() {
     if (savedSound) {
       setCurrentSound(savedSound);
     }
+  }, []);
+
+  // One-time nudge so people notice the music button
+  useEffect(() => {
+    let seen = false;
+    try { seen = localStorage.getItem(STORAGE_KEY_HINT) === "1"; } catch { /* storage blocked */ }
+    if (seen) return;
+    const t = setTimeout(() => {
+      const r = buttonRef.current?.getBoundingClientRect();
+      if (!r) return;
+      setHintPos({ top: r.bottom + 10, right: Math.max(12, window.innerWidth - r.right) });
+      setShowHint(true);
+    }, 6000);
+    return () => clearTimeout(t);
+  }, []);
+
+  const dismissHint = useCallback(() => {
+    setShowHint(false);
+    try { localStorage.setItem(STORAGE_KEY_HINT, "1"); } catch { /* storage blocked */ }
   }, []);
 
   // Close dropdown when clicking outside
@@ -80,6 +105,7 @@ export function AudioPlayer() {
   // Play sound
   const playSound = useCallback(async (soundId: SoundId) => {
     stopAllAudio();
+    setStation(null);
     
     if (soundId === "off") {
       setCurrentSound("off");
@@ -132,7 +158,15 @@ export function AudioPlayer() {
     if (audioRef.current) {
       audioRef.current.volume = newVolume;
     }
+    ytCommand(ytRef.current, "setVolume", [Math.round(newVolume * 100)]);
   }, []);
+
+  const playStation = useCallback((id: string) => {
+    stopAllAudio();
+    setCurrentSound("off");
+    localStorage.setItem(STORAGE_KEY_SOUND, "off");
+    setStation((cur) => (cur === id ? null : id));
+  }, [stopAllAudio]);
 
   // Handle sound selection
   const handleSelectSound = (soundId: SoundId) => {
@@ -152,7 +186,8 @@ export function AudioPlayer() {
   }, [stopAllAudio]);
 
   const currentOption = SOUND_OPTIONS.find(o => o.id === currentSound);
-  const isPlaying = currentSound !== "off";
+  const currentStation = LOFI_STATIONS.find((st) => st.id === station) ?? null;
+  const isPlaying = currentSound !== "off" || currentStation !== null;
 
   if (!isMounted) return null;
 
@@ -161,7 +196,7 @@ export function AudioPlayer() {
       <div className="relative" ref={buttonRef}>
         {/* Toggle Button */}
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => { setIsOpen(!isOpen); dismissHint(); }}
           className={`
             h-9 px-3 sm:px-4 rounded-full transition-all duration-200 relative flex items-center gap-2
             text-sm font-medium
@@ -192,9 +227,29 @@ export function AudioPlayer() {
         <div 
           ref={dropdownRef} 
           onClick={(e) => e.stopPropagation()}
-          className="fixed top-20 right-4 sm:right-6 w-64 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-3 animate-fade-in" 
+          className="fixed top-20 right-4 sm:right-6 w-64 max-h-[calc(100vh-6rem)] overflow-y-auto bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-3 animate-fade-in" 
           style={{ zIndex: 100 }}
         >
+          <p className="text-xs text-white/50 uppercase tracking-wider mb-2 px-1 flex items-center gap-2">
+            Live lo-fi radio <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+          </p>
+          <div className="space-y-1 mb-4">
+            {LOFI_STATIONS.map((st) => (
+              <button
+                key={st.id}
+                onClick={(e) => { e.stopPropagation(); playStation(st.id); }}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${station === st.id ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"}`}
+              >
+                <span className="text-lg">{st.icon}</span>
+                <span className="min-w-0">
+                  <span className="block text-sm truncate">{st.label}</span>
+                  <span className="block text-[11px] text-white/40 truncate">{st.by}</span>
+                </span>
+                {station === st.id && <span className="ml-auto text-[10px] font-semibold text-red-400">LIVE</span>}
+              </button>
+            ))}
+          </div>
+
           <p className="text-xs text-white/50 uppercase tracking-wider mb-2 px-1">Ambient Sounds</p>
           
           {/* Sound Options */}
@@ -247,17 +302,54 @@ export function AudioPlayer() {
           </div>
 
           {/* Current Playing */}
-          {isPlaying && currentOption && (
+          {isPlaying && (currentOption || currentStation) && (
             <div className="mt-3 pt-3 border-t border-white/10 px-1">
               <p className="text-xs text-white/40">
-                Now playing: <span className="text-white/70">{currentOption.icon} {currentOption.label}</span>
+                Now playing: <span className="text-white/70">{currentStation ? `${currentStation.icon} ${currentStation.label}` : `${currentOption?.icon} ${currentOption?.label}`}</span>
               </p>
             </div>
           )}
         </div>,
         document.body
       )}
+
+      {/* Live radio: YouTube's player, kept visible as its embed terms require */}
+      {currentStation && createPortal(
+        <div className="fixed bottom-16 right-4 w-[220px] rounded-xl overflow-hidden bg-black/85 backdrop-blur-xl border border-white/15 shadow-2xl" style={{ zIndex: 90 }}>
+          <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs text-white/80">
+            <span className="truncate">{currentStation.icon} {currentStation.label}</span>
+            <button onClick={() => setStation(null)} aria-label="Stop radio" className="text-white/50 hover:text-white">✕</button>
+          </div>
+          <iframe
+            ref={ytRef}
+            key={currentStation.id}
+            src={`https://www.youtube.com/embed/${currentStation.videoId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0&origin=${encodeURIComponent(window.location.origin)}`}
+            title={`${currentStation.label} by ${currentStation.by}`}
+            allow="autoplay; encrypted-media; picture-in-picture"
+            onLoad={() => ytCommand(ytRef.current, "setVolume", [Math.round(volume * 100)])}
+            className="block w-[220px] h-[200px] border-0"
+          />
+        </div>,
+        document.body
+      )}
+
+      {showHint && hintPos && !isOpen && createPortal(
+        <div className="fixed w-60 rounded-xl bg-violet-600 text-white shadow-2xl p-3 animate-fade-in" style={{ top: hintPos.top, right: hintPos.right, zIndex: 95 }}>
+          <span className="absolute -top-1.5 right-6 w-3 h-3 rotate-45 bg-violet-600" />
+          <p className="text-sm font-medium">🎧 Focus with music</p>
+          <p className="text-xs text-white/80 mt-0.5">Live lo-fi radio, rain, café and noise. One click, no sign-up.</p>
+          <div className="mt-2 flex gap-2">
+            <button onClick={() => { setIsOpen(true); dismissHint(); }} className="h-8 px-3 rounded-full bg-white text-violet-700 text-xs font-semibold">Pick a sound</button>
+            <button onClick={dismissHint} className="h-8 px-3 rounded-full text-xs text-white/80 hover:text-white">Not now</button>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
+}
+
+function ytCommand(frame: HTMLIFrameElement | null, func: string, args: unknown[] = []) {
+  frame?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), "https://www.youtube.com");
 }
 
