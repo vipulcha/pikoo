@@ -50,5 +50,6 @@ export const log = {
   store: createContextLogger("store"),
   security: createContextLogger("security"),
   metrics: createContextLogger("metrics"),
+  visitors: createContextLogger("visitors"),
   forContext: createContextLogger,
 };
