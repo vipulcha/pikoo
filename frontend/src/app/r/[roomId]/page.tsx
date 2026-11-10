@@ -65,8 +65,6 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [showWelcomePrompt, setShowWelcomePrompt] = useState(false);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
   const [pendingActiveFromWelcome, setPendingActiveFromWelcome] = useState(false);
-  const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
-  const notificationPromptShownRef = useRef(false); // Show the prompt at most once per page visit
   const prevPhaseRef = useRef<Phase | null>(null);
   const [inviteDismissed, setInviteDismissed] = useState(false);
   const [dismissedSummaryId, setDismissedSummaryId] = useState<string | null>(null);
@@ -205,28 +203,13 @@ export default function RoomPage({ params }: RoomPageProps) {
 
     const savedName = getSavedName();
 
-    // If no saved name, show welcome prompt immediately
+    // Only first-time visitors (no saved name) get the welcome prompt. Returning
+    // people go straight to the timer; their task list is right there if they want it.
     if (!savedName) {
       setShowWelcomePrompt(true);
       setHasShownWelcome(true);
-      return;
     }
-
-    // If we have a name but no todos, show after room loads
-    if (room) {
-      const myTodos = room.userTodos?.[uniqueId];
-      const hasTodos = myTodos && myTodos.todos.length > 0;
-
-      if (!hasTodos) {
-        const timer = setTimeout(() => {
-          setShowWelcomePrompt(true);
-          setHasShownWelcome(true);
-        }, 500);
-
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [room, uniqueId, hasShownWelcome]);
+  }, [uniqueId, hasShownWelcome]);
 
   // Auto-set the first todo as active when added from welcome prompt
   // Wait for the REAL ID from server (not temp_xxx) to avoid race condition
@@ -395,31 +378,8 @@ export default function RoomPage({ params }: RoomPageProps) {
     actions.updateSettings({ [key]: value });
   };
 
-  // Request notification permissions when starting the timer
-  const handleStart = async () => {
-    const permission = getNotificationPermission();
-
-    // If permission hasn't been decided yet AND the user hasn't already seen+dismissed the prompt this page visit, show explanation first
-    if (permission === "default" && !notificationPromptShownRef.current) {
-      setShowNotificationPrompt(true);
-      return;
-    }
-
-    // Permission already granted/denied, or user already dismissed the prompt this visit — just start
-    actions.start();
-  };
-
-  // Handle notification permission after user sees explanation
-  const handleNotificationResponse = async (allow: boolean) => {
-    // Mark the prompt as shown for the rest of this page visit so subsequent starts don't re-prompt
-    notificationPromptShownRef.current = true;
-    setShowNotificationPrompt(false);
-
-    if (allow) {
-      await requestNotificationPermission();
-    }
-
-    // Start the timer regardless of their choice
+  // Start right away; notifications are offered later, in the "Session done" card
+  const handleStart = () => {
     actions.start();
   };
 
@@ -628,6 +588,8 @@ export default function RoomPage({ params }: RoomPageProps) {
                 others={Math.max(0, new Set(participants.map((p) => p.uniqueId)).size - 1)}
                 phase={timer.phase}
                 onDismiss={() => setDismissedSummaryId(finishedId)}
+                canEnableNotifications={getNotificationPermission() === "default"}
+                onEnableNotifications={() => { void requestNotificationPermission(); }}
               />
             ) : (
               !inviteDismissed &&
@@ -698,48 +660,6 @@ export default function RoomPage({ params }: RoomPageProps) {
         }}
       />
 
-      {/* Notification Permission Prompt */}
-      {showNotificationPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => handleNotificationResponse(false)}
-          />
-          <div className="relative bg-slate-900/95 border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <div className="text-center">
-              {/* Bell Icon */}
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center">
-                <svg className="w-8 h-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-              </div>
-
-              <h3 className="text-xl font-semibold text-white mb-2">
-                Stay in the loop! 🔔
-              </h3>
-
-              <p className="text-white/70 text-sm mb-6">
-                Enable notifications to get alerted when your <span className="text-rose-400 font-medium">focus session</span> or <span className="text-emerald-400 font-medium">break</span> ends — even if you&apos;re in another tab.
-              </p>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => handleNotificationResponse(false)}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-sm font-medium transition-colors"
-                >
-                  Maybe later
-                </button>
-                <button
-                  onClick={() => handleNotificationResponse(true)}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white text-sm font-medium transition-all shadow-lg shadow-amber-500/25"
-                >
-                  Enable
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

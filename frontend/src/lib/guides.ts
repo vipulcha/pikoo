@@ -107,7 +107,7 @@ export const GUIDES: Guide[] = [
       { q: "How many people can join a study room?", a: "Rooms are designed for small groups such as a study group or a few friends, and anyone with the link can join." },
       { q: "Is there a camera or microphone?", a: "No. Pikoo has no video or audio calls. You share a timer, goals and a text chat, so you can study without being on camera." },
       { q: "Can I study alone?", a: "Yes. A room works fine as a personal Pomodoro timer with focus sounds and a to-do list." },
-      { q: "Do rooms expire?", a: "Rooms are temporary. A room is kept for about a day after it was last used, so create a new one for each study session." },
+      { q: "Do rooms expire?", a: "A room stays available for 30 days after it was last used, so your study group can keep using the same link. You can also pick a custom link like /r/physics-group when creating it." },
     ],
     related: ["pomodoro-timer-with-friends", "pomodoro-technique", "body-doubling"],
     updated: UPDATED,

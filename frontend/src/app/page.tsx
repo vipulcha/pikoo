@@ -1,5 +1,6 @@
 import { CreateRoomPanel, CreateRoomButton } from "@/components/CreateRoomPanel";
 import { LiveCount } from "@/components/LiveCount";
+import { GlobalStats } from "@/components/GlobalStats";
 import { JoinRoomForm } from "@/components/JoinRoomForm";
 import { SuggestionButton } from "@/components/SuggestionButton";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -294,9 +295,9 @@ export default function Home() {
 
         {/* Social proof + bottom CTA */}
         <section className="py-20 sm:py-28 px-6">
-          <div className="max-w-md mx-auto text-center">
-            <p className="text-5xl sm:text-6xl font-bold tracking-tight">300+</p>
-            <p className="mt-2 text-white/60">focus sessions hosted, by students and remote teams</p>
+          <div className="max-w-3xl mx-auto text-center">
+            <GlobalStats />
+            <p className="mt-6 text-sm text-white/40">by students, study groups and remote teams</p>
             <p className="mt-12 mb-6 text-xl font-semibold">Ready to focus?</p>
             <CreateRoomButton />
           </div>

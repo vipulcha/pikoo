@@ -24,7 +24,9 @@ import { track } from "./stats.js";
 const MAX_MESSAGES = 100; // Keep last 100 messages per room
 const MAX_HISTORY = 50; // Keep last 50 activity logs per room
 
-const ROOM_TTL = 60 * 60 * 24; // 24 hours
+// Rooms are kept for 30 days after their last change, so links pinned in a
+// Discord channel or calendar invite keep working between sessions
+const ROOM_TTL = 60 * 60 * 24 * 30;
 
 // In-memory fallback if Redis is not available
 const memoryStore = new Map<string, RoomState>();
@@ -65,8 +67,9 @@ export function initRedis(): Redis | null {
 export async function createRoom(
   roomId: string,
   settings: Partial<RoomSettings> = {},
-  hostId: string | null = null
-): Promise<RoomState> {
+  hostId: string | null = null,
+  opts: { exclusive?: boolean } = {}
+): Promise<RoomState | null> {
   const fullSettings: RoomSettings = { ...DEFAULT_SETTINGS, ...settings };
 
   const room: RoomState = {
@@ -81,6 +84,14 @@ export async function createRoom(
     history: [],
   };
 
+  // exclusive: never overwrite an existing room (custom links); null if the id is taken
+  if (opts.exclusive) {
+    if (redis) {
+      const ok = await redis.set(`room:${roomId}`, JSON.stringify(room), "EX", ROOM_TTL, "NX");
+      return ok ? room : null;
+    }
+    if (memoryStore.has(roomId)) return null;
+  }
   await saveRoom(room);
   return room;
 }
@@ -235,6 +246,7 @@ export async function resetTimer(
   room.timer.running = false;
   room.timer.phaseEndsAt = null;
   room.timer.remainingSecWhenPaused = duration;
+  room.timer.addedSec = 0;
   room.timer.lastUpdatedAt = actionTime;
 
   await saveRoom(room);
@@ -267,6 +279,7 @@ export async function addTime(
   } else {
     room.timer.remainingSecWhenPaused = current + added;
   }
+  room.timer.addedSec = (room.timer.addedSec ?? 0) + added;
   room.timer.lastUpdatedAt = now;
 
   const mins = Math.floor(added / 60);
@@ -329,7 +342,12 @@ export async function skipPhase(
     : `Skipped ${room.timer.phase} -> ${nextPhase}`;
   pushActivity(room, "timer_skip", userId, userName, details, actionTime);
   // A guarded skip is a phase that ran out on its own, so this counts real completed focus sessions
-  if (guard && room.timer.phase === "focus") track("focus_completed");
+  if (guard && room.timer.phase === "focus") {
+    track("focus_completed");
+    const people = new Set(room.participants.map((p) => p.uniqueId)).size;
+    const minutes = Math.round((room.settings.focusSec + (room.timer.addedSec ?? 0)) / 60);
+    if (people > 0 && minutes > 0) track("focus_minutes", undefined, minutes * people);
+  }
 
 
   const duration = getPhaseDuration(nextPhase, room.settings);
@@ -338,6 +356,7 @@ export async function skipPhase(
   room.timer.running = false;
   room.timer.phaseEndsAt = null;
   room.timer.remainingSecWhenPaused = duration;
+  room.timer.addedSec = 0;
   room.timer.lastUpdatedAt = actionTime;
 
   // A phase that ran out (guarded auto-skip) rolls straight into the next one if enabled
@@ -498,6 +517,7 @@ export async function updateSettings(
     const newDuration = getPhaseDuration(room.timer.phase, room.settings);
     if (newDuration !== prevDuration) {
       room.timer.remainingSecWhenPaused = newDuration;
+      room.timer.addedSec = 0;
     }
   }
 

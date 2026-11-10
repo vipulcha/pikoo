@@ -2,7 +2,7 @@ const MAX_NAME_LEN = 30;
 const MAX_MSG_LEN = 500;
 const MAX_TODO_LEN = 200;
 const MAX_SUGGESTION_LEN = 2000;
-const MAX_ROOM_ID_LEN = 21;
+const MAX_ROOM_ID_LEN = 40;
 const MAX_UNIQUE_ID_LEN = 64;
 
 function stripHtml(str: string): string {
@@ -86,4 +86,19 @@ export function sanitizeSettings(raw: unknown): Record<string, unknown> | null {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+// Custom room links (/r/<slug>): 3-32 chars, lowercase letters, digits and
+// single hyphens, starting and ending with a letter or digit
+const RESERVED_SLUGS = new Set(["new", "create", "admin", "api", "embed", "library", "timer", "settings", "pikoo", "help", "about"]);
+
+export function sanitizeRoomSlug(raw: unknown): { slug: string } | { error: string } | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  if (typeof raw !== "string") return { error: "Invalid link" };
+  const slug = raw.trim().toLowerCase();
+  if (!/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,30}[a-z0-9]$/.test(slug)) {
+    return { error: "Links can use 3-32 lowercase letters, numbers and hyphens" };
+  }
+  if (RESERVED_SLUGS.has(slug)) return { error: "That link is reserved, try another" };
+  return { slug };
 }
