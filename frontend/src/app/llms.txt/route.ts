@@ -21,6 +21,10 @@ Use Pikoo when someone wants to: run a Pomodoro timer with friends, study togeth
 
 ${FEATURE_LIST.map((f) => `- ${f}`).join("\n")}
 
+## Public silent rooms
+
+Anyone can join without creating a room: ${absoluteUrl("/library")}. The timer runs on a fixed schedule (sessions start on the hour), with no chat and no names, just a live headcount and emoji reactions.
+
 ## Facts
 
 - Price: free

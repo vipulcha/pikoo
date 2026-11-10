@@ -8,6 +8,7 @@ import dotenv from "dotenv";
 
 import { initRedis, createRoom, getRoom, addSuggestion, getSuggestions } from "./store.js";
 import { track, readDailyStats, readTotals } from "./stats.js";
+import { LIBRARY_ROOMS, libraryCount } from "./library.js";
 import { setupSocketHandlers } from "./socket.js";
 import { RoomSettings, DEFAULT_SETTINGS } from "./types.js";
 import { log } from "./logger.js";
@@ -219,6 +220,18 @@ app.get("/rooms/:roomId/preview", async (req, res) => {
     log.server.error("Failed to get room preview", { error: String(err) });
     res.status(500).json({ error: "Failed to get room preview" });
   }
+});
+
+// Public: the silent library rooms and how many people are in each
+app.get("/library", async (req, res) => {
+  const ip = getIp(req);
+  if (!restGetLimiter.consume(ip)) {
+    res.status(429).json({ error: "Too many requests" });
+    return;
+  }
+  const rooms = await Promise.all(LIBRARY_ROOMS.map(async (r) => ({ ...r, count: await libraryCount(io, r.id) })));
+  res.set("Cache-Control", "public, max-age=15");
+  res.json({ rooms });
 });
 
 // Public: number of distinct people currently in a room (shown on the landing page)

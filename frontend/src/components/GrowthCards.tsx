@@ -48,16 +48,17 @@ export function InviteNudge({ roomId, onDismiss }: { roomId: string; onDismiss: 
 
 // Shown during the break after a focus session ran to the end
 export function SessionSummary({
-  roomId, stats, others, phase, onDismiss, canEnableNotifications, onEnableNotifications,
+  shareUrl, stats, others, phase, onDismiss, canEnableNotifications, onEnableNotifications,
 }: {
-  roomId: string; stats: FocusStats; others: number; phase: Phase; onDismiss: () => void;
+  shareUrl: string; stats: FocusStats; others: number; phase: Phase; onDismiss: () => void;
   canEnableNotifications?: boolean; onEnableNotifications?: () => void;
 }) {
   const [sharing, setSharing] = useState(false);
   const [notifAsked, setNotifAsked] = useState(false);
   const minutes = Math.max(1, Math.round(stats.seconds / 60));
   const imageUrl = `/api/recap?m=${minutes}&s=${stats.sessions}&w=${others}`;
-  const text = `I focused ${formatDuration(minutes * 60)} today on Pikoo${others > 0 ? ` with ${others} other${others > 1 ? "s" : ""}` : ""}. Join me: ${roomUrl(roomId)}`;
+  const text = `I focused ${formatDuration(minutes * 60)} today on Pikoo${others > 0 ? ` with ${others} other${others > 1 ? "s" : ""}` : ""}. Join me: ${shareUrl}`;
+  const whatsapp = `https://wa.me/?text=${encodeURIComponent(`Focus with me on Pikoo (free, no sign-up): ${shareUrl}`)}`;
 
   const share = async () => {
     setSharing(true);
@@ -98,7 +99,7 @@ export function SessionSummary({
         <button onClick={share} disabled={sharing} className={`${btn} bg-white text-black hover:bg-white/85 disabled:opacity-60`}>
           {sharing ? "Preparing…" : "Share my progress"}
         </button>
-        <a href={whatsappUrl(roomId)} target="_blank" rel="noopener" className={`${btn} inline-flex items-center bg-white/10 hover:bg-white/20 text-white`}>
+        <a href={whatsapp} target="_blank" rel="noopener" className={`${btn} inline-flex items-center bg-white/10 hover:bg-white/20 text-white`}>
           Invite a friend
         </a>
       </div>
