@@ -3,6 +3,7 @@ import { CreateRoomPanel, CreateRoomButton } from "@/components/CreateRoomPanel"
 import { LiveCount } from "@/components/LiveCount";
 import { GlobalStats } from "@/components/GlobalStats";
 import { LibraryList } from "@/components/LibraryList";
+import { NextSessionLine } from "@/components/DailySessions";
 import { JoinRoomForm } from "@/components/JoinRoomForm";
 import { SuggestionButton } from "@/components/SuggestionButton";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -220,7 +221,8 @@ export default function Home() {
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-center mb-3">Focus with people right now</h2>
             <p className="text-white/50 text-center mb-10">Public silent rooms: one shared timer on a fixed schedule, no chat, no names.</p>
             <LibraryList compact />
-            <p className="mt-6 text-center text-sm"><Link href="/library" className="text-white/50 hover:text-white">All silent rooms →</Link></p>
+            <div className="mt-5 text-center"><NextSessionLine /></div>
+            <p className="mt-4 text-center text-sm"><Link href="/library" className="text-white/50 hover:text-white">All silent rooms →</Link></p>
           </div>
         </section>
 
