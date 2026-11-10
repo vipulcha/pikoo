@@ -163,11 +163,11 @@ export function AudioPlayer() {
         <button
           onClick={() => setIsOpen(!isOpen)}
           className={`
-            px-3 py-1.5 rounded-full transition-all duration-200 relative flex items-center gap-1.5
+            h-9 px-3 sm:px-4 rounded-full transition-all duration-200 relative flex items-center gap-2
             text-sm font-medium
             ${isOpen || isPlaying
               ? "bg-white/20 text-white" 
-              : "bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10"
+              : "bg-white/5 border border-white/10 text-white/80 hover:text-white hover:bg-white/10"
             }
           `}
         >

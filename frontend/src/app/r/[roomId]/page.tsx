@@ -6,7 +6,7 @@ import { Timer } from "@/components/Timer";
 import { Controls } from "@/components/Controls";
 import { AddTimeButtons } from "@/components/AddTimeButtons";
 import { InviteNudge, SessionSummary } from "@/components/GrowthCards";
-import { ScheduleChip, ScheduleDialog, LeaderboardButton, LeaderboardDialog } from "@/components/GroupFeatures";
+import { ScheduleChip, ScheduleDialog, RoomMoreMenu, LeaderboardDialog } from "@/components/GroupFeatures";
 import { useFocusStats } from "@/lib/hooks/useFocusStats";
 import { ParticipantCount } from "@/components/ParticipantCount";
 import { ShareButton } from "@/components/ShareButton";
@@ -70,6 +70,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [inviteDismissed, setInviteDismissed] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showSuggest, setShowSuggest] = useState(false);
   const [dismissedSummaryId, setDismissedSummaryId] = useState<string | null>(null);
   const processedTransitionRef = useRef<string | null>(null); // Track processed transitions to avoid duplicates
 
@@ -434,9 +435,7 @@ export default function RoomPage({ params }: RoomPageProps) {
 
         <div className="flex items-center gap-1.5 sm:gap-3">
           <ParticipantCount participants={participants} isConnected={isConnected} hostId={hostId} />
-          <LeaderboardButton onClick={() => setShowLeaderboard(true)} />
           <ShareButton roomId={roomId} />
-          <SuggestionButton roomId={roomId} name={userName} />
           <AudioPlayer />
           {/* Settings button */}
           <button
@@ -445,11 +444,11 @@ export default function RoomPage({ params }: RoomPageProps) {
             title={controlsLocked ? "Only the host can change timer settings" : "Timer settings"}
             className={`
               disabled:opacity-40 disabled:cursor-not-allowed
-              px-3 py-1.5 rounded-full transition-all duration-200 flex items-center gap-1.5
+              h-9 px-3 sm:px-4 rounded-full transition-all duration-200 flex items-center gap-2
               text-sm font-medium
               ${showSettings
                 ? "bg-white/20 text-white"
-                : "bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10"
+                : "bg-white/5 border border-white/10 text-white/80 hover:text-white hover:bg-white/10"
               }
             `}
           >
@@ -458,6 +457,12 @@ export default function RoomPage({ params }: RoomPageProps) {
             </svg>
             <span className="hidden sm:inline">Timer</span>
           </button>
+          <RoomMoreMenu
+            onLeaderboard={() => setShowLeaderboard(true)}
+            onSchedule={controlsLocked ? undefined : () => setShowSchedule(true)}
+            onFeedback={() => setShowSuggest(true)}
+            hasSchedule={!!room?.schedule}
+          />
         </div>
       </header>
 
@@ -580,7 +585,7 @@ export default function RoomPage({ params }: RoomPageProps) {
               onAdd={actions.addTime}
               disabled={controlsLocked}
             />
-            <div className="mt-5 flex items-center justify-center">
+            <div className="mt-5 flex items-center justify-center empty:hidden">
               <ScheduleChip
                 schedule={room.schedule}
                 roomUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/r/${roomId}`}
@@ -643,6 +648,7 @@ export default function RoomPage({ params }: RoomPageProps) {
         roomUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/r/${roomId}`}
         onClose={() => setShowLeaderboard(false)}
       />
+      <SuggestionButton roomId={roomId} name={userName} open={showSuggest} onClose={() => setShowSuggest(false)} />
 
       {/* Chat Panel */}
       <ChatPanel

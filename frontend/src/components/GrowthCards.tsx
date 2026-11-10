@@ -5,7 +5,6 @@ import { Phase } from "@/lib/types";
 import { FocusStats, formatDuration } from "@/lib/hooks/useFocusStats";
 import { roomUrl, whatsappUrl } from "./ShareButton";
 
-const card = "mt-6 w-full max-w-md mx-auto rounded-2xl border border-white/10 bg-black/50 backdrop-blur-md px-5 py-4 shadow-xl";
 const btn = "h-9 px-4 rounded-full text-sm font-medium transition-colors";
 
 function useCopy() {
@@ -25,23 +24,17 @@ function useCopy() {
 // Shown when you're the only one in the room
 export function InviteNudge({ roomId, onDismiss }: { roomId: string; onDismiss: () => void }) {
   const { copied, copy } = useCopy();
+  const chip = "h-8 px-3 whitespace-nowrap rounded-full text-xs font-medium transition-colors";
   return (
-    <div className={card} role="note">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-medium text-white">Focusing solo?</p>
-          <p className="mt-0.5 text-sm text-white/55">It&apos;s easier to stay on track with someone else in the room.</p>
-        </div>
-        <button onClick={onDismiss} className="text-white/40 hover:text-white/80 -mt-1" aria-label="Dismiss">✕</button>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button onClick={() => copy(roomUrl(roomId))} className={`${btn} bg-white/10 hover:bg-white/20 text-white`}>
-          {copied ? "Link copied!" : "Copy invite link"}
-        </button>
-        <a href={whatsappUrl(roomId)} target="_blank" rel="noopener" className={`${btn} inline-flex items-center bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200`}>
-          Invite on WhatsApp
-        </a>
-      </div>
+    <div role="note" className="mt-6 mx-auto w-fit max-w-full flex items-center justify-center gap-2 rounded-full border border-white/10 bg-black/40 backdrop-blur-md pl-4 pr-1.5 py-1.5 text-sm text-white/60">
+      <span className="whitespace-nowrap"><span className="sm:hidden">Invite a friend</span><span className="hidden sm:inline">Focus better with a friend</span></span>
+      <button onClick={() => copy(roomUrl(roomId))} className={`${chip} bg-white/10 hover:bg-white/20 text-white`}>
+        {copied ? "Copied!" : "Copy link"}
+      </button>
+      <a href={whatsappUrl(roomId)} target="_blank" rel="noopener" className={`${chip} inline-flex items-center bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200`}>
+        WhatsApp
+      </a>
+      <button onClick={onDismiss} className="w-7 h-7 rounded-full text-white/40 hover:text-white/80 hover:bg-white/10" aria-label="Dismiss">✕</button>
     </div>
   );
 }

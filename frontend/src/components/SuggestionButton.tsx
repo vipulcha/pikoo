@@ -6,10 +6,16 @@ import { submitSuggestion } from "@/lib/api";
 interface SuggestionButtonProps {
   roomId?: string;
   name?: string | null;
+  /** Controlled mode (opened from another menu): no trigger button is rendered */
+  open?: boolean;
+  onClose?: () => void;
 }
 
-export function SuggestionButton({ roomId, name }: SuggestionButtonProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function SuggestionButton({ roomId, name, open, onClose }: SuggestionButtonProps) {
+  const controlled = open !== undefined;
+  const [ownOpen, setOwnOpen] = useState(false);
+  const isOpen = controlled ? open : ownOpen;
+  const setIsOpen = (v: boolean) => { if (controlled) { if (!v) onClose?.(); } else setOwnOpen(v); };
   const [text, setText] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +50,7 @@ export function SuggestionButton({ roomId, name }: SuggestionButtonProps) {
 
   return (
     <>
-      <button
+      {!controlled && <button
         onClick={() => setIsOpen(true)}
         className="flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 bg-white/5 border border-white/10 hover:bg-white/10 text-white/80 hover:text-white"
       >
@@ -52,7 +58,7 @@ export function SuggestionButton({ roomId, name }: SuggestionButtonProps) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
         </svg>
         <span className="text-sm font-medium hidden sm:inline">Suggest</span>
-      </button>
+      </button>}
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
