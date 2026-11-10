@@ -1,3 +1,5 @@
+> Original design spec written before the first version. The README describes what Pikoo does today.
+
 # ONE FILE — Cuckoo.team Alternative (Shared Team Timer) — Full Design + Architecture Spec (Cursor)
 
 You can paste this entire file into Cursor as the “source of truth” spec.
