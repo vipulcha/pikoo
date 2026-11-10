@@ -62,7 +62,7 @@ export function ParticipantCount({ participants, isConnected, hostId }: Particip
       <button
         onClick={() => setShowList(!showList)}
         className={`
-          flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10
+          h-9 flex items-center gap-2 px-3 sm:px-4 rounded-full bg-white/5 border border-white/10
           hover:bg-white/10 transition-colors cursor-pointer
           ${showList ? "bg-white/10" : ""}
         `}

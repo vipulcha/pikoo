@@ -79,11 +79,11 @@ export function LibraryRoomView({ room }: { room: LibraryRoom }) {
       <div className={`pointer-events-none absolute inset-0 transition-colors duration-1000 ${s?.phase === "break" ? "bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.12),transparent_60%)]" : "bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.12),transparent_60%)]"}`} />
 
       <header className="relative z-10 flex items-center justify-between gap-3 px-4 sm:px-8 py-4">
-        <Link href="/library" className="flex items-center gap-2 text-white/70 hover:text-white">
-          <span aria-hidden>←</span> <span className="font-semibold">{room.name}</span>
+        <Link href="/library" className="min-w-0 flex items-center gap-2 text-white/70 hover:text-white">
+          <span aria-hidden>←</span> <span className="font-semibold truncate">{room.name}</span>
         </Link>
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-sm text-white/75">
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="whitespace-nowrap flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-sm text-white/75">
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
             {count === null ? "…" : `${count} focusing`}
           </span>

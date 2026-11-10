@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RoomSchedule, ScheduleRepeat, WeeklyEntry } from "@/lib/types";
 import { REPEAT_LABEL, formatWhen, googleCalendarUrl, icsContent, isoWeekKey, nextOccurrence } from "@/lib/schedule";
 import { formatDuration } from "@/lib/hooks/useFocusStats";
 
-const pill = "inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-medium transition-colors";
+const pill = "inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-xs font-medium transition-colors";
 
 function useNow(intervalMs = 30_000) {
   const [now, setNow] = useState<number | null>(null);
@@ -36,18 +36,9 @@ export function ScheduleChip({ schedule, roomUrl, roomName, canEdit, onEdit }: {
   const now = useNow();
   if (!now) return null;
 
-  if (!schedule) {
-    return canEdit ? (
-      <button onClick={onEdit} className="text-xs text-white/40 hover:text-white/75 transition-colors">
-        + Schedule a regular session for this group
-      </button>
-    ) : null;
-  }
-
+  if (!schedule) return null;
   const next = nextOccurrence(schedule, now);
-  if (next === null) {
-    return canEdit ? <button onClick={onEdit} className="text-xs text-white/40 hover:text-white/75">+ Schedule the next session</button> : null;
-  }
+  if (next === null) return null;
   const live = next <= now;
   const title = `Focus session · ${roomName}`;
 
@@ -148,16 +139,44 @@ export function ScheduleDialog({ open, schedule, onSave, onClear, onClose }: {
 // Weekly leaderboard
 // ---------------------------------------------------------------------------
 
-export function LeaderboardButton({ onClick }: { onClick: () => void }) {
+// "⋯" menu in the room header for the less-used group features
+export function RoomMoreMenu({ onLeaderboard, onSchedule, onFeedback, hasSchedule }: {
+  onLeaderboard: () => void; onSchedule?: () => void; onFeedback: () => void; hasSchedule: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  const item = "w-full flex items-center gap-3 text-left px-3 py-2.5 rounded-lg hover:bg-white/10 transition-colors";
+  const pick = (fn: () => void) => () => { setOpen(false); fn(); };
   return (
-    <button
-      onClick={onClick}
-      title="This week's focus time"
-      className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-white/80 hover:text-white text-sm transition-colors"
-    >
-      <span aria-hidden>🏆</span>
-      <span className="hidden sm:inline font-medium">This week</span>
-    </button>
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-label="More"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className={`h-9 w-9 flex items-center justify-center rounded-full border transition-colors ${open ? "bg-white/20 border-white/20 text-white" : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10 hover:text-white"}`}
+      >
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 mt-2 w-64 p-1.5 rounded-xl bg-neutral-900/95 backdrop-blur-md border border-white/10 shadow-2xl z-50 text-sm animate-fade-in">
+          <button role="menuitem" className={item} onClick={pick(onLeaderboard)}><span aria-hidden>🏆</span>This week&apos;s leaderboard</button>
+          {onSchedule && (
+            <button role="menuitem" className={item} onClick={pick(onSchedule)}><span aria-hidden>📅</span>{hasSchedule ? "Edit session schedule" : "Schedule a session"}</button>
+          )}
+          <div className="my-1 h-px bg-white/10" />
+          <button role="menuitem" className={`${item} text-white/70`} onClick={pick(onFeedback)}><span aria-hidden>💡</span>Send a suggestion</button>
+        </div>
+      )}
+    </div>
   );
 }
 
