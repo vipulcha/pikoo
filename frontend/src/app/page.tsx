@@ -21,15 +21,15 @@ const STARS = [...Array(50)].map((_, i) => ({
   duration: 2 + (i % 3),
 }));
 
-const FEATURES = [
+const FEATURES: { title: string; desc: string; icon: string; href?: string }[] = [
   {
     title: "One timer, everyone in sync",
     desc: "Start, pause or skip and the whole room sees it instantly. Breaks and focus can roll on automatically.",
     icon: "M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z",
   },
   {
-    title: "Session goals",
-    desc: "Write down what you're working on. Share it with the room for accountability, or keep it private.",
+    title: "Goals and chat",
+    desc: "Share what you're working on for accountability, or keep it private. Chat and check in during breaks.",
     icon: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
   },
   {
@@ -38,9 +38,21 @@ const FEATURES = [
     icon: "M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z",
   },
   {
-    title: "Room chat",
-    desc: "Say hi, check in during breaks, and keep each other going.",
-    icon: "M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z",
+    title: "Silent public rooms",
+    desc: "Drop in and focus with strangers on a fixed schedule, plus daily group sessions. No chat, nothing to moderate.",
+    icon: "M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z",
+    href: "/library",
+  },
+  {
+    title: "Schedules & leaderboard",
+    desc: "Set a regular session your group can add to their calendar, and see who focused most this week.",
+    icon: "M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5",
+  },
+  {
+    title: "Stream & Notion timer",
+    desc: "A transparent overlay for OBS study-with-me streams that viewers can join, or embed it in Notion.",
+    icon: "M6 20.25h12m-7.5-3v3m3-3v3m-10.125-3h17.25c.621 0 1.125-.504 1.125-1.125V4.875c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125z",
+    href: "/obs",
   },
 ];
 
@@ -138,9 +150,9 @@ export default function Home() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-16">
+      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-10">
         {/* Headline */}
-        <div className="text-center mb-12 sm:mb-14 relative">
+        <div className="text-center mb-10 relative">
           {/* Soft dark halo so stars and planets behind the text don't hurt readability */}
           <div className="absolute -inset-x-16 -inset-y-10 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.5)_45%,transparent_75%)] pointer-events-none" />
           <h1 className="relative text-5xl sm:text-7xl font-bold tracking-tight mb-6 opacity-0 animate-slide-up drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">
@@ -180,10 +192,6 @@ export default function Home() {
             <div className="mt-4">
               <JoinRoomForm />
             </div>
-            <Link href="/library" className="mt-5 inline-flex items-center gap-2 text-sm text-white/55 hover:text-white transition-colors">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              Or drop into a public silent room →
-            </Link>
           </div>
 
           {/* How it works (right) */}
@@ -200,10 +208,20 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Public silent rooms, above the fold */}
+        <section id="silent-rooms" aria-labelledby="silent-rooms-title" className="mt-10 w-full max-w-3xl px-4 opacity-0 animate-slide-up animation-delay-400">
+          <h2 id="silent-rooms-title" className="mb-3 flex items-center justify-center gap-2 text-sm font-semibold text-white/85">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            Or join a silent public room right now
+          </h2>
+          <LibraryList strip />
+          <div className="mt-3 text-center"><NextSessionLine /></div>
+        </section>
+
         {/* Scroll hint */}
         <a
           href="#features"
-          className="mt-14 hidden sm:flex flex-col items-center gap-1 text-xs text-white/35 hover:text-white/60 transition-colors opacity-0 animate-slide-up animation-delay-400"
+          className="mt-8 hidden sm:flex flex-col items-center gap-1 text-xs text-white/35 hover:text-white/60 transition-colors opacity-0 animate-slide-up animation-delay-400"
         >
           What&apos;s inside
           <svg className="w-4 h-4 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -215,31 +233,20 @@ export default function Home() {
       {/* Below-the-fold sections */}
       <div className="relative z-10 border-t border-white/5 bg-black/60 backdrop-blur-sm">
 
-        {/* Public silent rooms */}
-        <section id="silent-rooms" className="pt-20 sm:pt-24 px-6">
-          <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-center mb-3">Focus with people right now</h2>
-            <p className="text-white/50 text-center mb-10">Public silent rooms: one shared timer on a fixed schedule, no chat, no names.</p>
-            <LibraryList compact />
-            <div className="mt-5 text-center"><NextSessionLine /></div>
-            <p className="mt-4 text-center text-sm"><Link href="/library" className="text-white/50 hover:text-white">All silent rooms →</Link></p>
-          </div>
-        </section>
-
         {/* Features */}
         <section id="features" className="py-20 sm:py-28 px-6 scroll-mt-8">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-5xl mx-auto">
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-center mb-3">
               Everything you need to focus together
             </h2>
             <p className="text-white/50 text-center mb-12 sm:mb-14">
               No accounts, no setup, no meeting overhead. Just a room and a timer.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {FEATURES.map((feature) => (
                 <div
                   key={feature.title}
-                  className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-white/20 transition-colors"
+                  className="relative p-6 rounded-2xl bg-gradient-to-b from-white/[0.05] to-white/[0.015] border border-white/10 hover:border-rose-400/30 transition-colors"
                 >
                   <div className="w-10 h-10 mb-4 rounded-xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center">
                     <svg className="w-5 h-5 text-rose-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -248,6 +255,11 @@ export default function Home() {
                   </div>
                   <h3 className="font-semibold text-white mb-1.5">{feature.title}</h3>
                   <p className="text-sm text-white/55 leading-relaxed">{feature.desc}</p>
+                  {feature.href && (
+                    <Link href={feature.href} className="mt-3 inline-block text-sm text-rose-300 hover:text-rose-200 after:absolute after:inset-0">
+                      Try it →
+                    </Link>
+                  )}
                 </div>
               ))}
             </div>
@@ -282,21 +294,22 @@ export default function Home() {
         </div>
 
         {/* What is Pikoo: a short, self-contained answer for search snippets and AI assistants */}
-        <section id="what-is-pikoo" className="py-20 sm:py-24 px-6">
-          <div className="max-w-2xl mx-auto">
+        <div className="max-w-5xl mx-auto px-6 py-20 sm:py-28 grid gap-12 lg:grid-cols-[2fr_3fr] lg:gap-16">
+        <section id="what-is-pikoo">
+          <div>
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-5">What is Pikoo?</h2>
             <p data-answer className="text-lg text-white/70 leading-relaxed">{SITE_SUMMARY}</p>
           </div>
         </section>
 
         {/* FAQ (mirrored in the FAQPage structured data) */}
-        <section id="faq" className="pb-20 sm:pb-28 px-6">
-          <div className="max-w-2xl mx-auto">
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-8">Frequently asked questions</h2>
+        <section id="faq">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight mb-4 text-white/85">Questions</h2>
             <div className="divide-y divide-white/10 border-y border-white/10">
-              {HOME_FAQS.map((f) => (
-                <details key={f.q} className="group py-5" open>
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold [&::-webkit-details-marker]:hidden">
+              {HOME_FAQS.filter((f) => f.q !== "What is Pikoo?").map((f) => (
+                <details key={f.q} className="group py-4">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium text-white/85 hover:text-white [&::-webkit-details-marker]:hidden">
                     <h3>{f.q}</h3>
                     <span className="text-white/40 transition-transform group-open:rotate-45 text-xl leading-none" aria-hidden>+</span>
                   </summary>
@@ -306,6 +319,7 @@ export default function Home() {
             </div>
           </div>
         </section>
+        </div>
 
         <div className="mx-auto max-w-xl px-6">
           <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
