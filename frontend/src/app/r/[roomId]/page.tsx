@@ -6,6 +6,7 @@ import { Timer } from "@/components/Timer";
 import { Controls } from "@/components/Controls";
 import { AddTimeButtons } from "@/components/AddTimeButtons";
 import { InviteNudge, SessionSummary } from "@/components/GrowthCards";
+import { ScheduleChip, ScheduleDialog, LeaderboardButton, LeaderboardDialog } from "@/components/GroupFeatures";
 import { useFocusStats } from "@/lib/hooks/useFocusStats";
 import { ParticipantCount } from "@/components/ParticipantCount";
 import { ShareButton } from "@/components/ShareButton";
@@ -67,6 +68,8 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [pendingActiveFromWelcome, setPendingActiveFromWelcome] = useState(false);
   const prevPhaseRef = useRef<Phase | null>(null);
   const [inviteDismissed, setInviteDismissed] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [dismissedSummaryId, setDismissedSummaryId] = useState<string | null>(null);
   const processedTransitionRef = useRef<string | null>(null); // Track processed transitions to avoid duplicates
 
@@ -431,6 +434,7 @@ export default function RoomPage({ params }: RoomPageProps) {
 
         <div className="flex items-center gap-1.5 sm:gap-3">
           <ParticipantCount participants={participants} isConnected={isConnected} hostId={hostId} />
+          <LeaderboardButton onClick={() => setShowLeaderboard(true)} />
           <ShareButton roomId={roomId} />
           <SuggestionButton roomId={roomId} name={userName} />
           <AudioPlayer />
@@ -528,7 +532,7 @@ export default function RoomPage({ params }: RoomPageProps) {
       )}
 
       {/* Main content */}
-      <main className="flex-1 flex items-center justify-center px-4 -mt-16 relative z-10">
+      <main className="flex-1 flex items-center justify-center px-4 [@media(min-height:900px)]:-mt-16 relative z-10">
         {/* Todo List - Left side */}
         <div className="absolute left-2 sm:left-4 lg:left-8 top-1/2 -translate-y-1/2 hidden md:block">
           <div className="flex flex-col gap-2">
@@ -576,6 +580,15 @@ export default function RoomPage({ params }: RoomPageProps) {
               onAdd={actions.addTime}
               disabled={controlsLocked}
             />
+            <div className="mt-5 flex items-center justify-center">
+              <ScheduleChip
+                schedule={room.schedule}
+                roomUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/r/${roomId}`}
+                roomName={roomId}
+                canEdit={!controlsLocked}
+                onEdit={() => setShowSchedule(true)}
+              />
+            </div>
             {controlsLocked && (
               <p className="mt-4 text-center text-sm text-white/50">
                 Only {host?.name} (host) can control the timer
@@ -615,6 +628,21 @@ export default function RoomPage({ params }: RoomPageProps) {
           </div>
         </div>
       </main>
+
+      <ScheduleDialog
+        open={showSchedule}
+        schedule={room.schedule}
+        onSave={(s) => { actions.updateSchedule(s); setShowSchedule(false); }}
+        onClear={() => { actions.updateSchedule(null); setShowSchedule(false); }}
+        onClose={() => setShowSchedule(false)}
+      />
+      <LeaderboardDialog
+        open={showLeaderboard}
+        weekly={room.weekly}
+        myId={uniqueId}
+        roomUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/r/${roomId}`}
+        onClose={() => setShowLeaderboard(false)}
+      />
 
       {/* Chat Panel */}
       <ChatPanel

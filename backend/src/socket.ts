@@ -28,6 +28,7 @@ import {
   setTodoVisibility,
   reorderTodos,
   addActivity,
+  setSchedule,
 } from "./store.js";
 import { ChatMessage, UserTodos } from "./types.js";
 import { track } from "./stats.js";
@@ -43,6 +44,7 @@ import {
   sanitizeTodoText,
   sanitizeRoomId,
   sanitizeUniqueId,
+  sanitizeSchedule,
   isValidTodoId,
   isValidBoolean,
   sanitizeSettings,
@@ -608,6 +610,35 @@ export function setupSocketHandlers(io: Server): void {
         }
       } catch (err) {
         log.socket.error("Settings update error", { error: String(err) });
+      }
+    });
+
+    // ========================================
+    // Session schedule (shown in the room, exported to calendars)
+    // ========================================
+    on(SOCKET_EVENTS.UPDATE_SCHEDULE, async (payload: unknown) => {
+      if (rateLimited(socket)) return;
+      if (!currentRoomId) return;
+
+      try {
+        const room = await getRoom(currentRoomId);
+        if (!room) return;
+        if (!canControl(room, currentUniqueId)) {
+          socket.emit(SOCKET_EVENTS.ERROR, { message: "Only the host can change the schedule" });
+          return;
+        }
+        const schedule = sanitizeSchedule(payload);
+        if (schedule === undefined) {
+          socket.emit(SOCKET_EVENTS.ERROR, { message: "Invalid schedule" });
+          return;
+        }
+        const updated = await setSchedule(currentRoomId, schedule);
+        if (updated) {
+          track("schedules_set");
+          await emitRoomState(io, currentRoomId, updated);
+        }
+      } catch (err) {
+        log.socket.error("Schedule update error", { error: String(err) });
       }
     });
 

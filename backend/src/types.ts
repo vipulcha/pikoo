@@ -65,6 +65,25 @@ export interface ActivityLog {
   details?: string;
 }
 
+export type ScheduleRepeat = "none" | "daily" | "weekdays" | "weekly";
+
+// A recurring (or one-off) session time for the room, shown in the room and
+// exported to calendars. Times are epoch ms; tz is the creator's IANA zone,
+// used for weekday rules and for the link preview text.
+export interface RoomSchedule {
+  startsAt: number;
+  repeat: ScheduleRepeat;
+  durationMin: number;
+  tz: string;
+}
+
+// Focus time per member for one ISO week ("2026-W46"), keyed by uniqueId
+export interface WeeklyEntry {
+  name: string;
+  sec: number;
+  sessions: number;
+}
+
 export interface RoomState {
   id: string;
   settings: RoomSettings;
@@ -76,6 +95,8 @@ export interface RoomState {
   userTodos: Record<string, UserTodos>; // todos by uniqueId
   history: ActivityLog[];            // activity history (max 50)
   userSecrets?: Record<string, string>; // sha256 of each user's secret, binds a uniqueId to one browser (never sent to clients)
+  schedule?: RoomSchedule | null;     // next/recurring session time
+  weekly?: Record<string, Record<string, WeeklyEntry>>; // study-group leaderboard, last 2 ISO weeks
 }
 
 // Default settings
@@ -123,7 +144,8 @@ export const SOCKET_EVENTS = {
   TIMER_RESET: "timer_reset",
   TIMER_SKIP: "timer_skip",
   TIMER_ADD_TIME: "timer_add_time",
-  SPECTATE_ROOM: "spectate_room",   // view-only connection (stream overlay / Notion embed)
+  SPECTATE_ROOM: "spectate_room",
+  UPDATE_SCHEDULE: "update_schedule",   // view-only connection (stream overlay / Notion embed)
   UPDATE_SETTINGS: "update_settings",
   SEND_MESSAGE: "send_message",
 

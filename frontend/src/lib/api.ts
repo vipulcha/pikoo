@@ -1,4 +1,5 @@
-import { RoomSettings, RoomState } from "./types";
+import { RoomSettings, RoomState, RoomSchedule } from "./types";
+import { nextOccurrence, formatInZone } from "./schedule";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 
@@ -82,6 +83,7 @@ export interface RoomPreview {
   focusMin: number;
   breakMin: number;
   cycleCount: number;
+  schedule?: RoomSchedule | null;
 }
 
 // Server-side only: used for link previews of room URLs. Never blocks a page for long.
@@ -101,6 +103,13 @@ export async function getRoomPreview(roomId: string): Promise<RoomPreview | null
 export function describePreview(p: RoomPreview | null): { title: string; subtitle: string } {
   if (!p) {
     return { title: "Join my focus room", subtitle: "Focus together on one shared Pomodoro timer. Free, no sign-up." };
+  }
+  const next = p.schedule ? nextOccurrence(p.schedule, Date.now()) : null;
+  if (p.schedule && next !== null && p.peopleFocusing === 0) {
+    return {
+      title: "Join our focus session",
+      subtitle: `Next session ${formatInZone(next, p.schedule.tz)} · ${p.focusMin} min focus / ${p.breakMin} min break · free, no sign-up`,
+    };
   }
   const who = p.peopleFocusing === 0 ? "Be the first one here" : p.peopleFocusing === 1 ? "1 person focusing now" : `${p.peopleFocusing} people focusing now`;
   return {
