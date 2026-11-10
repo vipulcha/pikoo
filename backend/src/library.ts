@@ -6,7 +6,7 @@
 // reactions. Each cycle divides an hour evenly, so sessions start on the hour.
 
 import { Server, Socket } from "socket.io";
-import { track, logJoin } from "./stats.js";
+import { track, logJoin, logVisitor, formatStay } from "./stats.js";
 
 export interface LibraryRoom {
   id: string;
@@ -45,12 +45,14 @@ export function setupLibraryHandlers(io: Server, socket: Socket, rateLimited: (s
     const prev = socket.data.libraryRoom as string | undefined;
     if (prev === room.id) return;
     if (prev) {
+      logVisitor(socket.data.uniqueId, `🚪 left silent room ${prev} after ${formatStay(Date.now() - (socket.data.libraryJoinedAt ?? Date.now()))}`);
       socket.leave(channel(prev));
       await broadcastCount(io, prev);
     }
     const uid = typeof payload?.uniqueId === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(payload.uniqueId) ? payload.uniqueId : undefined;
     if (uid) socket.data.uniqueId = uid; // also counts toward "people focusing right now"
     socket.data.libraryRoom = room.id;
+    socket.data.libraryJoinedAt = Date.now();
     socket.join(channel(room.id));
     track("library_joins", uid);
     void logJoin(`silent room ${room.id}`, uid);
@@ -65,10 +67,14 @@ export function setupLibraryHandlers(io: Server, socket: Socket, rateLimited: (s
     if (now - lastReactionAt < 3000) return; // one reaction per 3s per person
     lastReactionAt = now;
     io.to(channel(id)).emit("library_reaction", { emoji: payload.emoji });
+    logVisitor(socket.data.uniqueId, `${payload.emoji} reacted in silent room ${id}`);
   });
 
   socket.on("disconnect", () => {
     const id = socket.data.libraryRoom as string | undefined;
-    if (id) broadcastCount(io, id).catch(() => {});
+    if (id) {
+      logVisitor(socket.data.uniqueId, `🚪 left silent room ${id} after ${formatStay(Date.now() - (socket.data.libraryJoinedAt ?? Date.now()))}`);
+      broadcastCount(io, id).catch(() => {});
+    }
   });
 }

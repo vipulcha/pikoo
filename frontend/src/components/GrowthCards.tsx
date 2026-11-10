@@ -1,5 +1,6 @@
 "use client";
 
+import { trace } from "@/lib/trace";
 import { useState } from "react";
 import { Phase } from "@/lib/types";
 import { FocusStats, formatDuration } from "@/lib/hooks/useFocusStats";
@@ -10,6 +11,7 @@ const btn = "h-9 px-4 rounded-full text-sm font-medium transition-colors";
 function useCopy() {
   const [copied, setCopied] = useState(false);
   const copy = async (text: string) => {
+    trace("share", { how: "copy_link" });
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -54,6 +56,7 @@ export function SessionSummary({
   const whatsapp = `https://wa.me/?text=${encodeURIComponent(`Focus with me on Pikoo (free, no sign-up): ${shareUrl}`)}`;
 
   const share = async () => {
+    trace("share", { how: "progress_image", minutes });
     setSharing(true);
     try {
       const blob = await (await fetch(imageUrl)).blob();

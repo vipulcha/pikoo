@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Sora } from "next/font/google";
 import "./globals.css";
 import { SiteAnalytics } from "@/components/SiteAnalytics";
+import { TraceView } from "@/components/TraceView";
 import { SITE_URL, SITE_NAME, SITE_TITLE, SITE_DESCRIPTION } from "@/lib/site";
 
 // Self-hosted by Next (no render-blocking Google Fonts stylesheet)
@@ -79,6 +80,7 @@ export default function RootLayout({
       <body className={`${sora.className} antialiased`}>
         {children}
         <SiteAnalytics />
+        <TraceView />
       </body>
     </html>
   );

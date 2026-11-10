@@ -11,6 +11,7 @@ import {
   getSoundFileUrl 
 } from "@/lib/audio";
 import { LOFI_STATIONS } from "@/lib/lofiStations";
+import { trace } from "@/lib/trace";
 
 const STORAGE_KEY_SOUND = "pikoo_sound";
 const STORAGE_KEY_VOLUME = "pikoo_volume";
@@ -165,11 +166,15 @@ export function AudioPlayer() {
     stopAllAudio();
     setCurrentSound("off");
     localStorage.setItem(STORAGE_KEY_SOUND, "off");
-    setStation((cur) => (cur === id ? null : id));
+    setStation((cur) => {
+      trace("music", { pick: cur === id ? "off" : `radio:${id}` });
+      return cur === id ? null : id;
+    });
   }, [stopAllAudio]);
 
   // Handle sound selection
   const handleSelectSound = (soundId: SoundId) => {
+    trace("music", { pick: soundId === currentSound ? "off" : soundId });
     if (soundId === currentSound) {
       // Toggle off if same sound selected
       playSound("off");
@@ -196,7 +201,7 @@ export function AudioPlayer() {
       <div className="relative" ref={buttonRef}>
         {/* Toggle Button */}
         <button
-          onClick={() => { setIsOpen(!isOpen); dismissHint(); }}
+          onClick={() => { if (!isOpen) trace("click", { what: "music_button" }); setIsOpen(!isOpen); dismissHint(); }}
           className={`
             h-9 px-3 sm:px-4 rounded-full transition-all duration-200 relative flex items-center gap-2
             text-sm font-medium
@@ -339,8 +344,8 @@ export function AudioPlayer() {
           <p className="text-sm font-medium">🎧 Focus with music</p>
           <p className="text-xs text-white/80 mt-0.5">Live lo-fi radio, rain, café and noise. One click, no sign-up.</p>
           <div className="mt-2 flex gap-2">
-            <button onClick={() => { setIsOpen(true); dismissHint(); }} className="h-8 px-3 rounded-full bg-white text-violet-700 text-xs font-semibold">Pick a sound</button>
-            <button onClick={dismissHint} className="h-8 px-3 rounded-full text-xs text-white/80 hover:text-white">Not now</button>
+            <button onClick={() => { trace("hint", { action: "pick_a_sound" }); setIsOpen(true); dismissHint(); }} className="h-8 px-3 rounded-full bg-white text-violet-700 text-xs font-semibold">Pick a sound</button>
+            <button onClick={() => { trace("hint", { action: "not_now" }); dismissHint(); }} className="h-8 px-3 rounded-full text-xs text-white/80 hover:text-white">Not now</button>
           </div>
         </div>,
         document.body

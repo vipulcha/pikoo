@@ -1,5 +1,6 @@
 "use client";
 
+import { trace } from "@/lib/trace";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -19,6 +20,7 @@ export function JoinRoomForm() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const roomId = parseRoomId(value);
+    trace("join_form", { input: value.trim().slice(0, 80), ok: roomId ? "yes" : "no" });
     if (!roomId) {
       setError("That doesn't look like a room link or code");
       return;

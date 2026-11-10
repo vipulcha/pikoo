@@ -1,5 +1,6 @@
 "use client";
 
+import { trace } from "@/lib/trace";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRoom } from "@/lib/api";
@@ -18,11 +19,13 @@ export function CreateRoomPanel() {
   const handleCreateRoom = async () => {
     setIsCreating(true);
     setError(null);
+    trace("create_room", { custom: showSettings ? "yes" : "no", slug: slug || undefined });
     try {
       const { roomId } = await createRoom(settings, getUserId(), slug.replace(/^-+|-+$/g, "") || undefined);
       router.push(`/r/${roomId}`);
     } catch (err) {
       console.error("Failed to create room:", err);
+      trace("error", { where: "create_room", msg: err instanceof Error ? err.message : "unknown" });
       setError(err instanceof Error ? err.message : "Couldn't create a room. Please try again.");
       setIsCreating(false);
     }

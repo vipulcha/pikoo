@@ -1,5 +1,6 @@
 "use client";
 
+import { trace } from "@/lib/trace";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRoom } from "@/lib/api";
@@ -36,7 +37,7 @@ export function SoloTimer({ focusMin, breakMin }: { focusMin: number; breakMin: 
   const running = endsAt !== null;
   const left = running ? Math.max(0, Math.ceil((endsAt - now) / 1000)) : remaining;
 
-  const start = () => { const t = Date.now(); setDone(false); setNow(t); setEndsAt(t + remaining * 1000); };
+  const start = () => { trace("solo_timer", { action: "start", focus: focusMin }); const t = Date.now(); setDone(false); setNow(t); setEndsAt(t + remaining * 1000); };
   const pause = () => { if (endsAt) { setRemaining(Math.max(0, Math.ceil((endsAt - Date.now()) / 1000))); setEndsAt(null); } };
   const reset = () => { setEndsAt(null); setPhase("focus"); setRemaining(lengthOf("focus")); setDone(false); };
 
@@ -80,6 +81,7 @@ export function SoloTimer({ focusMin, breakMin }: { focusMin: number; breakMin: 
   });
 
   const makeShared = async () => {
+    trace("solo_timer", { action: "make_shared", focus: focusMin });
     setSharing(true);
     setError(null);
     try {

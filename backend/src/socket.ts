@@ -31,7 +31,7 @@ import {
   setSchedule,
 } from "./store.js";
 import { ChatMessage, UserTodos } from "./types.js";
-import { track, logJoin } from "./stats.js";
+import { track, logJoin, logVisitor, formatStay } from "./stats.js";
 import { setupLibraryHandlers } from "./library.js";
 import { log } from "./logger.js";
 import { withRoomLock } from "./room-lock.js";
@@ -227,6 +227,25 @@ export function setupSocketHandlers(io: Server): void {
     let currentRoomId: string | null = null;
     let currentUserName: string = "Anonymous";
     let currentUniqueId: string = "";
+    let joinedAt = 0;
+
+    // What each room action looks like in the visitor trace (logged on every attempt)
+    const ACTION_LABEL: Record<string, (p: unknown) => string | null> = {
+      [SOCKET_EVENTS.TIMER_START]: () => "▶️ started the timer",
+      [SOCKET_EVENTS.TIMER_PAUSE]: () => "⏸️ paused the timer",
+      [SOCKET_EVENTS.TIMER_RESET]: () => "🔄 reset the timer",
+      [SOCKET_EVENTS.TIMER_SKIP]: (p) => ((p as { source?: string } | undefined)?.source === "auto" ? null : "⏭️ skipped the phase"),
+      [SOCKET_EVENTS.TIMER_ADD_TIME]: (p) => `➕ added ${Math.round(Number((p as { seconds?: unknown } | undefined)?.seconds) / 60) || "?"} min`,
+      [SOCKET_EVENTS.UPDATE_SETTINGS]: (p) => `⚙️ changed settings ${JSON.stringify(p ?? {}).slice(0, 120)}`,
+      [SOCKET_EVENTS.UPDATE_SCHEDULE]: (p) => (p ? "📅 set a schedule" : "📅 removed the schedule"),
+      [SOCKET_EVENTS.SEND_MESSAGE]: () => "💬 sent a chat message",
+      [SOCKET_EVENTS.TODO_ADD]: () => "📝 added a task",
+      [SOCKET_EVENTS.TODO_UPDATE]: (p) => ((p as { completed?: unknown } | undefined)?.completed === true ? "✅ completed a task" : "📝 edited a task"),
+      [SOCKET_EVENTS.TODO_DELETE]: () => "🗑️ deleted a task",
+      [SOCKET_EVENTS.TODO_SET_ACTIVE]: () => "🎯 picked a task to work on",
+      [SOCKET_EVENTS.TODO_SET_VISIBILITY]: () => "👁️ changed task visibility",
+      [SOCKET_EVENTS.UPDATE_NAME]: (p) => `✏️ set their name to "${String((p as { name?: unknown } | undefined)?.name ?? "").slice(0, 40)}"`,
+    };
 
     // Silent library (public, schedule-driven rooms): see library.ts
     setupLibraryHandlers(io, socket, rateLimited);
@@ -239,6 +258,8 @@ export function setupSocketHandlers(io: Server): void {
     // Register a handler that runs under its room's lock (see room-lock.ts)
     const on = <P>(event: string, handler: (payload: P) => Promise<void>) => {
       socket.on(event, (payload: P) => {
+        const label = currentUniqueId ? ACTION_LABEL[event]?.(payload) : null;
+        if (label) logVisitor(currentUniqueId, `${label} in room ${currentRoomId}`, currentUserName);
         const roomId = event === SOCKET_EVENTS.JOIN_ROOM
           ? sanitizeRoomId((payload as { roomId?: unknown } | undefined)?.roomId)
           : currentRoomId;
@@ -322,6 +343,7 @@ export function setupSocketHandlers(io: Server): void {
         }
 
         track("room_joins", uniqueId);
+        joinedAt = Date.now();
         void logJoin(`room ${roomId}`, uniqueId, name);
         log.socket.info("User joined room", { roomId, name, socketId: socket.id.slice(-6) });
       } catch (err) {
@@ -795,6 +817,9 @@ export function setupSocketHandlers(io: Server): void {
     // Disconnect
     // ========================================
     on("disconnect", async (reason: string) => {
+      if (currentRoomId && currentUniqueId && joinedAt) {
+        logVisitor(currentUniqueId, `🚪 left room ${currentRoomId} after ${formatStay(Date.now() - joinedAt)}`, currentUserName);
+      }
       log.socket.info("Client disconnected", {
         socketId: socket.id.slice(-6),
         reason,

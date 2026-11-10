@@ -35,7 +35,7 @@ backend/    Express + Socket.IO + Redis (ioredis) → deployed on Railway
 - Room state lives in Redis with a 30-day sliding TTL (in memory if `REDIS_URL` isn't set).
 - Every room mutation runs under a per-room lock; inputs are sanitized and rate-limited per socket and per IP.
 - Private to-dos and per-browser secrets never leave the server; each client gets a filtered view.
-- Usage stats are anonymous daily counters (unique visitors via HyperLogLog, no names or IPs).
+- Usage stats are anonymous daily counters (unique visitors via HyperLogLog, no names or IPs). Server logs trace visits under a short hashed visitor tag (pages, clicks, room actions, time spent); they never contain IPs, chat text or task text.
 
 The original design notes are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
