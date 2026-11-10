@@ -80,10 +80,20 @@ export function SessionSummary({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className={`text-xs font-semibold uppercase tracking-widest ${accent}`}>Session done</p>
-          <p className="mt-1 text-white">
-            <span className="text-2xl font-semibold">{formatDuration(minutes * 60)}</span>
-            <span className="text-white/55"> focused today · {stats.sessions} session{stats.sessions === 1 ? "" : "s"}</span>
-          </p>
+          {stats.lastSessionSec !== undefined && stats.lastSessionSec >= 60 ? (
+            <>
+              <p className="mt-1 text-white">
+                <span className="text-2xl font-semibold">{formatDuration(Math.round(stats.lastSessionSec / 60) * 60)}</span>
+                <span className="text-white/55"> this session</span>
+              </p>
+              <p className="text-sm text-white/45">{formatDuration(minutes * 60)} today · {stats.sessions} session{stats.sessions === 1 ? "" : "s"}</p>
+            </>
+          ) : (
+            <p className="mt-1 text-white">
+              <span className="text-2xl font-semibold">{formatDuration(minutes * 60)}</span>
+              <span className="text-white/55"> focused today · {stats.sessions} session{stats.sessions === 1 ? "" : "s"}</span>
+            </p>
+          )}
           {others > 0 && <p className="text-sm text-white/45">with {others} other{others > 1 ? "s" : ""} in this room</p>}
         </div>
         <button onClick={onDismiss} className="text-white/40 hover:text-white/80 -mt-1" aria-label="Dismiss">✕</button>

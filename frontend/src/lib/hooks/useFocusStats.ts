@@ -7,29 +7,35 @@ import { ActivityLog, TimerState } from "../types";
 // Seconds count while this tab is open and the room is in a running focus phase.
 
 export interface FocusStats {
-  seconds: number;
-  sessions: number;
+  seconds: number;         // today, all rooms, this device
+  sessions: number;        // focus blocks finished today (only ones you were actually in)
+  lastSessionSec?: number; // how long you were present for the block that just finished
 }
+
+interface Stored { seconds: number; sessions: number; tickAt: number; lastKey: string | null }
+
+// A focus block only counts as "your" session if you were there for at least this long
+const MIN_SESSION_SEC = 60;
 
 const todayKey = () => {
   const d = new Date();
   return `pikoo:focus:${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 };
 
-function read(): FocusStats {
+function read(): Stored {
   try {
     const raw = localStorage.getItem(todayKey());
     if (raw) {
       const v = JSON.parse(raw);
-      return { seconds: Number(v.seconds) || 0, sessions: Number(v.sessions) || 0 };
+      return { seconds: Number(v.seconds) || 0, sessions: Number(v.sessions) || 0, tickAt: Number(v.tickAt) || 0, lastKey: typeof v.lastKey === "string" ? v.lastKey : null };
     }
   } catch {
     // Storage unavailable (private mode etc.): stats just start at zero
   }
-  return { seconds: 0, sessions: 0 };
+  return { seconds: 0, sessions: 0, tickAt: 0, lastKey: null };
 }
 
-function write(s: FocusStats) {
+function write(s: Stored) {
   try {
     localStorage.setItem(todayKey(), JSON.stringify(s));
   } catch {
@@ -46,20 +52,24 @@ const isFocusFinished = (log?: ActivityLog) =>
 export function useFocusCounter(focusing: boolean, finishedKey: string | null): FocusStats {
   const [stats, setStats] = useState<FocusStats>({ seconds: 0, sessions: 0 });
   const countedRef = useRef<string | null>(null);
+  const sessionSecRef = useRef(0); // seconds present in the current focus block
 
-  // Tick while focusing (setState only from timer callbacks)
+  // Tick while focusing (setState only from timer callbacks). The last tick time is
+  // shared through storage, so two open tabs don't count the same second twice.
   useEffect(() => {
-    const load = setTimeout(() => setStats(read()), 0);
+    const load = setTimeout(() => setStats((cur) => ({ ...cur, ...pick(read()) })), 0);
     if (!focusing) return () => clearTimeout(load);
     let last = Date.now();
     const id = setInterval(() => {
       const now = Date.now();
-      const delta = Math.min(5, Math.round((now - last) / 1000)); // cap gaps from sleeping laptops
-      last = now;
       const next = read();
+      const delta = Math.max(0, Math.min(5, (now - Math.max(last, next.tickAt)) / 1000)); // cap gaps from sleeping laptops
+      sessionSecRef.current += Math.min(5, (now - last) / 1000); // this tab's own clock
+      last = now;
       next.seconds += delta;
+      next.tickAt = now;
       write(next);
-      setStats(next);
+      setStats((cur) => ({ ...cur, ...pick(next) }));
     }, 1000);
     return () => { clearTimeout(load); clearInterval(id); };
   }, [focusing]);
@@ -67,15 +77,22 @@ export function useFocusCounter(focusing: boolean, finishedKey: string | null): 
   useEffect(() => {
     if (!finishedKey || countedRef.current === finishedKey) return;
     countedRef.current = finishedKey;
+    const present = Math.round(sessionSecRef.current);
+    sessionSecRef.current = 0;
     const next = read();
-    next.sessions += 1;
-    write(next);
-    const t = setTimeout(() => setStats(next), 0);
+    if (present >= MIN_SESSION_SEC && next.lastKey !== finishedKey) {
+      next.sessions += 1;
+      next.lastKey = finishedKey;
+      write(next);
+    }
+    const t = setTimeout(() => setStats({ ...pick(next), lastSessionSec: present }), 0);
     return () => clearTimeout(t);
   }, [finishedKey]);
 
   return stats;
 }
+
+const pick = (s: Stored) => ({ seconds: Math.floor(s.seconds), sessions: s.sessions });
 
 export function useFocusStats(timer: TimerState | undefined, history: ActivityLog[] | undefined) {
   const [mountedAt] = useState(() => Date.now());
