@@ -7,7 +7,7 @@ import { LIBRARY_ROOMS, librarySchedule } from "@/lib/library";
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 
 // Cards for the public silent rooms, with live phase and headcount
-export function LibraryList({ compact = false }: { compact?: boolean }) {
+export function LibraryList({ compact = false, strip = false }: { compact?: boolean; strip?: boolean }) {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [now, setNow] = useState<number | null>(null);
 
@@ -23,6 +23,36 @@ export function LibraryList({ compact = false }: { compact?: boolean }) {
     const first = setTimeout(() => setNow(Date.now()), 0);
     return () => { clearInterval(poll); clearInterval(tick); clearTimeout(first); };
   }, []);
+
+  if (strip) {
+    // One-line cards for the homepage hero
+    return (
+      <div className="grid gap-2 sm:grid-cols-3">
+        {LIBRARY_ROOMS.map((room) => {
+          const s = now ? librarySchedule(room, now) : null;
+          const count = counts[room.id];
+          return (
+            <Link
+              key={room.id}
+              href={`/library/${room.id}`}
+              className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-black/40 backdrop-blur-md border border-white/10 hover:border-white/30 hover:bg-white/[0.06] transition-colors text-left"
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-white truncate">{room.name}</span>
+                <span className={`block text-xs mt-0.5 ${s?.phase === "break" ? "text-emerald-300" : "text-rose-300"}`}>
+                  {s ? `${room.focusMin}/${room.breakMin} · ${s.phase === "focus" ? "Focus" : "Break"} ${Math.ceil(s.remainingSec / 60)}m left` : " "}
+                </span>
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-white/50 whitespace-nowrap">
+                {count !== undefined && count > 0 && <span className="w-1.5 h-1.5 rounded-full bg-green-400" />}
+                {count === undefined ? "" : count === 0 ? "Join →" : `${count} in`}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div className={`grid gap-3 ${compact ? "sm:grid-cols-3" : ""}`}>
