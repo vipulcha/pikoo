@@ -4,39 +4,26 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRoom } from "@/lib/api";
 import { RoomSettings, DEFAULT_SETTINGS } from "@/lib/types";
-import { NamePrompt, getSavedName, getUserId } from "@/components/NamePrompt";
+import { getUserId } from "@/components/NamePrompt";
 
 export function CreateRoomPanel() {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [settings, setSettings] = useState<RoomSettings>(DEFAULT_SETTINGS);
+  const [slug, setSlug] = useState("");
 
+  // The room asks for a name on arrival, so creating a room needs no prompt here
   const handleCreateRoom = async () => {
-    const savedName = getSavedName();
-    if (!savedName) {
-      setShowNamePrompt(true);
-      return;
-    }
-    proceedToCreateRoom();
-  };
-
-  const handleNameSubmit = () => {
-    setShowNamePrompt(false);
-    proceedToCreateRoom();
-  };
-
-  const proceedToCreateRoom = async () => {
     setIsCreating(true);
     setError(null);
     try {
-      const { roomId } = await createRoom(settings, getUserId());
+      const { roomId } = await createRoom(settings, getUserId(), slug.replace(/^-+|-+$/g, "") || undefined);
       router.push(`/r/${roomId}`);
     } catch (err) {
       console.error("Failed to create room:", err);
-      setError("Couldn't create a room. Please try again.");
+      setError(err instanceof Error ? err.message : "Couldn't create a room. Please try again.");
       setIsCreating(false);
     }
   };
@@ -116,6 +103,24 @@ export function CreateRoomPanel() {
                     className="flex-1 accent-purple-500"
                   />
                   <span className="w-10 sm:w-16 text-right font-mono text-sm whitespace-nowrap">{settings.longBreakEvery}x</span>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="room-slug" className="block text-xs sm:text-sm text-white/60 mb-1.5 sm:mb-2">
+                  Custom link <span className="text-white/35">(optional, great for a study group)</span>
+                </label>
+                <div className="flex items-center rounded-lg sm:rounded-xl border border-white/10 bg-white/5 focus-within:border-rose-500/50 px-3">
+                  <span className="text-sm text-white/35 font-mono">/r/</span>
+                  <input
+                    id="room-slug"
+                    value={slug}
+                    onChange={(e) => { setSlug(e.target.value.toLowerCase().replace(/[\s_]+/g, "-").replace(/[^a-z0-9-]/g, "").replace(/-{2,}/g, "-").slice(0, 32)); setError(null); }}
+                    placeholder="physics-group"
+                    className="flex-1 bg-transparent py-2 text-sm font-mono outline-none placeholder:text-white/20"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
                 </div>
               </div>
 
@@ -206,12 +211,6 @@ export function CreateRoomPanel() {
         </div>
       </div>
 
-      <NamePrompt
-        isOpen={showNamePrompt}
-        onSubmit={handleNameSubmit}
-        title="What's your name?"
-        subtitle="This will be shown to others in the room"
-      />
     </>
   );
 }
@@ -220,23 +219,8 @@ export function CreateRoomButton() {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showNamePrompt, setShowNamePrompt] = useState(false);
 
   const handleCreateRoom = async () => {
-    const savedName = getSavedName();
-    if (!savedName) {
-      setShowNamePrompt(true);
-      return;
-    }
-    proceedToCreateRoom();
-  };
-
-  const handleNameSubmit = () => {
-    setShowNamePrompt(false);
-    proceedToCreateRoom();
-  };
-
-  const proceedToCreateRoom = async () => {
     setIsCreating(true);
     setError(null);
     try {
@@ -259,13 +243,6 @@ export function CreateRoomButton() {
         {isCreating ? "Creating..." : "Create focus room"}
       </button>
       {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
-
-      <NamePrompt
-        isOpen={showNamePrompt}
-        onSubmit={handleNameSubmit}
-        title="What's your name?"
-        subtitle="This will be shown to others in the room"
-      />
     </>
   );
 }

@@ -27,7 +27,7 @@ ${FEATURE_LIST.map((f) => `- ${f}`).join("\n")}
 - Account required: no
 - Platforms: any modern web browser, desktop and mobile
 - Video/voice: none (timer, goals, focus sounds and text chat only)
-- Rooms: private to whoever has the link; kept for about 24 hours after last use
+- Rooms: private to whoever has the link; kept for 30 days after last use, with optional custom links like /r/your-group
 
 ## FAQ
 

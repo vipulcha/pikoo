@@ -7,13 +7,13 @@ import { nanoid } from "nanoid";
 import dotenv from "dotenv";
 
 import { initRedis, createRoom, getRoom, addSuggestion, getSuggestions } from "./store.js";
-import { track, readDailyStats } from "./stats.js";
+import { track, readDailyStats, readTotals } from "./stats.js";
 import { setupSocketHandlers } from "./socket.js";
 import { RoomSettings, DEFAULT_SETTINGS } from "./types.js";
 import { log } from "./logger.js";
 import { roomCreateLimiter, restGetLimiter, connectionLimiter, suggestionLimiter } from "./rate-limit.js";
 import { roomForUser } from "./views.js";
-import { sanitizeSettings, sanitizeSuggestion, sanitizeName, sanitizeRoomId, sanitizeUniqueId } from "./sanitize.js";
+import { sanitizeSettings, sanitizeSuggestion, sanitizeName, sanitizeRoomId, sanitizeUniqueId, sanitizeRoomSlug } from "./sanitize.js";
 
 dotenv.config();
 
@@ -146,8 +146,17 @@ app.post("/rooms", async (req, res) => {
     const rawSettings = req.body?.settings;
     const settings = rawSettings ? sanitizeSettings(rawSettings) : {};
     const creatorId = sanitizeUniqueId(req.body?.creatorId);
-    const roomId = nanoid(10);
-    const room = await createRoom(roomId, (settings || {}) as Partial<RoomSettings>, creatorId);
+    const slug = sanitizeRoomSlug(req.body?.slug);
+    if (slug && "error" in slug) {
+      res.status(400).json({ error: slug.error });
+      return;
+    }
+    const roomId = slug ? slug.slug : nanoid(10);
+    const room = await createRoom(roomId, (settings || {}) as Partial<RoomSettings>, creatorId, { exclusive: true });
+    if (!room) {
+      res.status(409).json({ error: slug ? "That link is already taken, try another" : "Please try again" });
+      return;
+    }
 
     metrics.roomsCreated++;
     track("rooms_created", creatorId || undefined);
@@ -213,7 +222,7 @@ app.get("/rooms/:roomId/preview", async (req, res) => {
 });
 
 // Public: number of distinct people currently in a room (shown on the landing page)
-app.get("/stats", (req, res) => {
+app.get("/stats", async (req, res) => {
   const ip = getIp(req);
 
   if (!restGetLimiter.consume(ip)) {
@@ -225,7 +234,11 @@ app.get("/stats", (req, res) => {
   for (const socket of io.of("/").sockets.values()) {
     if (socket.data.uniqueId) people.add(socket.data.uniqueId);
   }
-  res.json({ focusingNow: people.size });
+  try {
+    res.json({ focusingNow: people.size, totals: await readTotals() });
+  } catch {
+    res.json({ focusingNow: people.size });
+  }
 });
 
 app.post("/suggestions", async (req, res) => {

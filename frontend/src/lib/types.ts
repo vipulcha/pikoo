@@ -21,6 +21,7 @@ export interface TimerState {
   remainingSecWhenPaused: number;
   cycleCount: number;
   lastUpdatedAt: number;
+  addedSec?: number;                 // time added to the current phase with +5/+10/custom
 }
 
 export interface Participant {

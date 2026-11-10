@@ -48,9 +48,13 @@ export function InviteNudge({ roomId, onDismiss }: { roomId: string; onDismiss: 
 
 // Shown during the break after a focus session ran to the end
 export function SessionSummary({
-  roomId, stats, others, phase, onDismiss,
-}: { roomId: string; stats: FocusStats; others: number; phase: Phase; onDismiss: () => void }) {
+  roomId, stats, others, phase, onDismiss, canEnableNotifications, onEnableNotifications,
+}: {
+  roomId: string; stats: FocusStats; others: number; phase: Phase; onDismiss: () => void;
+  canEnableNotifications?: boolean; onEnableNotifications?: () => void;
+}) {
   const [sharing, setSharing] = useState(false);
+  const [notifAsked, setNotifAsked] = useState(false);
   const minutes = Math.max(1, Math.round(stats.seconds / 60));
   const imageUrl = `/api/recap?m=${minutes}&s=${stats.sessions}&w=${others}`;
   const text = `I focused ${formatDuration(minutes * 60)} today on Pikoo${others > 0 ? ` with ${others} other${others > 1 ? "s" : ""}` : ""}. Join me: ${roomUrl(roomId)}`;
@@ -98,6 +102,14 @@ export function SessionSummary({
           Invite a friend
         </a>
       </div>
+      {canEnableNotifications && !notifAsked && (
+        <button
+          onClick={() => { setNotifAsked(true); onEnableNotifications?.(); }}
+          className="mt-3 text-xs text-white/50 hover:text-white/80 underline underline-offset-2"
+        >
+          Get a notification when the break ends
+        </button>
+      )}
     </div>
   );
 }

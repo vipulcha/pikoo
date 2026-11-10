@@ -21,6 +21,7 @@ export interface TimerState {
   remainingSecWhenPaused: number;    // seconds remaining when paused
   cycleCount: number;                // completed focus cycles
   lastUpdatedAt: number;             // epoch_ms of last state change (for conflict resolution)
+  addedSec?: number;                 // time added to the current phase with +5/+10/custom
 }
 
 export interface Participant {

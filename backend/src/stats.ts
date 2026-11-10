@@ -14,7 +14,8 @@ export type StatEvent =
   | "focus_completed"
   | "time_added"
   | "messages_sent"
-  | "embed_views";
+  | "embed_views"
+  | "focus_minutes"; // person-minutes of completed focus (minutes x people present)
 
 const RETENTION_SEC = 60 * 60 * 24 * 90;
 const memory = new Map<string, Map<string, number>>();
@@ -22,18 +23,21 @@ const memoryUsers = new Map<string, Set<string>>();
 
 const day = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
 
-export function track(event: StatEvent, uniqueId?: string): void {
+const memoryTotals = new Map<string, number>();
+
+export function track(event: StatEvent, uniqueId?: string, amount = 1): void {
   const d = day();
   const redis = getRedis();
   if (redis) {
     const key = `stats:${d}`;
-    const pipe = redis.multi().hincrby(key, event, 1).expire(key, RETENTION_SEC);
+    const pipe = redis.multi().hincrby(key, event, amount).expire(key, RETENTION_SEC).hincrby("stats:total", event, amount);
     if (uniqueId) pipe.pfadd(`${key}:users`, uniqueId).expire(`${key}:users`, RETENTION_SEC);
     pipe.exec().catch((err) => log.store.warn("Stats write failed", { error: String(err) }));
     return;
   }
+  memoryTotals.set(event, (memoryTotals.get(event) ?? 0) + amount);
   const counts = memory.get(d) ?? new Map<string, number>();
-  counts.set(event, (counts.get(event) ?? 0) + 1);
+  counts.set(event, (counts.get(event) ?? 0) + amount);
   memory.set(d, counts);
   if (uniqueId) {
     const users = memoryUsers.get(d) ?? new Set<string>();
@@ -65,4 +69,20 @@ export async function readDailyStats(days: number): Promise<DailyStats[]> {
     }
   }
   return out;
+}
+
+// All-time totals since counting started (shown on the homepage).
+// The baseline carries over the "300+ sessions" figure the site already showed
+// before these counters existed; override with STATS_BASELINE_SESSIONS.
+const BASELINE_SESSIONS = Number(process.env.STATS_BASELINE_SESSIONS ?? 300) || 0;
+
+export async function readTotals(): Promise<{ focusSessions: number; focusHours: number; roomsCreated: number }> {
+  const redis = getRedis();
+  const raw: Record<string, string | number> = redis ? await redis.hgetall("stats:total") : Object.fromEntries(memoryTotals);
+  const n = (k: string) => Number(raw[k] ?? 0) || 0;
+  return {
+    focusSessions: n("focus_completed") + BASELINE_SESSIONS,
+    focusHours: Math.floor(n("focus_minutes") / 60),
+    roomsCreated: n("rooms_created"),
+  };
 }

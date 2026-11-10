@@ -8,7 +8,7 @@ function parseRoomId(input: string): string | null {
   const trimmed = input.trim();
   const match = trimmed.match(/\/r\/([A-Za-z0-9_-]+)/);
   const roomId = match ? match[1] : trimmed;
-  return /^[A-Za-z0-9_-]{1,21}$/.test(roomId) ? roomId : null;
+  return /^[A-Za-z0-9_-]{1,40}$/.test(roomId) ? roomId : null;
 }
 
 export function JoinRoomForm() {

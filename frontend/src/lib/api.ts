@@ -2,15 +2,17 @@ import { RoomSettings, RoomState } from "./types";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 
-export async function createRoom(settings?: Partial<RoomSettings>, creatorId?: string): Promise<{ roomId: string; room: RoomState }> {
+export async function createRoom(settings?: Partial<RoomSettings>, creatorId?: string, slug?: string): Promise<{ roomId: string; room: RoomState }> {
   const res = await fetch(`${BACKEND_URL}/rooms`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ settings, creatorId }),
+    body: JSON.stringify({ settings, creatorId, slug: slug || undefined }),
   });
-  
+
   if (!res.ok) {
-    throw new Error("Failed to create room");
+    // 400/409 carry a message meant for the user (e.g. "That link is already taken")
+    const data = await res.json().catch(() => null);
+    throw new Error(res.status === 400 || res.status === 409 ? data?.error || "Couldn't create a room" : "Couldn't create a room. Please try again.");
   }
   
   return res.json();
@@ -29,7 +31,13 @@ export async function submitSuggestion(suggestion: { text: string; name?: string
   }
 }
 
-export async function getStats(): Promise<{ focusingNow: number }> {
+export interface SiteTotals {
+  focusSessions: number;
+  focusHours: number;
+  roomsCreated: number;
+}
+
+export async function getStats(): Promise<{ focusingNow: number; totals?: SiteTotals }> {
   const res = await fetch(`${BACKEND_URL}/stats`);
 
   if (!res.ok) {
@@ -78,7 +86,7 @@ export interface RoomPreview {
 
 // Server-side only: used for link previews of room URLs. Never blocks a page for long.
 export async function getRoomPreview(roomId: string): Promise<RoomPreview | null> {
-  if (!/^[A-Za-z0-9_-]{1,21}$/.test(roomId)) return null;
+  if (!/^[A-Za-z0-9_-]{1,40}$/.test(roomId)) return null;
   try {
     const res = await fetch(`${BACKEND_URL}/rooms/${roomId}/preview`, {
       next: { revalidate: 30 },
