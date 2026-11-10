@@ -16,6 +16,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: absoluteUrl("/library"), lastModified: new Date(), changeFrequency: "daily", priority: 0.9 },
     ...LIBRARY_ROOMS.map((r) => ({ url: absoluteUrl(`/library/${r.id}`), lastModified: new Date(), changeFrequency: "daily" as const, priority: 0.7 })),
     ...TIMER_PRESETS.map((t) => ({ url: absoluteUrl(`/timer/${t.slug}`), lastModified: new Date("2026-11-10"), changeFrequency: "monthly" as const, priority: 0.7 })),
+    { url: absoluteUrl("/obs"), lastModified: new Date("2026-11-10"), changeFrequency: "monthly", priority: 0.8 },
     { url: absoluteUrl("/llms.txt"), lastModified: new Date(), changeFrequency: "monthly", priority: 0.3 },
   ];
 }

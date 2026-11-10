@@ -79,7 +79,7 @@ export default function EmbedTimer({ params }: { params: Promise<{ roomId: strin
           </div>
           {showLink && (
             <a
-              href={`/r/${roomId}`}
+              href={`/r/${roomId}?ref=${transparent ? "obs" : "embed"}`}
               target="_blank"
               rel="noopener"
               className="mt-2 text-[clamp(0.65rem,3vw,0.9rem)] text-white/50 hover:text-white/80"

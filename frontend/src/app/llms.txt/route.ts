@@ -42,6 +42,10 @@ ${HOME_FAQS.map((f) => `### ${f.q}\n${f.a}`).join("\n\n")}
 
 ${TIMER_PRESETS.map((t) => `- [${t.label}](${absoluteUrl(`/timer/${t.slug}`)})`).join("\n")}
 
+## For streamers
+
+- [OBS Pomodoro timer overlay](${absoluteUrl("/obs")}): free transparent timer for OBS/Streamlabs that viewers can join
+
 ## Guides
 
 ${GUIDES.map((g) => `- [${g.label}](${absoluteUrl(`/${g.slug}`)}): ${g.description}`).join("\n")}
