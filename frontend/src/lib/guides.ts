@@ -151,7 +151,7 @@ export const GUIDES: Guide[] = [
       { q: "Can I body double with a stranger?", a: "Pikoo rooms are private to whoever has the link. Share links only with people you're comfortable working with." },
       { q: "How long should a body doubling session be?", a: "Anything from 15 to 50 minutes works. Start short and increase the length once getting started feels easier." },
     ],
-    related: ["virtual-coworking", "online-study-room", "pomodoro-timer-with-friends"],
+    related: ["body-doubling-adhd", "virtual-coworking", "online-study-room"],
     updated: UPDATED,
   },
   {
@@ -284,6 +284,98 @@ export const GUIDES: Guide[] = [
     ],
     related: ["body-doubling", "focus-timer-for-remote-teams", "online-study-room"],
     updated: UPDATED,
+  },
+  {
+    slug: "body-doubling-adhd",
+    label: "Body doubling for ADHD",
+    title: "Body Doubling for ADHD – Free, No Camera, No Sign-Up",
+    description:
+      "Free online body doubling for ADHD without a camera or a stranger on video. Join a silent focus room or invite one person to a shared timer.",
+    h1: "Body doubling for ADHD, without a camera",
+    answer:
+      "Body doubling means doing a task while someone else is present, which many people with ADHD find makes it easier to start and keep going. You don't need a video call for it. On Pikoo you can join a silent public room where others are focusing on the same timer, or invite one person to a private room. It's free and needs no account.",
+    steps: [
+      { name: "Pick a room", text: "Join a silent public room at /library, or create a private room if you'd rather work with someone you know." },
+      { name: "Name one small task", text: "Write down a first step small enough to start right now, like \"open the document and write one heading\"." },
+      { name: "Start with the timer", text: "In a public room the timer is already running; just begin. In a private room, try a 15-minute session." },
+      { name: "Use the break", text: "When the break comes, stand up, get water, then come back for the next round." },
+    ],
+    sections: [
+      {
+        heading: "Why skip the camera?",
+        paragraphs: [
+          "Video body doubling works for some people, but being watched can add pressure, and setting up a call is one more thing to do before you can start. Many people find that simply knowing others are working at the same moment is enough.",
+          "Pikoo's public rooms show a live count of who's focusing and let you send a quick emoji, with no chat, names or camera. Private rooms add shared goals and text chat for when you want a little more accountability.",
+        ],
+      },
+      {
+        heading: "Tips that tend to help",
+        bullets: [
+          "Make the first task almost too small. Starting is usually the hardest part.",
+          "Use the daily group sessions: same time each day, so you don't have to decide when to start.",
+          "Put a timer you can see in front of you, not just on your phone.",
+          "If silence is distracting, add brown noise, rain or lo-fi from the music button.",
+          "Pair with one friend and make your goals public in the room, so you can both see them.",
+        ],
+      },
+      {
+        heading: "What body doubling isn't",
+        paragraphs: [
+          "It's a practical strategy, not a treatment. If ADHD is making daily life hard, talking to a qualified professional is worth doing alongside tools like this.",
+        ],
+      },
+    ],
+    faqs: [
+      { q: "Is there free body doubling online?", a: "Yes. Pikoo is free with no account. You can join a public silent room or create a private room and share the link." },
+      { q: "Can I body double without video?", a: "Yes. Pikoo has no camera or microphone. You see the shared timer and how many people are focusing, which is enough for many people." },
+      { q: "Do I have to talk to strangers?", a: "No. Public rooms have no chat or names. You can send a quick emoji if you want to, but you don't have to." },
+      { q: "How long should a session be?", a: "Short is fine. The Quick Sprints room uses 15-minute sessions, and private rooms can be set as short as 5 minutes." },
+    ],
+    related: ["body-doubling", "adhd-pomodoro-timer", "online-study-room"],
+    updated: "2026-11-10",
+  },
+  {
+    slug: "adhd-pomodoro-timer",
+    label: "Pomodoro timer for ADHD",
+    title: "Pomodoro Timer for ADHD – Shorter Sessions That Work",
+    description:
+      "How to adapt the Pomodoro Technique for ADHD: shorter focus blocks, visible timers and someone to work alongside. Free online timer, no sign-up.",
+    h1: "A Pomodoro timer that works with ADHD",
+    answer:
+      "The classic Pomodoro is 25 minutes of focus and a 5-minute break. With ADHD, many people do better with shorter blocks, such as 10 to 15 minutes, a timer they can see, and someone else working at the same time. Pikoo lets you set any length, add time when you're in the flow, and focus alongside others for free.",
+    steps: [
+      { name: "Choose a short block", text: "Start with 15 minutes of focus and 5 minutes of break, or 10/5 if starting feels hard." },
+      { name: "Write the first step", text: "Add one concrete goal to your task list so you know exactly what to do when the timer starts." },
+      { name: "Start right away", text: "Press start before you feel ready. The timer is short, so the commitment is small." },
+      { name: "Extend if you're in the flow", text: "If you're going well when time runs out, add 5 or 10 minutes instead of stopping." },
+    ],
+    sections: [
+      {
+        heading: "Why the standard 25 minutes can be too long",
+        paragraphs: [
+          "Twenty-five minutes can feel like a long time to hold attention on something boring, and that feeling alone can stop you from starting. A shorter block lowers the barrier. Once you're going, it's easy to add time.",
+          "The opposite also happens: when you hit hyperfocus, a rigid timer can break it. Being able to add time without resetting helps here.",
+        ],
+      },
+      {
+        heading: "Adjustments worth trying",
+        bullets: [
+          "Shorter focus blocks (10–15 minutes) to make starting easier.",
+          "A visible countdown on screen, not hidden in a phone.",
+          "Breaks that involve moving, like standing up or getting water, not scrolling.",
+          "A sound cue at the end of each block so you notice it.",
+          "Someone else on the same timer, either a friend or a public silent room.",
+        ],
+      },
+    ],
+    faqs: [
+      { q: "Is the Pomodoro Technique good for ADHD?", a: "Many people with ADHD find timed blocks helpful, especially when the blocks are shorter than the standard 25 minutes. It's worth experimenting to find a length that works for you." },
+      { q: "What's the best Pomodoro length for ADHD?", a: "There's no single answer. Many people start with 10 or 15 minutes and lengthen it once starting feels easier." },
+      { q: "Can I add time without restarting?", a: "Yes. In a Pikoo room you can add 5, 10 or any number of minutes to the current session." },
+      { q: "Is this timer free?", a: "Yes. Pikoo is free, runs in the browser and needs no account." },
+    ],
+    related: ["body-doubling-adhd", "pomodoro-technique", "body-doubling"],
+    updated: "2026-11-10",
   },
 ];
 

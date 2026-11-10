@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LibraryList } from "@/components/LibraryList";
+import { DailySessions } from "@/components/DailySessions";
 import { SiteFooter } from "@/components/SiteFooter";
 import { absoluteUrl } from "@/lib/site";
 
@@ -30,6 +31,9 @@ export default function LibraryPage() {
         </p>
         <div className="mt-10">
           <LibraryList />
+        </div>
+        <div className="mt-8">
+          <DailySessions />
         </div>
         <section className="mt-16 grid gap-8 sm:grid-cols-2 text-sm text-white/60 leading-relaxed">
           <div>

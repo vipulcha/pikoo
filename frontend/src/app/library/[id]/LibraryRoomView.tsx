@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import { AudioPlayer } from "@/components/AudioPlayer";
+import { NextSessionLine } from "@/components/DailySessions";
 import { SessionSummary } from "@/components/GrowthCards";
 import { getUserId } from "@/components/NamePrompt";
 import { LibraryRoom, LIBRARY_REACTIONS, librarySchedule } from "@/lib/library";
@@ -13,6 +14,8 @@ import { notifyFocusEnd, notifyBreakEnd, getNotificationPermission, requestNotif
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+const INTRO_KEY = "pikoo:library-intro-seen";
 
 interface Floating { id: number; emoji: string; left: number }
 
@@ -24,7 +27,21 @@ export function LibraryRoomView({ room }: { room: LibraryRoom }) {
   const [finishedKey, setFinishedKey] = useState<string | null>(null);
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showIntro, setShowIntro] = useState(false);
   const prevPhase = useRef<"focus" | "break" | null>(null);
+
+  // First visit: a short "how this room works" card
+  useEffect(() => {
+    let seen = true;
+    try { seen = localStorage.getItem(INTRO_KEY) === "1"; } catch { /* storage blocked */ }
+    if (seen) return;
+    const t = setTimeout(() => setShowIntro(true), 400);
+    return () => clearTimeout(t);
+  }, []);
+  const closeIntro = () => {
+    setShowIntro(false);
+    try { localStorage.setItem(INTRO_KEY, "1"); } catch { /* storage blocked */ }
+  };
 
   // Presence + reactions
   useEffect(() => {
@@ -107,6 +124,7 @@ export function LibraryRoomView({ room }: { room: LibraryRoom }) {
         <p className="mt-4 text-sm text-white/45 text-center max-w-sm">
           Silent room · {room.focusMin} min focus, {room.breakMin} min break · the timer runs on a fixed schedule for everyone
         </p>
+        <NextSessionLine roomId={room.id} className="mt-2 text-center" />
 
         <div className="mt-10 flex items-center gap-2" aria-label="Send a reaction">
           {LIBRARY_REACTIONS.map((e) => (
@@ -119,6 +137,22 @@ export function LibraryRoomView({ room }: { room: LibraryRoom }) {
           <p className="mt-6 text-xs text-white/40">You&apos;ve focused {Math.floor(stats.seconds / 60)} min today</p>
         )}
       </main>
+
+      {showIntro && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeIntro} />
+          <div className="relative w-full max-w-sm rounded-2xl bg-neutral-900/95 border border-white/10 p-6 shadow-2xl animate-fade-in">
+            <h2 id="intro-title" className="text-lg font-semibold">How this room works</h2>
+            <ul className="mt-4 space-y-3 text-sm text-white/75">
+              <li className="flex gap-3"><span aria-hidden>🤫</span><span>It&apos;s silent: no chat, no names, no camera. Just you and everyone else focusing.</span></li>
+              <li className="flex gap-3"><span aria-hidden>⏱️</span><span>The timer is the same for everyone and never stops. Join mid-session and just start working.</span></li>
+              <li className="flex gap-3"><span aria-hidden>👋</span><span>Tap an emoji to say hi or cheer people on. Everyone sees it float up.</span></li>
+              <li className="flex gap-3"><span aria-hidden>🎧</span><span>Want sound? Turn on lo-fi, rain or café noise from the music button at the top.</span></li>
+            </ul>
+            <button onClick={closeIntro} autoFocus className="mt-6 w-full h-11 rounded-full bg-rose-500 hover:bg-rose-400 font-medium">Start focusing</button>
+          </div>
+        </div>
+      )}
 
       {/* Floating reactions from everyone in the room */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 z-20" aria-hidden>
