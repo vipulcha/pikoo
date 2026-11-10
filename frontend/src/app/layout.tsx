@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import { Sora } from "next/font/google";
 import "./globals.css";
+import { SITE_URL, SITE_NAME, SITE_TITLE, SITE_DESCRIPTION } from "@/lib/site";
 
-const SITE_URL = "https://pikoo.live";
+// Self-hosted by Next (no render-blocking Google Fonts stylesheet)
+const sora = Sora({ subsets: ["latin"], display: "swap" });
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -13,45 +16,55 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Pikoo - Focus together. Instantly.",
-    template: "%s | Pikoo",
+    default: SITE_TITLE,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    "Shared Pomodoro rooms with session goals, lo-fi music, and real-time presence. Built for studying, body doubling, and remote work.",
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  category: "productivity",
   keywords: [
-    "pomodoro",
-    "timer",
-    "team",
-    "productivity",
-    "focus",
-    "remote work",
-    "study together",
+    "pomodoro timer",
+    "shared pomodoro timer",
+    "pomodoro timer with friends",
+    "online study room",
+    "study with me",
+    "study together online",
     "body doubling",
-    "shared timer",
+    "virtual coworking",
+    "focus timer",
+    "group study timer",
     "focus room",
   ],
-  authors: [{ name: "Pikoo" }],
+  authors: [{ name: SITE_NAME, url: SITE_URL }],
+  creator: SITE_NAME,
   robots: {
     index: true,
     follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 },
   },
   openGraph: {
     type: "website",
     locale: "en_US",
     url: SITE_URL,
-    siteName: "Pikoo",
-    title: "Pikoo - Focus together. Instantly.",
-    description:
-      "Shared Pomodoro rooms with session goals, lo-fi music, and real-time presence. Built for studying, body doubling, and remote work.",
+    siteName: SITE_NAME,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
   },
   twitter: {
     card: "summary_large_image",
-    title: "Pikoo - Focus together. Instantly.",
-    description:
-      "Shared Pomodoro rooms with session goals, lo-fi music, and real-time presence.",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
   },
   alternates: {
-    canonical: SITE_URL,
+    canonical: "/",
+    types: { "text/plain": "/llms.txt" },
+  },
+  // Set these in Vercel after verifying the site in each search console
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+    other: process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION
+      ? { "msvalidate.01": process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION }
+      : undefined,
   },
 };
 
@@ -62,18 +75,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link 
-          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100..800&family=Sora:wght@100..800&display=swap" 
-          rel="stylesheet" 
-        />
-      </head>
-      <body 
-        className="antialiased font-sans"
-        style={{ fontFamily: "'Sora', system-ui, sans-serif" }}
-      >
+      <body className={`${sora.className} antialiased`}>
         {children}
       </body>
     </html>

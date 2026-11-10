@@ -8,6 +8,8 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
+  // Private rooms have no canonical page of their own
+  alternates: { canonical: null },
 };
 
 export default function RoomLayout({
