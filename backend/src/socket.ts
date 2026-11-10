@@ -31,6 +31,7 @@ import {
 } from "./store.js";
 import { ChatMessage, UserTodos } from "./types.js";
 import { track } from "./stats.js";
+import { setupLibraryHandlers } from "./library.js";
 import { log } from "./logger.js";
 import { withRoomLock } from "./room-lock.js";
 import { roomForUser, todosForUser } from "./views.js";
@@ -224,6 +225,9 @@ export function setupSocketHandlers(io: Server): void {
     let currentRoomId: string | null = null;
     let currentUserName: string = "Anonymous";
     let currentUniqueId: string = "";
+
+    // Silent library (public, schedule-driven rooms): see library.ts
+    setupLibraryHandlers(io, socket, rateLimited);
 
     // Clock sync: clients measure their offset from server time (see frontend lib/clock.ts)
     socket.on("time_sync", (ack: unknown) => {

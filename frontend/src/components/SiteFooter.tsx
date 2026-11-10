@@ -8,6 +8,7 @@ export function SiteFooter({ children }: { children?: React.ReactNode }) {
     <footer className="relative z-10 border-t border-white/5 px-6 py-10">
       <div className="max-w-4xl mx-auto">
         <nav aria-label="Guides" className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+          <Link href="/library" className="text-white/45 hover:text-white/80 transition-colors">Live silent study rooms</Link>
           {GUIDES.map((g) => (
             <Link key={g.slug} href={`/${g.slug}`} className="text-white/45 hover:text-white/80 transition-colors">
               {g.label}

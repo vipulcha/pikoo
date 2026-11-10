@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { CreateRoomPanel, CreateRoomButton } from "@/components/CreateRoomPanel";
 import { LiveCount } from "@/components/LiveCount";
 import { GlobalStats } from "@/components/GlobalStats";
+import { LibraryList } from "@/components/LibraryList";
 import { JoinRoomForm } from "@/components/JoinRoomForm";
 import { SuggestionButton } from "@/components/SuggestionButton";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -177,6 +179,10 @@ export default function Home() {
             <div className="mt-4">
               <JoinRoomForm />
             </div>
+            <Link href="/library" className="mt-5 inline-flex items-center gap-2 text-sm text-white/55 hover:text-white transition-colors">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              Or drop into a public silent room →
+            </Link>
           </div>
 
           {/* How it works (right) */}
@@ -207,6 +213,16 @@ export default function Home() {
 
       {/* Below-the-fold sections */}
       <div className="relative z-10 border-t border-white/5 bg-black/60 backdrop-blur-sm">
+
+        {/* Public silent rooms */}
+        <section id="silent-rooms" className="pt-20 sm:pt-24 px-6">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-center mb-3">Focus with people right now</h2>
+            <p className="text-white/50 text-center mb-10">Public silent rooms: one shared timer on a fixed schedule, no chat, no names.</p>
+            <LibraryList compact />
+            <p className="mt-6 text-center text-sm"><Link href="/library" className="text-white/50 hover:text-white">All silent rooms →</Link></p>
+          </div>
+        </section>
 
         {/* Features */}
         <section id="features" className="py-20 sm:py-28 px-6 scroll-mt-8">

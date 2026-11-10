@@ -583,7 +583,7 @@ export default function RoomPage({ params }: RoomPageProps) {
             )}
             {finishedId && finishedId !== dismissedSummaryId && timer.phase !== "focus" ? (
               <SessionSummary
-                roomId={roomId}
+                shareUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/r/${roomId}`}
                 stats={focusStats}
                 others={Math.max(0, new Set(participants.map((p) => p.uniqueId)).size - 1)}
                 phase={timer.phase}

@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { GUIDES } from "@/lib/guides";
+import { LIBRARY_ROOMS } from "@/lib/library";
 import { absoluteUrl } from "@/lib/site";
 
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -11,6 +12,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "monthly" as const,
       priority: 0.8,
     })),
+    { url: absoluteUrl("/library"), lastModified: new Date(), changeFrequency: "daily", priority: 0.9 },
+    ...LIBRARY_ROOMS.map((r) => ({ url: absoluteUrl(`/library/${r.id}`), lastModified: new Date(), changeFrequency: "daily" as const, priority: 0.7 })),
     { url: absoluteUrl("/llms.txt"), lastModified: new Date(), changeFrequency: "monthly", priority: 0.3 },
   ];
 }

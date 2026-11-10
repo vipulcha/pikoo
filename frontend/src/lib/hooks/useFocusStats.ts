@@ -41,14 +41,13 @@ function write(s: FocusStats) {
 const isFocusFinished = (log?: ActivityLog) =>
   !!log && log.type === "timer_skip" && log.userId === "system" && log.details === "Focus finished";
 
-export function useFocusStats(timer: TimerState | undefined, history: ActivityLog[] | undefined) {
+// Counts focus seconds while `focusing` is true, and one session each time
+// `finishedKey` changes to a new non-null value (a focus phase that ran out).
+export function useFocusCounter(focusing: boolean, finishedKey: string | null): FocusStats {
   const [stats, setStats] = useState<FocusStats>({ seconds: 0, sessions: 0 });
-  const [mountedAt] = useState(() => Date.now());
   const countedRef = useRef<string | null>(null);
 
-  const focusing = !!timer?.running && timer.phase === "focus";
-
-  // Tick while focusing (setState only from the interval callback)
+  // Tick while focusing (setState only from timer callbacks)
   useEffect(() => {
     const load = setTimeout(() => setStats(read()), 0);
     if (!focusing) return () => clearTimeout(load);
@@ -65,20 +64,25 @@ export function useFocusStats(timer: TimerState | undefined, history: ActivityLo
     return () => { clearTimeout(load); clearInterval(id); };
   }, [focusing]);
 
-  // A focus session that finished while this tab was open: count it once
-  const latest = history?.[0];
-  const justFinished = isFocusFinished(latest) && latest!.timestamp >= mountedAt;
   useEffect(() => {
-    if (!justFinished || countedRef.current === latest!.id) return;
-    countedRef.current = latest!.id;
+    if (!finishedKey || countedRef.current === finishedKey) return;
+    countedRef.current = finishedKey;
     const next = read();
     next.sessions += 1;
     write(next);
     const t = setTimeout(() => setStats(next), 0);
     return () => clearTimeout(t);
-  }, [justFinished, latest]);
+  }, [finishedKey]);
 
-  return { stats, finishedId: justFinished ? latest!.id : null };
+  return stats;
+}
+
+export function useFocusStats(timer: TimerState | undefined, history: ActivityLog[] | undefined) {
+  const [mountedAt] = useState(() => Date.now());
+  const latest = history?.[0];
+  const finishedId = isFocusFinished(latest) && latest!.timestamp >= mountedAt ? latest!.id : null;
+  const stats = useFocusCounter(!!timer?.running && timer.phase === "focus", finishedId);
+  return { stats, finishedId };
 }
 
 export function formatDuration(sec: number): string {

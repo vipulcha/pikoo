@@ -15,6 +15,7 @@ export type StatEvent =
   | "time_added"
   | "messages_sent"
   | "embed_views"
+  | "library_joins"
   | "focus_minutes"; // person-minutes of completed focus (minutes x people present)
 
 const RETENTION_SEC = 60 * 60 * 24 * 90;
