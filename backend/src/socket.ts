@@ -30,6 +30,7 @@ import {
   addActivity,
 } from "./store.js";
 import { ChatMessage, UserTodos } from "./types.js";
+import { track } from "./stats.js";
 import { log } from "./logger.js";
 import { withRoomLock } from "./room-lock.js";
 import { roomForUser, todosForUser } from "./views.js";
@@ -314,10 +315,42 @@ export function setupSocketHandlers(io: Server): void {
           io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants: room?.participants || [] });
         }
 
+        track("room_joins", uniqueId);
         log.socket.info("User joined room", { roomId, name, socketId: socket.id.slice(-6) });
       } catch (err) {
         log.socket.error("Join room error", { error: String(err), roomId });
         socket.emit(SOCKET_EVENTS.ERROR, { message: "Failed to join room" });
+      }
+    });
+
+    // ========================================
+    // Spectate (view-only: stream overlay / Notion embed)
+    // ========================================
+    // Joins the room's broadcast channel without becoming a participant, so the
+    // overlay isn't counted as a person and can't control anything. Every control
+    // handler requires currentRoomId, which a spectator never sets.
+    on(SOCKET_EVENTS.SPECTATE_ROOM, async (payload: { roomId?: unknown }) => {
+      if (rateLimited(socket)) return;
+      if (currentRoomId) return;
+
+      const roomId = sanitizeRoomId(payload?.roomId);
+      if (!roomId) {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: "Invalid room ID" });
+        return;
+      }
+
+      try {
+        const room = await getRoom(roomId);
+        if (!room) {
+          socket.emit(SOCKET_EVENTS.ERROR, { message: "Room not found" });
+          return;
+        }
+        socket.join(roomId);
+        socket.data.spectator = true;
+        socket.emit(SOCKET_EVENTS.ROOM_STATE, roomForUser(room, undefined));
+        track("embed_views");
+      } catch (err) {
+        log.socket.error("Spectate error", { error: String(err), roomId });
       }
     });
 
@@ -600,6 +633,7 @@ export function setupSocketHandlers(io: Server): void {
         };
 
         const savedMessage = await addMessage(currentRoomId, message);
+        if (savedMessage) track("messages_sent");
         if (savedMessage) {
           io.to(currentRoomId).emit(SOCKET_EVENTS.NEW_MESSAGE, { message: savedMessage });
         }

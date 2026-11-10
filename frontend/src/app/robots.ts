@@ -12,9 +12,10 @@ const AI_CRAWLERS = [
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
-      // Rooms are private and short-lived, so keep them out of every index
-      { userAgent: "*", allow: "/", disallow: "/r/" },
-      { userAgent: AI_CRAWLERS, allow: "/", disallow: "/r/" },
+      // Rooms and embeds are crawlable so chat apps can build link previews; they
+      // stay out of search indexes via noindex (meta tag + X-Robots-Tag header)
+      { userAgent: "*", allow: "/" },
+      { userAgent: AI_CRAWLERS, allow: "/" },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,
   };

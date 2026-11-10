@@ -19,6 +19,7 @@ import {
   ActivityType,
 } from "./types.js";
 import { log } from "./logger.js";
+import { track } from "./stats.js";
 
 const MAX_MESSAGES = 100; // Keep last 100 messages per room
 const MAX_HISTORY = 50; // Keep last 50 activity logs per room
@@ -29,6 +30,10 @@ const ROOM_TTL = 60 * 60 * 24; // 24 hours
 const memoryStore = new Map<string, RoomState>();
 
 let redis: Redis | null = null;
+
+export function getRedis(): Redis | null {
+  return redis;
+}
 
 export function initRedis(): Redis | null {
   const redisUrl = process.env.REDIS_URL;
@@ -267,6 +272,7 @@ export async function addTime(
   const mins = Math.floor(added / 60);
   const secs = added % 60;
   const label = secs === 0 ? `${mins} min` : mins === 0 ? `${secs} sec` : `${mins}m ${secs}s`;
+  track("time_added");
   pushActivity(room, "timer_add_time", userId, userName, `added ${label} (${room.timer.phase})`, now);
 
   await saveRoom(room);
@@ -322,6 +328,8 @@ export async function skipPhase(
     ? `${room.timer.phase === "focus" ? "Focus" : "Break"} finished`
     : `Skipped ${room.timer.phase} -> ${nextPhase}`;
   pushActivity(room, "timer_skip", userId, userName, details, actionTime);
+  // A guarded skip is a phase that ran out on its own, so this counts real completed focus sessions
+  if (guard && room.timer.phase === "focus") track("focus_completed");
 
 
   const duration = getPhaseDuration(nextPhase, room.settings);

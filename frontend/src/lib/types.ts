@@ -94,6 +94,7 @@ export const SOCKET_EVENTS = {
   TIMER_RESET: "timer_reset",
   TIMER_SKIP: "timer_skip",
   TIMER_ADD_TIME: "timer_add_time",
+  SPECTATE_ROOM: "spectate_room",   // view-only connection (stream overlay / Notion embed)
   UPDATE_SETTINGS: "update_settings",
   SEND_MESSAGE: "send_message",
 

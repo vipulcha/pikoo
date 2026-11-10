@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Sora } from "next/font/google";
 import "./globals.css";
+import { SiteAnalytics } from "@/components/SiteAnalytics";
 import { SITE_URL, SITE_NAME, SITE_TITLE, SITE_DESCRIPTION } from "@/lib/site";
 
 // Self-hosted by Next (no render-blocking Google Fonts stylesheet)
@@ -77,6 +78,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${sora.className} antialiased`}>
         {children}
+        <SiteAnalytics />
       </body>
     </html>
   );
