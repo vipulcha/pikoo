@@ -1,5 +1,6 @@
 "use client";
 
+import { trace } from "@/lib/trace";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
@@ -39,6 +40,7 @@ export function LibraryRoomView({ room }: { room: LibraryRoom }) {
     return () => clearTimeout(t);
   }, []);
   const closeIntro = () => {
+    trace("intro", { action: "closed", room: room.id });
     setShowIntro(false);
     try { localStorage.setItem(INTRO_KEY, "1"); } catch { /* storage blocked */ }
   };

@@ -7,7 +7,7 @@ import { nanoid } from "nanoid";
 import dotenv from "dotenv";
 
 import { initRedis, createRoom, getRoom, addSuggestion, getSuggestions } from "./store.js";
-import { track, readDailyStats, readTotals } from "./stats.js";
+import { track, readDailyStats, readTotals, logVisitor } from "./stats.js";
 import { LIBRARY_ROOMS, libraryCount } from "./library.js";
 import { setupSocketHandlers } from "./socket.js";
 import { RoomSettings, DEFAULT_SETTINGS } from "./types.js";
@@ -162,6 +162,7 @@ app.post("/rooms", async (req, res) => {
     metrics.roomsCreated++;
     track("rooms_created", creatorId || undefined);
     log.server.info("Room created", { roomId });
+    logVisitor(creatorId || undefined, `🏠 created room ${roomId}${slug ? " (custom link)" : ""} ${JSON.stringify(settings ?? {}).slice(0, 120)}`);
     res.status(201).json({ roomId, room });
   } catch (err) {
     log.server.error("Failed to create room", { error: String(err) });
@@ -253,6 +254,34 @@ app.get("/stats", async (req, res) => {
   } catch {
     res.json({ focusingNow: people.size });
   }
+});
+
+// Visitor trace from the browser: page views and clicks that never reach a socket.
+// Only known event names, short string props; the text/plain body avoids a CORS
+// preflight so the browser can fire it on page exit.
+const TRACE_EVENTS: Record<string, string> = {
+  page: "👀 opened", leave_page: "👋 left", click: "🖱️ clicked", music: "🎧 picked music",
+  share: "📤 shared", join_form: "🔗 tried to join with a link", create_room: "🏠 tried to create a room",
+  solo_timer: "⏱️ solo timer", obs: "🎥 OBS builder", intro: "📖 silent-room intro", hint: "💡 music hint", error: "⚠️ saw an error",
+};
+const traceLimiter = new Map<string, { n: number; at: number }>();
+
+app.post("/events", express.text({ type: "*/*", limit: "2kb" }), (req, res) => {
+  res.status(204).end();
+  const ip = getIp(req);
+  const now = Date.now();
+  const b = traceLimiter.get(ip);
+  if (b && now - b.at < 60_000) { if (++b.n > 60) return; } else traceLimiter.set(ip, { n: 1, at: now });
+  if (traceLimiter.size > 5000) traceLimiter.clear();
+  let body: { uid?: unknown; event?: unknown; props?: unknown };
+  try { body = typeof req.body === "string" ? JSON.parse(req.body) : req.body; } catch { return; }
+  const label = typeof body?.event === "string" ? TRACE_EVENTS[body.event] : undefined;
+  const uid = typeof body?.uid === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(body.uid) ? body.uid : undefined;
+  if (!label || !uid) return;
+  const props = body.props && typeof body.props === "object" ? Object.entries(body.props as Record<string, unknown>).slice(0, 6)
+    .filter(([k, v]) => /^[a-z_]{1,20}$/.test(k) && (typeof v === "string" || typeof v === "number") && String(v).length > 0)
+    .map(([k, v]) => `${k}=${String(v).replace(/[\r\n]/g, " ").slice(0, 80)}`).join(" ") : "";
+  logVisitor(uid, `${label}${props ? ` ${props}` : ""}`);
 });
 
 app.post("/suggestions", async (req, res) => {

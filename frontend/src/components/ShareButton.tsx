@@ -1,5 +1,6 @@
 "use client";
 
+import { trace } from "@/lib/trace";
 import { useEffect, useRef, useState } from "react";
 
 interface ShareButtonProps {
@@ -25,6 +26,7 @@ export function ShareButton({ roomId }: ShareButtonProps) {
   }, [open]);
 
   const copy = async (key: string, text: string) => {
+    trace("share", { how: key, room: roomId });
     try {
       await navigator.clipboard.writeText(text);
       setCopied(key);
@@ -42,7 +44,7 @@ export function ShareButton({ roomId }: ShareButtonProps) {
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => { if (!open) trace("click", { what: "share_menu", room: roomId }); setOpen((o) => !o); }}
         aria-expanded={open}
         aria-haspopup="menu"
         className={`

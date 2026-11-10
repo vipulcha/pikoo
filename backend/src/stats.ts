@@ -111,9 +111,30 @@ export async function isNewVisitor(uniqueId: string | undefined): Promise<boolea
   }
 }
 
-// One easy-to-spot line per join, e.g. "👋 NEW person joined room physics-group as Riya"
+// ---- Visitor trace -------------------------------------------------------
+// Every line about one browser starts with the same short tag, e.g. [v3f9a2c]
+// or [v3f9a2c Riya], so a visitor's whole visit can be read top to bottom in
+// the logs (search the tag). The tag is a hash of the random browser id: no
+// names beyond what people type into rooms, no IPs.
+export function visitorTag(uniqueId: string | undefined, name?: string): string {
+  const tag = uniqueId ? "v" + createHash("sha256").update(uniqueId).digest("hex").slice(0, 6) : "v??????";
+  return `[${tag}${name && name !== "Anonymous" ? ` ${name}` : ""}]`;
+}
+
+export function logVisitor(uniqueId: string | undefined, msg: string, name?: string): void {
+  log.visitors.info(`${visitorTag(uniqueId, name)} ${msg}`);
+}
+
+export function formatStay(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m}m ${s % 60}s` : `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+// One easy-to-spot line per join, e.g. "[v3f9a2c Riya] 👋 NEW person joined room physics-group"
 export async function logJoin(where: string, uniqueId: string | undefined, name?: string): Promise<void> {
   const isNew = await isNewVisitor(uniqueId);
   const who = isNew === true ? "👋 NEW person" : isNew === false ? "↩️ Returning person" : "Someone";
-  log.visitors.info(`${who} joined ${where}${name && name !== "Anonymous" ? ` as ${name}` : ""}`);
+  logVisitor(uniqueId, `${who} joined ${where}`, name);
 }

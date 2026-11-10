@@ -1,5 +1,6 @@
 "use client";
 
+import { trace } from "@/lib/trace";
 import { useEffect, useState } from "react";
 import { createRoom } from "@/lib/api";
 import { getUserId } from "@/components/NamePrompt";
@@ -38,6 +39,7 @@ export function ObsBuilder() {
     setError(null);
     try {
       const p = PRESETS[preset];
+      trace("obs", { action: "create_overlay", preset: `${p.focus}/${p.brk}` });
       const { roomId: id } = await createRoom({ focusSec: p.focus * 60, breakSec: p.brk * 60, mode: "host" }, getUserId(), slug.trim() || undefined);
       setRoomId(id);
       try { localStorage.setItem(STORE_KEY, id); } catch { /* storage blocked */ }
