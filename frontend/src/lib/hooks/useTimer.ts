@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Socket } from "socket.io-client";
-import { RoomState, RoomSettings, TimerState, Participant, ChatMessage, UserTodos, SOCKET_EVENTS, MAX_ADD_TIME_SEC, MAX_REMAINING_SEC } from "../types";
+import { RoomState, RoomSettings, RoomSchedule, TimerState, Participant, ChatMessage, UserTodos, SOCKET_EVENTS, MAX_ADD_TIME_SEC, MAX_REMAINING_SEC } from "../types";
 import { connectSocket, disconnectSocket, getSocket } from "../socket";
 import { notifyRoomJoin } from "../audio";
 import { serverNow, syncClock } from "../clock";
@@ -21,6 +21,7 @@ interface UseTimerReturn {
     reset: () => void;
     skip: (source?: "auto" | "manual") => void;
     addTime: (seconds: number) => void;
+    updateSchedule: (schedule: RoomSchedule | null) => void;
     updateSettings: (settings: Partial<RoomSettings>) => void;
     sendMessage: (text: string) => void;
     // Todo actions
@@ -522,6 +523,11 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       });
 
       socketRef.current?.emit(SOCKET_EVENTS.TIMER_ADD_TIME, { seconds: secs });
+    },
+
+    updateSchedule: (schedule: RoomSchedule | null) => {
+      setRoom((prev) => (prev ? { ...prev, schedule } : prev));
+      socketRef.current?.emit(SOCKET_EVENTS.UPDATE_SCHEDULE, schedule);
     },
 
     updateSettings: (settings: Partial<RoomSettings>) => {

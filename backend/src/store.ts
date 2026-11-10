@@ -17,6 +17,7 @@ import {
   Phase,
   ActivityLog,
   ActivityType,
+  RoomSchedule,
 } from "./types.js";
 import { log } from "./logger.js";
 import { track } from "./stats.js";
@@ -292,6 +293,39 @@ export async function addTime(
   return room.timer;
 }
 
+// ISO week key like "2026-W46" (UTC)
+export function isoWeekKey(t = Date.now()): string {
+  const d = new Date(t);
+  const day = (d.getUTCDay() + 6) % 7; // Monday = 0
+  d.setUTCDate(d.getUTCDate() - day + 3); // Thursday of this week decides the year
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round(((d.getTime() - firstThursday.getTime()) / 86_400_000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+// Everyone in the room when a focus session runs out gets its full length
+// (including time added mid-session) on this week's leaderboard
+function creditWeekly(room: RoomState, members: Map<string, string>, focusSec: number) {
+  const key = isoWeekKey();
+  const weekly = room.weekly ?? {};
+  const week = weekly[key] ?? {};
+  for (const [uid, name] of members) {
+    const e = week[uid] ?? { name, sec: 0, sessions: 0 };
+    week[uid] = { name, sec: e.sec + focusSec, sessions: e.sessions + 1 };
+  }
+  weekly[key] = week;
+  // keep this week and last week only
+  room.weekly = Object.fromEntries(Object.entries(weekly).sort(([a], [b]) => (a < b ? 1 : -1)).slice(0, 2));
+}
+
+export async function setSchedule(roomId: string, schedule: RoomSchedule | null): Promise<RoomState | null> {
+  const room = await getRoom(roomId);
+  if (!room) return null;
+  room.schedule = schedule;
+  await saveRoom(room);
+  return room;
+}
+
 export async function skipPhase(
   roomId: string,
   userId: string,
@@ -344,9 +378,11 @@ export async function skipPhase(
   // A guarded skip is a phase that ran out on its own, so this counts real completed focus sessions
   if (guard && room.timer.phase === "focus") {
     track("focus_completed");
-    const people = new Set(room.participants.map((p) => p.uniqueId)).size;
-    const minutes = Math.round((room.settings.focusSec + (room.timer.addedSec ?? 0)) / 60);
-    if (people > 0 && minutes > 0) track("focus_minutes", undefined, minutes * people);
+    const focusSec = room.settings.focusSec + (room.timer.addedSec ?? 0);
+    const members = new Map(room.participants.map((p) => [p.uniqueId, p.name]));
+    const minutes = Math.round(focusSec / 60);
+    if (members.size > 0 && minutes > 0) track("focus_minutes", undefined, minutes * members.size);
+    creditWeekly(room, members, focusSec);
   }
 
 

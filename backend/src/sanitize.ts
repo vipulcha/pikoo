@@ -102,3 +102,23 @@ export function sanitizeRoomSlug(raw: unknown): { slug: string } | { error: stri
   if (RESERVED_SLUGS.has(slug)) return { error: "That link is reserved, try another" };
   return { slug };
 }
+
+// Session schedule: start within a year, 15-480 minutes, a known repeat rule and
+// a plausible IANA time zone name. Returns null to clear, undefined if invalid.
+export function sanitizeSchedule(raw: unknown):
+  | { startsAt: number; repeat: "none" | "daily" | "weekdays" | "weekly"; durationMin: number; tz: string }
+  | null
+  | undefined {
+  if (raw === null) return null;
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  const startsAt = Number(r.startsAt);
+  const durationMin = Math.round(Number(r.durationMin));
+  const repeat = r.repeat;
+  const tz = typeof r.tz === "string" && /^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+){0,2}$/.test(r.tz) && r.tz.length <= 64 ? r.tz : "UTC";
+  const now = Date.now();
+  if (!Number.isFinite(startsAt) || startsAt < now - 7 * 86_400_000 || startsAt > now + 366 * 86_400_000) return undefined;
+  if (!Number.isFinite(durationMin) || durationMin < 15 || durationMin > 480) return undefined;
+  if (repeat !== "none" && repeat !== "daily" && repeat !== "weekdays" && repeat !== "weekly") return undefined;
+  return { startsAt, repeat, durationMin, tz };
+}

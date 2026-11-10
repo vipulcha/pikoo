@@ -215,6 +215,7 @@ app.get("/rooms/:roomId/preview", async (req, res) => {
       focusMin: Math.round(room.settings.focusSec / 60),
       breakMin: Math.round(room.settings.breakSec / 60),
       cycleCount: room.timer.cycleCount,
+      schedule: room.schedule ?? null,
     });
   } catch (err) {
     log.server.error("Failed to get room preview", { error: String(err) });
