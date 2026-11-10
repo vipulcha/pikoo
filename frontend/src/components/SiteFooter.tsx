@@ -9,6 +9,8 @@ export function SiteFooter({ children }: { children?: React.ReactNode }) {
       <div className="max-w-4xl mx-auto">
         <nav aria-label="Guides" className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
           <Link href="/library" className="text-white/45 hover:text-white/80 transition-colors">Live silent study rooms</Link>
+          <Link href="/timer/25-minutes" className="text-white/45 hover:text-white/80 transition-colors">25 minute timer</Link>
+          <Link href="/timer/50-10" className="text-white/45 hover:text-white/80 transition-colors">50/10 Pomodoro timer</Link>
           {GUIDES.map((g) => (
             <Link key={g.slug} href={`/${g.slug}`} className="text-white/45 hover:text-white/80 transition-colors">
               {g.label}

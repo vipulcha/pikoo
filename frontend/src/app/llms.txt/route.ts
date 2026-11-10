@@ -1,4 +1,5 @@
 import { GUIDES, HOME_FAQS } from "@/lib/guides";
+import { TIMER_PRESETS } from "@/lib/timers";
 import { SITE_NAME, SITE_SUMMARY, FEATURE_LIST, absoluteUrl } from "@/lib/site";
 
 // llms.txt (https://llmstxt.org): a plain-text overview for AI assistants and answer engines
@@ -36,6 +37,10 @@ Anyone can join without creating a room: ${absoluteUrl("/library")}. The timer r
 ## FAQ
 
 ${HOME_FAQS.map((f) => `### ${f.q}\n${f.a}`).join("\n\n")}
+
+## Simple timers (single person, can be made shared)
+
+${TIMER_PRESETS.map((t) => `- [${t.label}](${absoluteUrl(`/timer/${t.slug}`)})`).join("\n")}
 
 ## Guides
 
