@@ -8,7 +8,7 @@ import { AudioPlayer } from "@/components/AudioPlayer";
 import { NextSessionLine } from "@/components/DailySessions";
 import { SessionSummary } from "@/components/GrowthCards";
 import { getUserId } from "@/components/NamePrompt";
-import { LibraryRoom, LIBRARY_REACTIONS, librarySchedule, displayedLibraryCount } from "@/lib/library";
+import { LibraryRoom, LIBRARY_REACTIONS, librarySchedule, displayedLibraryCount, ambientReaction } from "@/lib/library";
 import { serverNow, syncClock } from "@/lib/clock";
 import { useFocusCounter } from "@/lib/hooks/useFocusStats";
 import { notifyFocusEnd, notifyBreakEnd, getNotificationPermission, requestNotificationPermission } from "@/lib/audio";
@@ -30,6 +30,13 @@ export function LibraryRoomView({ room }: { room: LibraryRoom }) {
   const [copied, setCopied] = useState(false);
   const [showIntro, setShowIntro] = useState(false);
   const prevPhase = useRef<"focus" | "break" | null>(null);
+  const lastAmbientSec = useRef<number | null>(null);
+
+  const float = (emoji: string, left = 10 + Math.random() * 80) => {
+    const f = { id: Math.random(), emoji, left };
+    setFloating((list) => [...list.slice(-20), f]);
+    setTimeout(() => setFloating((list) => list.filter((x) => x.id !== f.id)), 2600);
+  };
 
   // First visit: a short "how this room works" card
   useEffect(() => {
@@ -56,11 +63,7 @@ export function LibraryRoomView({ room }: { room: LibraryRoom }) {
     socket.on("library_count", ({ id, count }: { id: string; count: number }) => {
       if (id === room.id) setCount(count);
     });
-    socket.on("library_reaction", ({ emoji }: { emoji: string }) => {
-      const f = { id: Math.random(), emoji, left: 10 + Math.random() * 80 };
-      setFloating((list) => [...list.slice(-20), f]);
-      setTimeout(() => setFloating((list) => list.filter((x) => x.id !== f.id)), 2600);
-    });
+    socket.on("library_reaction", ({ emoji }: { emoji: string }) => float(emoji));
     return () => { socket.disconnect(); };
   }, [room.id]);
 
@@ -78,6 +81,14 @@ export function LibraryRoomView({ room }: { room: LibraryRoom }) {
         }
       }
       prevPhase.current = s.phase;
+      const sec = Math.floor(t / 1000);
+      if (lastAmbientSec.current !== null && sec > lastAmbientSec.current && sec - lastAmbientSec.current < 5 && !document.hidden) {
+        for (let x = lastAmbientSec.current + 1; x <= sec; x++) {
+          const a = ambientReaction(room, x);
+          if (a) float(a.emoji, a.left);
+        }
+      }
+      lastAmbientSec.current = sec;
       setNow(t);
       document.title = `${fmt(s.remainingSec)} ${s.phase === "focus" ? "Focus" : "Break"} · ${room.name}`;
     };

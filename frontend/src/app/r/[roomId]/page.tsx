@@ -538,8 +538,8 @@ export default function RoomPage({ params }: RoomPageProps) {
 
       {/* Main content */}
       <main className="flex-1 flex items-center justify-center px-4 [@media(min-height:900px)]:-mt-16 relative z-10">
-        {/* Todo List - Left side */}
-        <div className="absolute left-2 sm:left-4 lg:left-8 top-1/2 -translate-y-1/2 hidden md:block">
+        {/* Todo List - Left side. z-20 keeps it clickable if the timer ever overlaps it */}
+        <div className="absolute left-2 sm:left-4 lg:left-8 top-1/2 -translate-y-1/2 hidden md:block z-20">
           <div className="flex flex-col gap-2">
             {/* History Panel - Above Todo List */}
             <HistoryPanel history={room?.history || []} />
