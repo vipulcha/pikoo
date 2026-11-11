@@ -19,6 +19,10 @@ export const LIBRARY_ROOMS: LibraryRoom[] = [
   { id: "pomodoro", name: "Pomodoro Hall", focusMin: 25, breakMin: 5 },
   { id: "deep-work", name: "Deep Work Library", focusMin: 50, breakMin: 10 },
   { id: "quick-sprints", name: "Quick Sprints", focusMin: 15, breakMin: 5 },
+  // Exam rooms (countdowns live in the frontend)
+  { id: "jee-main-2027", name: "JEE Main 2027 Room", focusMin: 50, breakMin: 10 },
+  { id: "neet-2027", name: "NEET 2027 Room", focusMin: 50, breakMin: 10 },
+  { id: "upsc-prelims-2027", name: "UPSC Prelims 2027 Room", focusMin: 50, breakMin: 10 },
 ];
 
 export const LIBRARY_REACTIONS = ["👋", "🔥", "💪", "☕", "🎉"] as const;

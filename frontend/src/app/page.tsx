@@ -209,6 +209,10 @@ export default function Home() {
             <div className="mt-6">
               <LibraryList rows />
             </div>
+            <Link href="/library#exams" className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] px-4 py-2.5 text-sm text-amber-100 hover:bg-amber-300/[0.12] transition-colors">
+              <span>Preparing for JEE, NEET or UPSC? <span className="text-amber-200/70">Exam rooms with a countdown</span></span>
+              <span aria-hidden>→</span>
+            </Link>
             <div className="mt-auto pt-5 flex flex-wrap items-center justify-between gap-2 text-xs">
               <NextSessionLine />
               <Link href="/library" className="text-white/50 hover:text-white transition-colors">How it works →</Link>
