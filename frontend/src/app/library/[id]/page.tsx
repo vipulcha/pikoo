@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { LIBRARY_ROOMS, getLibraryRoom } from "@/lib/library";
+import { LIBRARY_ROOMS, getLibraryRoom, examDateLabel } from "@/lib/library";
 import { absoluteUrl } from "@/lib/site";
 import { LibraryRoomView } from "./LibraryRoomView";
 
@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     ? `${room.exam.name} Study Room – Live Countdown & ${room.focusMin}/${room.breakMin} Timer | Pikoo`
     : `${room.name} – Live ${room.focusMin}/${room.breakMin} Study Room | Pikoo`;
   const description = room.exam
-    ? `Study for ${room.exam.name} alongside other aspirants in a free silent room with a countdown to exam day (${room.exam.dateLabel}). ${room.focusMin}-minute focus blocks, no chat, no sign-up.`
+    ? `Study for ${room.exam.name} alongside other students in a free silent room with a countdown to exam day (${room.exam.dates.length > 1 ? "countdown to the next test date" : examDateLabel(room.exam, Date.now())}). ${room.focusMin}-minute focus blocks, no chat, no sign-up.`
     : `Focus alongside others in a free silent study room: ${room.focusMin}-minute focus, ${room.breakMin}-minute breaks, sessions on the hour. No chat, no sign-up.`;
   return {
     title: { absolute: title },

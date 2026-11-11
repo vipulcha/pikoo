@@ -3,11 +3,12 @@
 // server state: cycles divide an hour evenly and start on the hour (UTC).
 
 export interface ExamInfo {
-  name: string;       // "JEE Main 2027"
-  short: string;      // "JEE Main"
-  date: string;       // first exam day, YYYY-MM-DD (India)
-  dateLabel: string;  // "20 Jan 2027 (Session 1)"
-  confirmed: boolean; // false = expected date, not yet announced officially
+  name: string;        // "JEE Main 2027"
+  short: string;       // "JEE Main"
+  dates: string[];     // first day of each sitting, YYYY-MM-DD; the countdown targets the next one
+  utcOffset: string;   // offset where the exam is held, e.g. "+05:30"
+  note?: string;       // shown after the date, e.g. "Session 1" or "expected"
+  region: "india" | "international";
 }
 
 export interface LibraryRoom {
@@ -28,35 +29,71 @@ export const LIBRARY_ROOMS: LibraryRoom[] = [
   {
     id: "jee-main-2027", name: "JEE Main 2027 Room", focusMin: 50, breakMin: 10,
     blurb: "50-minute blocks with everyone preparing for JEE Main 2027.",
-    exam: { name: "JEE Main 2027", short: "JEE Main", date: "2027-01-20", dateLabel: "20 Jan 2027 (Session 1)", confirmed: true },
+    exam: { name: "JEE Main 2027", short: "JEE Main", dates: ["2027-01-20"], utcOffset: "+05:30", note: "Session 1", region: "india" },
   },
   {
     id: "neet-2027", name: "NEET 2027 Room", focusMin: 50, breakMin: 10,
     blurb: "50-minute blocks with everyone preparing for NEET UG 2027.",
-    exam: { name: "NEET UG 2027", short: "NEET", date: "2027-05-02", dateLabel: "2 May 2027 (expected)", confirmed: false },
+    exam: { name: "NEET UG 2027", short: "NEET", dates: ["2027-05-02"], utcOffset: "+05:30", note: "expected", region: "india" },
   },
   {
     id: "upsc-prelims-2027", name: "UPSC Prelims 2027 Room", focusMin: 50, breakMin: 10,
     blurb: "50-minute blocks with everyone preparing for UPSC CSE Prelims 2027.",
-    exam: { name: "UPSC Prelims 2027", short: "UPSC Prelims", date: "2027-05-23", dateLabel: "23 May 2027", confirmed: true },
+    exam: { name: "UPSC Prelims 2027", short: "UPSC Prelims", dates: ["2027-05-23"], utcOffset: "+05:30", region: "india" },
+  },
+  {
+    id: "sat", name: "SAT Room", focusMin: 50, breakMin: 10,
+    blurb: "50-minute blocks with everyone preparing for the next SAT.",
+    exam: { name: "SAT", short: "the SAT", dates: ["2026-12-05", "2027-03-06", "2027-05-01", "2027-06-05"], utcOffset: "-05:00", note: "next test", region: "international" },
+  },
+  {
+    id: "ap-exams-2027", name: "AP Exams 2027 Room", focusMin: 50, breakMin: 10,
+    blurb: "50-minute blocks with everyone preparing for AP Exams in May 2027.",
+    exam: { name: "AP Exams 2027", short: "AP Exams", dates: ["2027-05-03"], utcOffset: "-05:00", region: "international" },
+  },
+  {
+    id: "gcse-a-levels-2027", name: "GCSE & A-level 2027 Room", focusMin: 50, breakMin: 10,
+    blurb: "50-minute blocks with everyone revising for GCSEs and A-levels 2027.",
+    exam: { name: "GCSEs & A-levels 2027", short: "GCSEs & A-levels", dates: ["2027-05-10"], utcOffset: "+01:00", region: "international" },
+  },
+  {
+    id: "ib-exams-2027", name: "IB Exams May 2027 Room", focusMin: 50, breakMin: 10,
+    blurb: "50-minute blocks with everyone preparing for the IB May 2027 session.",
+    exam: { name: "IB May 2027", short: "IB exams", dates: ["2027-04-23"], utcOffset: "+00:00", region: "international" },
+  },
+  {
+    id: "bar-exam-feb-2027", name: "Bar Exam Feb 2027 Room", focusMin: 50, breakMin: 10,
+    blurb: "50-minute blocks with everyone preparing for the February 2027 bar exam.",
+    exam: { name: "February 2027 Bar Exam", short: "the bar exam", dates: ["2027-02-23"], utcOffset: "-05:00", note: "UBE", region: "international" },
   },
 ];
 
 export const STUDY_ROOMS = LIBRARY_ROOMS.filter((r) => !r.exam);
 export const EXAM_ROOMS = LIBRARY_ROOMS.filter((r) => r.exam);
+export const examRooms = (region: ExamInfo["region"]) => EXAM_ROOMS.filter((r) => r.exam?.region === region);
 
-// Whole days left until the exam's first day (midnight India time)
-export function daysToExam(exam: ExamInfo, now: number): number {
-  const start = Date.parse(`${exam.date}T00:00:00+05:30`);
-  return Math.ceil((start - now) / 86_400_000);
+const DAY = 86_400_000;
+const examStart = (exam: ExamInfo, date: string) => Date.parse(`${date}T00:00:00${exam.utcOffset}`);
+
+// The sitting the countdown points at: the first one that hasn't finished its first day
+export function nextExamStart(exam: ExamInfo, now: number): number {
+  const starts = exam.dates.map((d) => examStart(exam, d));
+  return starts.find((t) => t + DAY > now) ?? starts[starts.length - 1];
+}
+
+export function examDateLabel(exam: ExamInfo, now: number): string {
+  const t = nextExamStart(exam, now);
+  const d = new Date(t + 12 * 3_600_000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  return exam.note ? `${d} (${exam.note})` : d;
 }
 
 export function examCountdownText(exam: ExamInfo, now: number): string {
-  const d = daysToExam(exam, now);
+  const d = Math.ceil((nextExamStart(exam, now) - now) / DAY);
+  const cap = exam.short.charAt(0).toUpperCase() + exam.short.slice(1);
   if (d > 1) return `${d} days to ${exam.short}`;
-  if (d === 1) return `${exam.short} is tomorrow`;
-  if (d === 0) return `${exam.short} starts today. Good luck!`;
-  return `${exam.short} has started. Good luck!`;
+  if (d === 1) return `${cap}: tomorrow. Good luck!`;
+  if (d === 0) return "Exam day is today. Good luck!";
+  return "Exams are underway. Good luck!";
 }
 
 export const LIBRARY_REACTIONS = ["👋", "🔥", "💪", "☕", "🎉"] as const;

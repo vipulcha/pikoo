@@ -35,9 +35,10 @@ export default function LibraryPage() {
         <section id="exams" className="mt-14 scroll-mt-6">
           <h2 className="text-2xl font-semibold tracking-tight">Exam rooms</h2>
           <p className="mt-2 text-white/60">Permanent rooms for one exam, with a live countdown to exam day. Study in 50-minute blocks next to people preparing for the same paper.</p>
-          <div className="mt-6">
-            <LibraryList exams />
-          </div>
+          <h3 className="mt-6 mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">India</h3>
+          <LibraryList exams="india" />
+          <h3 className="mt-8 mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">International</h3>
+          <LibraryList exams="international" />
         </section>
         <div className="mt-8">
           <DailySessions />
