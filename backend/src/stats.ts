@@ -125,6 +125,16 @@ export function logVisitor(uniqueId: string | undefined, msg: string, name?: str
   log.visitors.info(`${visitorTag(uniqueId, name)} ${msg}`);
 }
 
+// Search engines and link-preview bots run our JS and fire trace events too.
+// They go to a separate "crawlers" log so "visitors" only shows people.
+const CRAWLER_RE = /(googlebot|google-inspectiontool|googleother|adsbot|mediapartners|bingbot|bingpreview|adidxbot|msnbot|yandex|baiduspider|duckduckbot|applebot|slurp|petalbot|bytespider|gptbot|claudebot|perplexitybot|ahrefsbot|semrushbot|facebookexternalhit|twitterbot|linkedinbot|slackbot|discordbot|telegrambot|headlesschrome|lighthouse|chrome-lighthouse|crawler|spider|\bbot\b)/i;
+
+export function crawlerName(ua: string | undefined): string | null {
+  if (!ua) return "no-user-agent";
+  const m = ua.match(CRAWLER_RE);
+  return m ? m[1] : null;
+}
+
 export function formatStay(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
   if (s < 60) return `${s}s`;

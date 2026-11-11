@@ -51,5 +51,6 @@ export const log = {
   security: createContextLogger("security"),
   metrics: createContextLogger("metrics"),
   visitors: createContextLogger("visitors"),
+  crawlers: createContextLogger("crawlers"),
   forContext: createContextLogger,
 };
