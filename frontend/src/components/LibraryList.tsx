@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { LibraryRoom, STUDY_ROOMS, EXAM_ROOMS, librarySchedule, displayedLibraryCount, examCountdownText } from "@/lib/library";
+import { ExamInfo, LibraryRoom, STUDY_ROOMS, examRooms, librarySchedule, displayedLibraryCount, examCountdownText, examDateLabel } from "@/lib/library";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 
 // Cards for the public silent rooms, with live phase and headcount
-export function LibraryList({ compact = false, strip = false, rows = false, exams = false }: { compact?: boolean; strip?: boolean; rows?: boolean; exams?: boolean }) {
-  const LIBRARY_ROOMS: LibraryRoom[] = exams ? EXAM_ROOMS : STUDY_ROOMS;
+export function LibraryList({ compact = false, strip = false, rows = false, exams }: { compact?: boolean; strip?: boolean; rows?: boolean; exams?: ExamInfo["region"] }) {
+  const LIBRARY_ROOMS: LibraryRoom[] = exams ? examRooms(exams) : STUDY_ROOMS;
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [now, setNow] = useState<number | null>(null);
 
@@ -118,7 +118,7 @@ export function LibraryList({ compact = false, strip = false, rows = false, exam
               <span className="text-xs font-mono text-white/40">{room.focusMin}/{room.breakMin}</span>
             </div>
             {room.exam && now && (
-              <p className="mt-1.5 text-sm font-medium text-amber-200">⏳ {examCountdownText(room.exam, now)} <span className="font-normal text-white/45">· {room.exam.dateLabel}</span></p>
+              <p className="mt-1.5 text-sm font-medium text-amber-200">⏳ {examCountdownText(room.exam, now)} <span className="font-normal text-white/45">· {examDateLabel(room.exam, now)}</span></p>
             )}
             {!compact && <p className="mt-1.5 text-sm text-white/55">{room.blurb}</p>}
             <div className="mt-3 flex items-center justify-between text-xs">

@@ -23,6 +23,11 @@ export const LIBRARY_ROOMS: LibraryRoom[] = [
   { id: "jee-main-2027", name: "JEE Main 2027 Room", focusMin: 50, breakMin: 10 },
   { id: "neet-2027", name: "NEET 2027 Room", focusMin: 50, breakMin: 10 },
   { id: "upsc-prelims-2027", name: "UPSC Prelims 2027 Room", focusMin: 50, breakMin: 10 },
+  { id: "sat", name: "SAT Room", focusMin: 50, breakMin: 10 },
+  { id: "ap-exams-2027", name: "AP Exams 2027 Room", focusMin: 50, breakMin: 10 },
+  { id: "gcse-a-levels-2027", name: "GCSE & A-level 2027 Room", focusMin: 50, breakMin: 10 },
+  { id: "ib-exams-2027", name: "IB Exams May 2027 Room", focusMin: 50, breakMin: 10 },
+  { id: "bar-exam-feb-2027", name: "Bar Exam Feb 2027 Room", focusMin: 50, breakMin: 10 },
 ];
 
 export const LIBRARY_REACTIONS = ["👋", "🔥", "💪", "☕", "🎉"] as const;
