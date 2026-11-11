@@ -2,19 +2,62 @@
 // arithmetic on the clock, so every visitor computes the same phase with no
 // server state: cycles divide an hour evenly and start on the hour (UTC).
 
+export interface ExamInfo {
+  name: string;       // "JEE Main 2027"
+  short: string;      // "JEE Main"
+  date: string;       // first exam day, YYYY-MM-DD (India)
+  dateLabel: string;  // "20 Jan 2027 (Session 1)"
+  confirmed: boolean; // false = expected date, not yet announced officially
+}
+
 export interface LibraryRoom {
   id: string;
   name: string;
   focusMin: number;
   breakMin: number;
   blurb: string;
+  exam?: ExamInfo;
 }
 
 export const LIBRARY_ROOMS: LibraryRoom[] = [
   { id: "pomodoro", name: "Pomodoro Hall", focusMin: 25, breakMin: 5, blurb: "Classic 25/5 Pomodoros, starting on the hour and half hour." },
   { id: "deep-work", name: "Deep Work Library", focusMin: 50, breakMin: 10, blurb: "Long 50-minute blocks for reading, writing and problem sets." },
   { id: "quick-sprints", name: "Quick Sprints", focusMin: 15, breakMin: 5, blurb: "Short 15-minute sprints for getting started when it's hard." },
+  // Exam rooms: permanent silent rooms with a countdown to the exam.
+  // Dates checked 2026-11-11; update when the official notices change.
+  {
+    id: "jee-main-2027", name: "JEE Main 2027 Room", focusMin: 50, breakMin: 10,
+    blurb: "50-minute blocks with everyone preparing for JEE Main 2027.",
+    exam: { name: "JEE Main 2027", short: "JEE Main", date: "2027-01-20", dateLabel: "20 Jan 2027 (Session 1)", confirmed: true },
+  },
+  {
+    id: "neet-2027", name: "NEET 2027 Room", focusMin: 50, breakMin: 10,
+    blurb: "50-minute blocks with everyone preparing for NEET UG 2027.",
+    exam: { name: "NEET UG 2027", short: "NEET", date: "2027-05-02", dateLabel: "2 May 2027 (expected)", confirmed: false },
+  },
+  {
+    id: "upsc-prelims-2027", name: "UPSC Prelims 2027 Room", focusMin: 50, breakMin: 10,
+    blurb: "50-minute blocks with everyone preparing for UPSC CSE Prelims 2027.",
+    exam: { name: "UPSC Prelims 2027", short: "UPSC Prelims", date: "2027-05-23", dateLabel: "23 May 2027", confirmed: true },
+  },
 ];
+
+export const STUDY_ROOMS = LIBRARY_ROOMS.filter((r) => !r.exam);
+export const EXAM_ROOMS = LIBRARY_ROOMS.filter((r) => r.exam);
+
+// Whole days left until the exam's first day (midnight India time)
+export function daysToExam(exam: ExamInfo, now: number): number {
+  const start = Date.parse(`${exam.date}T00:00:00+05:30`);
+  return Math.ceil((start - now) / 86_400_000);
+}
+
+export function examCountdownText(exam: ExamInfo, now: number): string {
+  const d = daysToExam(exam, now);
+  if (d > 1) return `${d} days to ${exam.short}`;
+  if (d === 1) return `${exam.short} is tomorrow`;
+  if (d === 0) return `${exam.short} starts today. Good luck!`;
+  return `${exam.short} has started. Good luck!`;
+}
 
 export const LIBRARY_REACTIONS = ["👋", "🔥", "💪", "☕", "🎉"] as const;
 

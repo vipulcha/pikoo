@@ -8,7 +8,7 @@ import { AudioPlayer } from "@/components/AudioPlayer";
 import { NextSessionLine } from "@/components/DailySessions";
 import { SessionSummary } from "@/components/GrowthCards";
 import { getUserId } from "@/components/NamePrompt";
-import { LibraryRoom, LIBRARY_REACTIONS, librarySchedule, displayedLibraryCount, ambientReaction } from "@/lib/library";
+import { LibraryRoom, LIBRARY_REACTIONS, librarySchedule, displayedLibraryCount, ambientReaction, examCountdownText } from "@/lib/library";
 import { serverNow, syncClock } from "@/lib/clock";
 import { useFocusCounter } from "@/lib/hooks/useFocusStats";
 import { notifyFocusEnd, notifyBreakEnd, getNotificationPermission, requestNotificationPermission } from "@/lib/audio";
@@ -130,6 +130,11 @@ export function LibraryRoomView({ room }: { room: LibraryRoom }) {
       </header>
 
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 pb-16">
+        {room.exam && now && (
+          <p className="mb-6 px-4 py-1.5 rounded-full border border-amber-300/25 bg-amber-300/[0.08] text-sm text-amber-100 text-center">
+            ⏳ <b className="font-semibold">{examCountdownText(room.exam, now)}</b> <span className="text-amber-100/60">· {room.exam.dateLabel}</span>
+          </p>
+        )}
         <p className={`text-sm font-semibold uppercase tracking-[0.25em] ${color}`}>{s ? (s.phase === "focus" ? "Focus" : "Break") : " "}</p>
         <div className="font-mono font-light leading-none tracking-tighter text-[clamp(4.5rem,22vw,14rem)]" style={{ fontFeatureSettings: '"tnum"' }}>
           {s ? fmt(s.remainingSec) : "--:--"}
