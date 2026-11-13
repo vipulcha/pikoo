@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LibraryList } from "@/components/LibraryList";
 import { DailySessions } from "@/components/DailySessions";
+import { CampaignRedirect } from "@/components/CampaignRedirect";
 import { SiteFooter } from "@/components/SiteFooter";
 import { absoluteUrl } from "@/lib/site";
 
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
 export default function LibraryPage() {
   return (
     <div className="min-h-screen bg-black text-white">
+      <CampaignRedirect />
       <div className="pointer-events-none fixed inset-x-0 top-0 h-[480px] bg-[radial-gradient(ellipse_at_top,rgba(244,63,94,0.12),transparent_65%)]" />
       <header className="relative z-10 border-b border-white/5">
         <div className="max-w-3xl mx-auto px-6 py-5 flex items-center justify-between">
