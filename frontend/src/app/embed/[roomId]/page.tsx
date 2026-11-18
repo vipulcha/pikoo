@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { io, Socket } from "socket.io-client";
-import { PHASE_LABELS, SOCKET_EVENTS, TimerState } from "@/lib/types";
+import { PHASE_LABELS, SOCKET_EVENTS, TimerState, UserTodos } from "@/lib/types";
 import { serverNow, syncClock } from "@/lib/clock";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
@@ -18,16 +18,20 @@ function remainingSec(t: TimerState): number {
 const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
 // View-only timer for stream overlays (OBS browser source) and Notion embeds.
-// ?bg=transparent for OBS, ?link=0 hides the join link. It can't control the room
-// and doesn't count as a person in it.
+// ?bg=transparent for OBS, ?link=0 hides the join link, ?goal=0 hides the room
+// creator's current task. It can't control the room and doesn't count as a person in it.
 export default function EmbedTimer({ params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = use(params);
   const search = useSearchParams();
   const transparent = search.get("bg") === "transparent";
   const showLink = search.get("link") !== "0";
+  const showGoal = search.get("goal") !== "0";
 
   const [timer, setTimer] = useState<TimerState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Only task lists their owners made visible to others ever reach a spectator
+  const [todos, setTodos] = useState<Record<string, UserTodos>>({});
+  const [hostId, setHostId] = useState<string | null>(null);
   const [, tick] = useState(0);
 
   useEffect(() => {
@@ -43,7 +47,13 @@ export default function EmbedTimer({ params }: { params: Promise<{ roomId: strin
       syncClock(socket);
     };
     socket.on("connect", spectate);
-    socket.on(SOCKET_EVENTS.ROOM_STATE, (state: { timer: TimerState }) => { setTimer(state.timer); setError(null); });
+    socket.on(SOCKET_EVENTS.ROOM_STATE, (state: { timer: TimerState; userTodos?: Record<string, UserTodos>; hostId?: string | null }) => {
+      setTimer(state.timer);
+      setTodos(state.userTodos ?? {});
+      setHostId(state.hostId ?? null);
+      setError(null);
+    });
+    socket.on(SOCKET_EVENTS.TODOS_UPDATE, ({ userTodos }: { userTodos?: Record<string, UserTodos> }) => setTodos(userTodos ?? {}));
     socket.on(SOCKET_EVENTS.TIMER_UPDATE, ({ timer }: { timer: TimerState }) => setTimer(timer));
     socket.on(SOCKET_EVENTS.ERROR, ({ message }: { message: string }) => setError(message));
     return () => { socket.disconnect(); };
@@ -56,10 +66,14 @@ export default function EmbedTimer({ params }: { params: Promise<{ roomId: strin
   }, [timer?.running]);
 
   const host = typeof window !== "undefined" ? window.location.host : "";
+  // The streamer created the room (from /obs), so the creator's picked task is "what I'm working on"
+  const list = hostId ? todos[hostId] : undefined;
+  const goal = list?.todos.find((t) => t.id === list.activeTodoId && !t.completed);
+  const done = list?.todos.filter((t) => t.completed).length ?? 0;
 
   return (
     <main
-      className={`min-h-screen w-full flex items-center justify-center p-4 ${transparent ? "" : "bg-black"}`}
+      className={`h-screen w-full overflow-hidden flex items-center justify-center p-4 ${transparent ? "" : "bg-black"}`}
       style={{ textShadow: transparent ? "0 2px 12px rgba(0,0,0,0.6)" : undefined }}
     >
       {error ? (
@@ -74,9 +88,16 @@ export default function EmbedTimer({ params }: { params: Promise<{ roomId: strin
             {timer.cycleCount > 0 && <span className="text-white/40">#{timer.cycleCount}</span>}
             {!timer.running && <span className="text-white/40">· paused</span>}
           </div>
-          <div className="font-mono font-light leading-none tracking-tighter text-[clamp(3rem,26vw,12rem)]" style={{ fontFeatureSettings: '"tnum"' }}>
+          <div className="font-mono font-light leading-none tracking-tighter text-[clamp(2.5rem,min(26vw,48vh),12rem)]" style={{ fontFeatureSettings: '"tnum"' }}>
             {fmt(remainingSec(timer))}
           </div>
+          {showGoal && goal && list && (
+            <p className="mt-1 mb-1 flex max-w-[92vw] items-baseline gap-1.5 text-[clamp(0.75rem,3.6vw,1.15rem)] text-white/90">
+              <span className="shrink-0 text-white/50">Working on:</span>
+              <span className="min-w-0 truncate">{goal.text}</span>
+              <span className="shrink-0 text-white/50">· {done}/{list.todos.length} done</span>
+            </p>
+          )}
           {showLink && (
             <a
               href={`/r/${roomId}?ref=${transparent ? "obs" : "embed"}`}

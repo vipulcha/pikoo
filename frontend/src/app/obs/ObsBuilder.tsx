@@ -23,6 +23,7 @@ export function ObsBuilder() {
   const [error, setError] = useState<string | null>(null);
   const [transparent, setTransparent] = useState(true);
   const [showLink, setShowLink] = useState(true);
+  const [showGoal, setShowGoal] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");
 
@@ -54,7 +55,7 @@ export function ObsBuilder() {
     try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied(null), 2000); } catch { /* blocked */ }
   };
 
-  const query = [transparent && "bg=transparent", !showLink && "link=0"].filter(Boolean).join("&");
+  const query = [transparent && "bg=transparent", !showLink && "link=0", !showGoal && "goal=0"].filter(Boolean).join("&");
   const overlayUrl = roomId ? `${origin}/embed/${roomId}${query ? `?${query}` : ""}` : "";
   const roomUrl = roomId ? `${origin}/r/${roomId}` : "";
   const chip = (on: boolean) => `h-9 px-4 rounded-full text-sm border transition-colors ${on ? "bg-white text-black border-white" : "bg-white/5 border-white/10 text-white/75 hover:bg-white/10"}`;
@@ -121,6 +122,7 @@ export function ObsBuilder() {
         <div className="mt-4 flex flex-wrap gap-2">
           <button onClick={() => setTransparent((v) => !v)} className={chip(transparent)}>Transparent background</button>
           <button onClick={() => setShowLink((v) => !v)} className={chip(showLink)}>Show &ldquo;focus with us&rdquo; link</button>
+          <button onClick={() => setShowGoal((v) => !v)} className={chip(showGoal)}>Show what I&apos;m working on</button>
         </div>
 
         <div className="mt-4 flex gap-2">
@@ -134,6 +136,7 @@ export function ObsBuilder() {
           <li>In OBS, under <b className="text-white/85">Sources</b>, click <b className="text-white/85">+</b> → <b className="text-white/85">Browser</b>.</li>
           <li>Paste the link into <b className="text-white/85">URL</b>. Set width <b className="text-white/85">600</b> and height <b className="text-white/85">300</b>, then resize it on your scene.</li>
           <li>Leave &ldquo;Custom CSS&rdquo; as it is. The background is already transparent.</li>
+          {showGoal && <li>To show what you&apos;re working on, open your room, add a task and pick it. It appears under the timer with how many tasks you&apos;ve done.</li>}
         </ol>
       </div>
 
