@@ -16,7 +16,7 @@ export interface LibraryRoom {
   name: string;
   focusMin: number;
   breakMin: number;
-  blurb: string;
+  blurb?: string;     // study rooms only; exam rooms share one line about the schedule
   exam?: ExamInfo;
 }
 
@@ -28,42 +28,34 @@ export const LIBRARY_ROOMS: LibraryRoom[] = [
   // Dates checked 2026-11-11; update when the official notices change.
   {
     id: "jee-main-2027", name: "JEE Main 2027 Room", focusMin: 50, breakMin: 10,
-    blurb: "50-minute blocks with everyone preparing for JEE Main 2027.",
     exam: { name: "JEE Main 2027", short: "JEE Main", dates: ["2027-01-20"], utcOffset: "+05:30", note: "Session 1", region: "india" },
   },
   {
     id: "neet-2027", name: "NEET 2027 Room", focusMin: 50, breakMin: 10,
-    blurb: "50-minute blocks with everyone preparing for NEET UG 2027.",
     exam: { name: "NEET UG 2027", short: "NEET", dates: ["2027-05-02"], utcOffset: "+05:30", note: "expected", region: "india" },
   },
   {
     id: "upsc-prelims-2027", name: "UPSC Prelims 2027 Room", focusMin: 50, breakMin: 10,
-    blurb: "50-minute blocks with everyone preparing for UPSC CSE Prelims 2027.",
     exam: { name: "UPSC Prelims 2027", short: "UPSC Prelims", dates: ["2027-05-23"], utcOffset: "+05:30", region: "india" },
   },
   {
     id: "sat", name: "SAT Room", focusMin: 50, breakMin: 10,
-    blurb: "50-minute blocks with everyone preparing for the next SAT.",
     exam: { name: "SAT", short: "the SAT", dates: ["2026-12-05", "2027-03-06", "2027-05-01", "2027-06-05"], utcOffset: "-05:00", note: "next test", region: "international" },
   },
   {
     id: "ap-exams-2027", name: "AP Exams 2027 Room", focusMin: 50, breakMin: 10,
-    blurb: "50-minute blocks with everyone preparing for AP Exams in May 2027.",
     exam: { name: "AP Exams 2027", short: "AP Exams", dates: ["2027-05-03"], utcOffset: "-05:00", region: "international" },
   },
   {
     id: "gcse-a-levels-2027", name: "GCSE & A-level 2027 Room", focusMin: 50, breakMin: 10,
-    blurb: "50-minute blocks with everyone revising for GCSEs and A-levels 2027.",
     exam: { name: "GCSEs & A-levels 2027", short: "GCSEs & A-levels", dates: ["2027-05-10"], utcOffset: "+01:00", region: "international" },
   },
   {
     id: "ib-exams-2027", name: "IB Exams May 2027 Room", focusMin: 50, breakMin: 10,
-    blurb: "50-minute blocks with everyone preparing for the IB May 2027 session.",
     exam: { name: "IB May 2027", short: "IB exams", dates: ["2027-04-23"], utcOffset: "+00:00", region: "international" },
   },
   {
     id: "bar-exam-feb-2027", name: "Bar Exam Feb 2027 Room", focusMin: 50, breakMin: 10,
-    blurb: "50-minute blocks with everyone preparing for the February 2027 bar exam.",
     exam: { name: "February 2027 Bar Exam", short: "the bar exam", dates: ["2027-02-23"], utcOffset: "-05:00", note: "UBE", region: "international" },
   },
 ];
@@ -100,6 +92,22 @@ export const LIBRARY_REACTIONS = ["👋", "🔥", "💪", "☕", "🎉"] as cons
 
 export const getLibraryRoom = (id: string) => LIBRARY_ROOMS.find((r) => r.id === id);
 
+// When the next focus block starts (the end of the current cycle)
+export function nextFocusStart(room: LibraryRoom, now: number): number {
+  const cycleMs = (room.focusMin + room.breakMin) * 60_000;
+  return now - (now % cycleMs) + cycleMs;
+}
+
+export function minutesUntil(t: number, now: number): string {
+  const m = Math.max(1, Math.ceil((t - now) / 60_000));
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+// "14:30 UTC" style label, the same on the server and every client
+export function utcClock(t: number): string {
+  return new Date(t).toISOString().slice(11, 16) + " UTC";
+}
+
 export function librarySchedule(room: LibraryRoom, now: number) {
   const focusMs = room.focusMin * 60_000;
   const cycleMs = (room.focusMin + room.breakMin) * 60_000;
@@ -119,7 +127,7 @@ export function librarySchedule(room: LibraryRoom, now: number) {
 // (ambientReaction below). Real people are added on top. Both are derived from
 // the room id and the clock, so every viewer sees the same thing. Set to false
 // to go back to real counts and real reactions only.
-export const SEEDED_LIBRARY_COUNTS = true;
+export const SEEDED_LIBRARY_COUNTS = false;
 
 function seeded(key: string): number {
   let h = 2166136261;

@@ -6,14 +6,16 @@ import { asSchedule, formatCountdown, upcomingSessions } from "@/lib/dailySessio
 import { googleCalendarUrl, icsContent } from "@/lib/schedule";
 import { absoluteUrl } from "@/lib/site";
 
-function useNow(ms = 30_000) {
-  const [now, setNow] = useState<number | null>(null);
+// Starts from the server's clock when given, so the list is in the HTML before JS runs
+function useNow(ms = 30_000, initialNow?: number) {
+  const [now, setNow] = useState<number | null>(initialNow ?? null);
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    const first = setTimeout(() => setNow(Date.now()), 0);
+    const first = setTimeout(() => { setNow(Date.now()); setMounted(true); }, 0);
     const id = setInterval(() => setNow(Date.now()), ms);
     return () => { clearTimeout(first); clearInterval(id); };
   }, [ms]);
-  return now;
+  return { now, mounted };
 }
 
 const localTime = (t: number) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -34,14 +36,14 @@ function downloadIcs(text: string) {
 }
 
 /** Full list for /library: every daily session with status, join and calendar links */
-export function DailySessions() {
-  const now = useNow();
+export function DailySessions({ initialNow }: { initialNow?: number }) {
+  const { now, mounted } = useNow(30_000, initialNow);
   const rows = now ? upcomingSessions(now) : [];
   return (
-    <section aria-labelledby="daily-sessions" className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-      <h2 id="daily-sessions" className="font-semibold">Daily group sessions</h2>
-      <p className="mt-1 text-sm text-white/55">Two hours of Pomodoros at the same time every day, so there&apos;s always someone focusing with you. Add one to your calendar and just show up.</p>
-      <ul className="mt-4 divide-y divide-white/5">
+    <section id="daily" aria-labelledby="daily-sessions" className="scroll-mt-6">
+      <h2 id="daily-sessions" className="font-serif text-2xl text-stone-100">Daily group sessions</h2>
+      <p className="mt-2 text-stone-400">Two hours of Pomodoros at the same time every day, so there&apos;s always someone focusing with you. Add one to your calendar and just show up.</p>
+      <ul className="mt-5 divide-y divide-stone-700/50 border-y border-stone-700/50">
         {rows.map(({ session: s, start, end, live }) => {
           const title = `${s.label} · Pikoo`;
           const url = absoluteUrl(`/library/${s.roomId}`);
@@ -53,7 +55,7 @@ export function DailySessions() {
                   {s.label} <span className="text-white/45 font-normal">· {zoneTime(s.hour, s.minute)} {s.tzLabel}</span>
                 </p>
                 <p className={`text-xs mt-0.5 ${live ? "text-green-300" : "text-white/45"}`}>
-                  {live ? `Live now · ${formatCountdown(end - now!)} left` : `Starts in ${formatCountdown(start - now!)}${sameZone(start, s.tz) ? "" : ` · ${localTime(start)} your time`}`}
+                  {live ? `Live now · ${formatCountdown(end - now!)} left` : `Starts in ${formatCountdown(start - now!)}${!mounted || sameZone(start, s.tz) ? "" : ` · ${localTime(start)} your time`}`}
                 </p>
               </div>
               <div className="flex items-center gap-2 text-xs">
@@ -73,7 +75,7 @@ export function DailySessions() {
 
 /** One line: the live or next session (homepage, library rooms) */
 export function NextSessionLine({ roomId, className = "" }: { roomId?: string; className?: string }) {
-  const now = useNow();
+  const { now } = useNow();
   if (!now) return null;
   const next = upcomingSessions(now).find((r) => !roomId || r.session.roomId === roomId);
   if (!next) return null;

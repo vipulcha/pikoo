@@ -9,6 +9,10 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { HOME_FAQS } from "@/lib/guides";
 import { SITE_SUMMARY } from "@/lib/site";
 import { homeGraph, jsonLd } from "@/lib/structured-data";
+import { librarySnapshot } from "@/lib/libraryCounts";
+
+// Re-rendered every 30s so the silent-room list ships with real phases and headcounts
+export const revalidate = 30;
 
 const STARS = [...Array(50)].map((_, i) => ({
   id: i,
@@ -59,7 +63,8 @@ const FEATURES: { title: string; desc: string; icon: string; href?: string }[] =
 const BUILT_FOR = ["Study sessions", "Body doubling", "Remote work sprints", "Coworking with a friend"];
 const STEPS = ["Create a room", "Share the link", "Focus together"];
 
-export default function Home() {
+export default async function Home() {
+  const { now, counts } = await librarySnapshot();
   return (
     <div className="min-h-screen bg-black text-white overflow-hidden">
       {/* JSON-LD structured data */}
@@ -207,7 +212,7 @@ export default function Home() {
               Public rooms on a fixed Pomodoro clock. No chat, no camera, no names. Just you and everyone else, working quietly together.
             </p>
             <div className="mt-6">
-              <LibraryList rows />
+              <LibraryList rows initialNow={now} initialCounts={counts} />
             </div>
             <Link href="/library#exams" className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] px-4 py-2.5 text-sm text-amber-100 hover:bg-amber-300/[0.12] transition-colors">
               <span>Studying for an exam? <span className="text-amber-200/70">JEE, NEET, UPSC, SAT, AP, A-levels, IB and more</span></span>
