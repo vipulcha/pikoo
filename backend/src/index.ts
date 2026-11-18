@@ -6,7 +6,7 @@ import helmet from "helmet";
 import { nanoid } from "nanoid";
 import dotenv from "dotenv";
 
-import { initRedis, createRoom, getRoom, addSuggestion, getSuggestions } from "./store.js";
+import { initRedis, createRoom, getRoom, addSuggestion, getSuggestions, flushRoomWrites } from "./store.js";
 import { track, readDailyStats, readTotals, logVisitor, crawlerName } from "./stats.js";
 import { LIBRARY_ROOMS, libraryCount } from "./library.js";
 import { setupSocketHandlers } from "./socket.js";
@@ -405,3 +405,13 @@ httpServer.listen(PORT, () => {
     env: IS_PROD ? "production" : "development",
   });
 });
+
+// Room changes reach Redis in the background (see store.ts), so on a deploy or
+// restart let queued writes land before the process exits
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.once(signal, async () => {
+    log.server.info("Shutting down, saving queued room writes", { signal });
+    if (!(await flushRoomWrites(8000))) log.server.warn("Some room writes did not finish before exit");
+    process.exit(0);
+  });
+}
