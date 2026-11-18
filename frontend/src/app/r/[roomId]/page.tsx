@@ -15,7 +15,7 @@ import { SuggestionButton } from "@/components/SuggestionButton";
 import { NamePrompt, getSavedName, saveName, getUserId, clearSavedName } from "@/components/NamePrompt";
 import { ChatPanel } from "@/components/ChatPanel";
 import { AudioPlayer } from "@/components/AudioPlayer";
-import { BackgroundPicker } from "@/components/BackgroundPicker";
+import { BackgroundPicker, NextWallpaperButton } from "@/components/BackgroundPicker";
 import { RoomBackground, StarField } from "@/components/RoomBackground";
 import { useBackground } from "@/lib/backgrounds";
 import { TodoList } from "@/components/TodoList";
@@ -338,6 +338,7 @@ export default function RoomPage({ params }: RoomPageProps) {
   return (
     <div className="min-h-screen bg-black text-white flex flex-col relative overflow-hidden">
       <RoomBackground bg={bg} />
+      <NextWallpaperButton bg={bg} />
 
       {/* Header */}
       <header className="flex items-center justify-between p-4 sm:p-6 relative z-20">
