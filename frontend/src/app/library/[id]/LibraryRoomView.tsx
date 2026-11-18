@@ -8,7 +8,7 @@ import { AudioPlayer } from "@/components/AudioPlayer";
 import { NextSessionLine } from "@/components/DailySessions";
 import { SessionSummary } from "@/components/GrowthCards";
 import { getUserId } from "@/components/NamePrompt";
-import { LibraryRoom, LIBRARY_REACTIONS, librarySchedule, displayedLibraryCount, ambientReaction, examCountdownText, examDateLabel } from "@/lib/library";
+import { LibraryRoom, LIBRARY_REACTIONS, librarySchedule, displayedLibraryCount, ambientReaction, examCountdownText, examDateLabel, examDaysLeft } from "@/lib/library";
 import { serverNow, syncClock } from "@/lib/clock";
 import { useFocusCounter } from "@/lib/hooks/useFocusStats";
 import { notifyFocusEnd, notifyBreakEnd, getNotificationPermission, requestNotificationPermission } from "@/lib/audio";
@@ -18,7 +18,7 @@ const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${Str
 
 // Once we're in, the count includes us
 const peopleHere = (n: number, joined: boolean) =>
-  joined ? (n <= 1 ? "Just you so far" : `You + ${n - 1} focusing`) : n === 0 ? "Empty right now" : `${n} focusing`;
+  joined ? (n <= 1 ? "Just you so far" : `You + ${n - 1} focusing`) : n === 0 ? "Be the first here" : `${n} focusing`;
 
 const INTRO_KEY = "pikoo:library-intro-seen";
 
@@ -105,6 +105,7 @@ export function LibraryRoomView({ room, initialNow, initialCount }: { room: Libr
   const s = now ? librarySchedule(room, now) : null;
   const stats = useFocusCounter(s?.phase === "focus", finishedKey);
   const color = s?.phase === "break" ? "text-emerald-300" : "text-rose-300";
+  const examDays = room.exam && now ? examDaysLeft(room.exam, now) : null;
 
   const react = (emoji: string) => socketRef.current?.emit("library_react", { emoji });
   const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/library/${room.id}` : "";
@@ -135,14 +136,24 @@ export function LibraryRoomView({ room, initialNow, initialCount }: { room: Libr
       </header>
 
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 pb-16">
+        {/* Exam rooms lead with the countdown; the timer sits below it, a third smaller */}
         {room.exam && now && (
-          <div className="mb-8 text-center">
-            <p className="font-serif text-3xl sm:text-4xl text-amber-100">{examCountdownText(room.exam, now)}</p>
-            <p className="mt-1 text-sm text-amber-100/55">{room.exam.name} · {examDateLabel(room.exam, now)}</p>
+          <div className="mb-10 text-center">
+            {examDays !== null && examDays > 1 ? (
+              <>
+                <p className="font-serif leading-none text-amber-100 tabular-nums text-[clamp(3.5rem,13vw,7.5rem)]">{examDays} days</p>
+                <p className="mt-3 text-base sm:text-lg text-amber-100/60">to {room.exam.short} · {examDateLabel(room.exam, now)}</p>
+              </>
+            ) : (
+              <>
+                <p className="font-serif text-4xl sm:text-5xl text-amber-100">{examCountdownText(room.exam, now)}</p>
+                <p className="mt-2 text-base text-amber-100/60">{room.exam.name} · {examDateLabel(room.exam, now)}</p>
+              </>
+            )}
           </div>
         )}
         <p className={`text-sm font-semibold uppercase tracking-[0.25em] ${color}`}>{s ? (s.phase === "focus" ? "Focus" : "Break") : " "}</p>
-        <div className="font-mono font-light leading-none tracking-tighter text-[clamp(4.5rem,22vw,14rem)]" style={{ fontFeatureSettings: '"tnum"' }}>
+        <div className={`font-mono font-light leading-none tracking-tighter ${room.exam ? "text-[clamp(3.5rem,15vw,9.5rem)]" : "text-[clamp(4.5rem,22vw,14rem)]"}`} style={{ fontFeatureSettings: '"tnum"' }}>
           {s ? fmt(s.remainingSec) : "--:--"}
         </div>
         <p className="mt-4 text-sm text-white/45 text-center max-w-sm">

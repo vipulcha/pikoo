@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { LibraryList } from "@/components/LibraryList";
+import { LibraryList, SharedClock } from "@/components/LibraryList";
 import { DailySessions } from "@/components/DailySessions";
 import { CampaignRedirect } from "@/components/CampaignRedirect";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -32,10 +32,11 @@ export default async function LibraryPage() {
       </header>
       <main className="max-w-4xl mx-auto px-5 sm:px-6 pt-14 sm:pt-20 pb-20">
         <p className="text-sm text-stone-500">Pikoo library</p>
-        <h1 className="mt-2 font-serif text-4xl sm:text-6xl text-stone-50 leading-[1.05] tracking-tight">
-          Silent study rooms<br className="hidden sm:block" /> <em className="text-stone-400">on a fixed clock.</em>
-        </h1>
-        <p data-answer className="mt-6 text-lg text-stone-300 leading-relaxed max-w-2xl">
+        <h1 className="mt-2 font-serif text-4xl sm:text-5xl text-stone-50 leading-tight tracking-tight">Silent study rooms</h1>
+        <div className="mt-8">
+          <SharedClock initialNow={now} />
+        </div>
+        <p data-answer className="mt-8 text-lg text-stone-300 leading-relaxed max-w-2xl">
           Every room runs one timer for everyone, starting on the hour, so nobody has to organise anything. Walk in, see
           how long is left, and start working. No chat, no names, no camera.
         </p>

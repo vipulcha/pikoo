@@ -79,8 +79,16 @@ export function examDateLabel(exam: ExamInfo, now: number): string {
   return exam.note ? `${d} (${exam.note})` : d;
 }
 
+export const examDaysLeft = (exam: ExamInfo, now: number): number => Math.ceil((nextExamStart(exam, now) - now) / DAY);
+
+/** Short form for room lists: "63 days", "Tomorrow", "Today" */
+export function examDaysLabel(exam: ExamInfo, now: number): string {
+  const d = examDaysLeft(exam, now);
+  return d > 1 ? `${d} days` : d === 1 ? "Tomorrow" : d === 0 ? "Today" : "Underway";
+}
+
 export function examCountdownText(exam: ExamInfo, now: number): string {
-  const d = Math.ceil((nextExamStart(exam, now) - now) / DAY);
+  const d = examDaysLeft(exam, now);
   const cap = exam.short.charAt(0).toUpperCase() + exam.short.slice(1);
   if (d > 1) return `${d} days to ${exam.short}`;
   if (d === 1) return `${cap}: tomorrow. Good luck!`;
@@ -93,7 +101,13 @@ export const LIBRARY_REACTIONS = ["👋", "🔥", "💪", "☕", "🎉"] as cons
 export const getLibraryRoom = (id: string) => LIBRARY_ROOMS.find((r) => r.id === id);
 
 // When the next focus block starts (the end of the current cycle)
-export function nextFocusStart(room: LibraryRoom, now: number): number {
+type Rhythm = Pick<LibraryRoom, "focusMin" | "breakMin">;
+
+// Deep Work and every exam room run this clock, so /library shows it once at the top
+export const MAIN_CLOCK: Rhythm = { focusMin: 50, breakMin: 10 };
+export const onMainClock = (r: Rhythm) => r.focusMin === MAIN_CLOCK.focusMin && r.breakMin === MAIN_CLOCK.breakMin;
+
+export function nextFocusStart(room: Rhythm, now: number): number {
   const cycleMs = (room.focusMin + room.breakMin) * 60_000;
   return now - (now % cycleMs) + cycleMs;
 }
@@ -104,7 +118,7 @@ export function minutesUntil(t: number, now: number): string {
   return m % 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m / 60}h`;
 }
 
-export function librarySchedule(room: LibraryRoom, now: number) {
+export function librarySchedule(room: Rhythm, now: number) {
   const focusMs = room.focusMin * 60_000;
   const cycleMs = (room.focusMin + room.breakMin) * 60_000;
   const cycleStart = now - (now % cycleMs);

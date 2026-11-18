@@ -42,7 +42,7 @@ export function DailySessions({ initialNow }: { initialNow?: number }) {
   return (
     <section id="daily" aria-labelledby="daily-sessions" className="scroll-mt-6">
       <h2 id="daily-sessions" className="font-serif text-2xl text-stone-100">Daily group sessions</h2>
-      <p className="mt-2 text-stone-400">Two hours of Pomodoros at the same time every day, so there&apos;s always someone focusing with you. Add one to your calendar and just show up.</p>
+      <p className="mt-2 text-stone-400">Two hours of Pomodoros at the same time every day, so there&apos;s a set time to show up with others. Add one to your calendar and just show up.</p>
       <ul className="mt-5 divide-y divide-stone-700/50 border-y border-stone-700/50">
         {rows.map(({ session: s, start, end, live }) => {
           const title = `${s.label} · Pikoo`;
