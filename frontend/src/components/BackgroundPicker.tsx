@@ -137,3 +137,37 @@ export function BackgroundPicker({ bg, open, setOpen }: { bg: BackgroundState; o
     </>
   );
 }
+
+/** Bottom-left button: next photo in the current theme (only for themes with several photos) */
+export function NextWallpaperButton({ bg }: { bg: BackgroundState }) {
+  const [loading, setLoading] = useState(false);
+  if (bg.photoCount < 2) return null;
+  const label = BACKGROUNDS.find((b) => b.id === bg.choice)?.label ?? "Wallpaper";
+  const next = async () => {
+    if (loading) return;
+    setLoading(true);
+    trace("background", { pick: bg.choice ?? "", photo: ((bg.photoIndex + 1) % bg.photoCount) + 1 });
+    try { await bg.nextPhoto(); } finally { setLoading(false); }
+  };
+  return (
+    <button
+      onClick={next}
+      title={`Next ${label.toLowerCase()} wallpaper (${bg.photoIndex + 1} of ${bg.photoCount})`}
+      aria-label="Next wallpaper"
+      className="fixed bottom-4 left-4 z-30 h-10 w-10 rounded-full bg-black/40 backdrop-blur-md border border-white/15 text-white/75 hover:text-white hover:bg-black/60 flex items-center justify-center transition-colors"
+    >
+      {loading ? (
+        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+      ) : (
+        // A picture with a "refresh" arrow: swap this picture for another
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M13 18.5H4.5a2 2 0 01-2-2v-11a2 2 0 012-2h13a2 2 0 012 2V10" />
+          <path d="M2.5 14.5l4.2-4.2a1.5 1.5 0 012.1 0l3.2 3.2" />
+          <circle cx="14.5" cy="7.5" r="1.3" />
+          <path d="M21.5 16.5a4 4 0 11-1.2-2.85" />
+          <path d="M21.5 12.5v2.5H19" />
+        </svg>
+      )}
+    </button>
+  );
+}
