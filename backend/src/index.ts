@@ -7,7 +7,7 @@ import { nanoid } from "nanoid";
 import dotenv from "dotenv";
 
 import { initRedis, createRoom, getRoom, addSuggestion, getSuggestions, flushRoomWrites } from "./store.js";
-import { track, readDailyStats, readTotals, logVisitor, crawlerName } from "./stats.js";
+import { track, readDailyStats, readTotals, logVisitor, markCrawler } from "./stats.js";
 import { LIBRARY_ROOMS, libraryCount } from "./library.js";
 import { setupSocketHandlers } from "./socket.js";
 import { RoomSettings, DEFAULT_SETTINGS } from "./types.js";
@@ -160,6 +160,7 @@ app.post("/rooms", async (req, res) => {
     }
 
     metrics.roomsCreated++;
+    markCrawler(creatorId || undefined, req.get("user-agent"));
     track("rooms_created", creatorId || undefined);
     log.server.info("Room created", { roomId });
     logVisitor(creatorId || undefined, `🏠 created room ${roomId}${slug ? " (custom link)" : ""} ${JSON.stringify(settings ?? {}).slice(0, 120)}`);
@@ -282,9 +283,8 @@ app.post("/events", express.text({ type: "*/*", limit: "2kb" }), (req, res) => {
   const props = body.props && typeof body.props === "object" ? Object.entries(body.props as Record<string, unknown>).slice(0, 6)
     .filter(([k, v]) => /^[a-z_]{1,20}$/.test(k) && (typeof v === "string" || typeof v === "number") && String(v).length > 0)
     .map(([k, v]) => `${k}=${String(v).replace(/[\r\n]/g, " ").slice(0, 80)}`).join(" ") : "";
-  const bot = crawlerName(req.get("user-agent"));
-  if (bot) log.crawlers.info(`🤖 ${bot} ${label}${props ? ` ${props}` : ""}`);
-  else logVisitor(uid, `${label}${props ? ` ${props}` : ""}`);
+  markCrawler(uid, req.get("user-agent"));
+  logVisitor(uid, `${label}${props ? ` ${props}` : ""}`);
 });
 
 app.post("/suggestions", async (req, res) => {
