@@ -88,8 +88,11 @@ export async function createRoom(
   // exclusive: never overwrite an existing room (custom links); null if the id is taken
   if (opts.exclusive) {
     if (redis) {
-      const ok = await redis.set(`room:${roomId}`, JSON.stringify(room), "EX", ROOM_TTL, "NX");
-      return ok ? room : null;
+      if (roomCache.has(roomId)) return null;
+      const ok = await redis.set(roomKey(roomId), JSON.stringify(room), "EX", ROOM_TTL, "NX");
+      if (!ok) return null;
+      cacheRoom(roomId, JSON.stringify(room));
+      return room;
     }
     if (memoryStore.has(roomId)) return null;
   }
@@ -97,17 +100,109 @@ export async function createRoom(
   return room;
 }
 
+// ============================================
+// Room cache
+// ============================================
+// Redis can be far from this server (each call has cost ~280ms in production),
+// and joining a room used to make ~10 calls in a row. So rooms are read from an
+// in-process copy, and writes update the copy at once and reach Redis in the
+// background, in order, with back-to-back writes merged into one. Redis stays
+// the durable store: a room nobody has used for a while is dropped from memory
+// and read back from Redis the next time. This relies on one backend instance
+// owning every room, which the room lock (room-lock.ts) already assumes.
+
+const roomKey = (id: string) => `room:${id}`;
+const roomCache = new Map<string, { json: string; usedAt: number }>();
+const pendingWrites = new Map<string, string | null>(); // latest JSON to write, null = delete
+const flushing = new Map<string, Promise<void>>();
+const CACHE_IDLE_MS = 30 * 60_000;
+// Bumped on every save or delete, so a Redis read that was in flight while the
+// room changed can tell that its answer is out of date
+const changeCount = new Map<string, number>();
+const bump = (id: string) => changeCount.set(id, (changeCount.get(id) ?? 0) + 1);
+
+function cacheRoom(id: string, json: string) {
+  roomCache.set(id, { json, usedAt: Date.now() });
+}
+
+function queueWrite(id: string, json: string | null) {
+  pendingWrites.set(id, json);
+  if (!flushing.has(id)) {
+    const p = flushRoom(id).finally(() => flushing.delete(id));
+    flushing.set(id, p);
+  }
+}
+
+// Writes the latest pending version of a room until none is left. A failed
+// write is retried (unless a newer version replaced it) with growing waits.
+async function flushRoom(id: string): Promise<void> {
+  let delay = 500;
+  while (redis && pendingWrites.has(id)) {
+    const json = pendingWrites.get(id)!;
+    pendingWrites.delete(id);
+    try {
+      if (json === null) await redis.del(roomKey(id));
+      else await redis.setex(roomKey(id), ROOM_TTL, json);
+      delay = 500;
+    } catch (err) {
+      log.store.error("Room write failed, retrying", { roomId: id, error: String(err) });
+      if (!pendingWrites.has(id)) pendingWrites.set(id, json);
+      await new Promise((r) => setTimeout(r, delay));
+      delay = Math.min(delay * 2, 10_000);
+    }
+  }
+}
+
+/** Waits for every queued room write to reach Redis (used on shutdown and in tests). */
+export async function flushRoomWrites(timeoutMs = 8000): Promise<boolean> {
+  const all = Promise.all([...flushing.values()]).then(() => true);
+  return Promise.race([all, new Promise<boolean>((r) => setTimeout(() => r(false), timeoutMs))]);
+}
+
+/** For tests: forget the in-memory copies so the next reads come from Redis. */
+export function dropRoomCache() {
+  roomCache.clear();
+}
+
+// Forget rooms nobody has touched for a while (never ones with unsent writes)
+setInterval(() => {
+  const cutoff = Date.now() - CACHE_IDLE_MS;
+  for (const [id, entry] of roomCache) {
+    if (entry.usedAt < cutoff && !pendingWrites.has(id) && !flushing.has(id)) {
+      roomCache.delete(id);
+      changeCount.delete(id);
+    }
+  }
+}, 5 * 60_000).unref();
+
 export async function getRoom(roomId: string): Promise<RoomState | null> {
   if (redis) {
-    const data = await redis.get(`room:${roomId}`);
-    return data ? JSON.parse(data) : null;
+    const cached = roomCache.get(roomId);
+    if (cached) {
+      cached.usedAt = Date.now();
+      return JSON.parse(cached.json); // a fresh object each time, like a Redis read
+    }
+    if (pendingWrites.get(roomId) === null) return null; // deleted, delete not sent yet
+    const before = changeCount.get(roomId);
+    const data = await redis.get(roomKey(roomId));
+    // Another read may have cached it meanwhile, or it was saved or deleted while
+    // we waited; in each case memory has the newer answer
+    const now = roomCache.get(roomId);
+    if (now) return JSON.parse(now.json);
+    if (changeCount.get(roomId) !== before) return null;
+    if (!data) return null;
+    cacheRoom(roomId, data);
+    return JSON.parse(data);
   }
   return memoryStore.get(roomId) || null;
 }
 
 export async function saveRoom(room: RoomState): Promise<void> {
   if (redis) {
-    await redis.setex(`room:${room.id}`, ROOM_TTL, JSON.stringify(room));
+    const json = JSON.stringify(room);
+    bump(room.id);
+    cacheRoom(room.id, json);
+    queueWrite(room.id, json);
   } else {
     memoryStore.set(room.id, room);
   }
@@ -115,7 +210,9 @@ export async function saveRoom(room: RoomState): Promise<void> {
 
 export async function deleteRoom(roomId: string): Promise<void> {
   if (redis) {
-    await redis.del(`room:${roomId}`);
+    bump(roomId);
+    roomCache.delete(roomId);
+    queueWrite(roomId, null);
   } else {
     memoryStore.delete(roomId);
   }
