@@ -6,7 +6,7 @@ import { NextSessionLine } from "@/components/DailySessions";
 import { JoinRoomForm } from "@/components/JoinRoomForm";
 import { SuggestionButton } from "@/components/SuggestionButton";
 import { SiteFooter } from "@/components/SiteFooter";
-import { HOME_FAQS } from "@/lib/guides";
+import { GUIDES, HOME_FAQS } from "@/lib/guides";
 import { SITE_SUMMARY } from "@/lib/site";
 import { homeGraph, jsonLd } from "@/lib/structured-data";
 import { librarySnapshot } from "@/lib/libraryCounts";
@@ -324,6 +324,14 @@ export default async function Home() {
                 </details>
               ))}
             </div>
+            <nav aria-label="Guides" className="mt-8">
+              <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-3">Guides</p>
+              <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                {GUIDES.map((g) => (
+                  <li key={g.slug}><Link href={`/${g.slug}`} className="text-white/55 hover:text-white transition-colors">{g.label}</Link></li>
+                ))}
+              </ul>
+            </nav>
           </div>
         </section>
         </div>

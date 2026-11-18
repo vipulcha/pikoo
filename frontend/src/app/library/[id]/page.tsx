@@ -6,8 +6,9 @@ import { LibraryRoomView } from "./LibraryRoomView";
 import { newsreader } from "@/lib/fonts";
 import { librarySnapshot } from "@/lib/libraryCounts";
 
-// Re-rendered every 30s so the HTML carries the current timer, countdown and headcount
-export const revalidate = 30;
+// Rendered per request so the timer in the HTML is the real one (a cached copy
+// would show a stale time that jumps when the page loads)
+export const dynamic = "force-dynamic";
 
 export const dynamicParams = false;
 export const generateStaticParams = () => LIBRARY_ROOMS.map((r) => ({ id: r.id }));

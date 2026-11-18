@@ -100,12 +100,8 @@ export function nextFocusStart(room: LibraryRoom, now: number): number {
 
 export function minutesUntil(t: number, now: number): string {
   const m = Math.max(1, Math.ceil((t - now) / 60_000));
-  return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`;
-}
-
-// "14:30 UTC" style label, the same on the server and every client
-export function utcClock(t: number): string {
-  return new Date(t).toISOString().slice(11, 16) + " UTC";
+  if (m <= 60) return `${m} min`;
+  return m % 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m / 60}h`;
 }
 
 export function librarySchedule(room: LibraryRoom, now: number) {
