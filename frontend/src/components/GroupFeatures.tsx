@@ -140,8 +140,8 @@ export function ScheduleDialog({ open, schedule, onSave, onClear, onClose }: {
 // ---------------------------------------------------------------------------
 
 // "⋯" menu in the room header for the less-used group features
-export function RoomMoreMenu({ onLeaderboard, onSchedule, onFeedback, hasSchedule }: {
-  onLeaderboard: () => void; onSchedule?: () => void; onFeedback: () => void; hasSchedule: boolean;
+export function RoomMoreMenu({ onLeaderboard, onSchedule, onFeedback, onTheme, hasSchedule }: {
+  onLeaderboard: () => void; onSchedule?: () => void; onFeedback: () => void; onTheme?: () => void; hasSchedule: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -168,6 +168,10 @@ export function RoomMoreMenu({ onLeaderboard, onSchedule, onFeedback, hasSchedul
       </button>
       {open && (
         <div role="menu" className="absolute right-0 mt-2 w-64 p-1.5 rounded-xl bg-neutral-900/95 backdrop-blur-md border border-white/10 shadow-2xl z-50 text-sm animate-fade-in">
+          {/* On phones the header has no room for the Theme button, so it lives here */}
+          {onTheme && (
+            <button role="menuitem" className={`${item} sm:hidden`} onClick={pick(onTheme)}><span aria-hidden>🖼️</span>Theme</button>
+          )}
           <button role="menuitem" className={item} onClick={pick(onLeaderboard)}><span aria-hidden>🏆</span>This week&apos;s leaderboard</button>
           {onSchedule && (
             <button role="menuitem" className={item} onClick={pick(onSchedule)}><span aria-hidden>📅</span>{hasSchedule ? "Edit session schedule" : "Schedule a session"}</button>

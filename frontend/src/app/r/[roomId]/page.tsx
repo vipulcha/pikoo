@@ -15,6 +15,9 @@ import { SuggestionButton } from "@/components/SuggestionButton";
 import { NamePrompt, getSavedName, saveName, getUserId, clearSavedName } from "@/components/NamePrompt";
 import { ChatPanel } from "@/components/ChatPanel";
 import { AudioPlayer } from "@/components/AudioPlayer";
+import { BackgroundPicker } from "@/components/BackgroundPicker";
+import { RoomBackground, StarField } from "@/components/RoomBackground";
+import { useBackground } from "@/lib/backgrounds";
 import { TodoList } from "@/components/TodoList";
 import { OthersTodos } from "@/components/OthersTodos";
 import { SessionPrompt } from "@/components/SessionPrompt";
@@ -24,29 +27,6 @@ import { RoomSettings, Phase } from "@/lib/types";
 import { notifyFocusEnd, notifyBreakEnd, requestNotificationPermission, getNotificationPermission } from "@/lib/audio";
 import Link from "next/link";
 import { serverNow } from "@/lib/clock";
-
-// Realistic planet/space images from Unsplash
-const PLANET_IMAGES = [
-  "https://images.unsplash.com/photo-1614732414444-096e5f1122d5?w=1920&q=80", // Earth from space
-  "https://images.unsplash.com/photo-1630839437035-dac17da580d0?w=1920&q=80", // Mars surface
-  "https://images.unsplash.com/photo-1639921884918-8d28ab2e39a4?w=1920&q=80", // Jupiter
-  "https://images.unsplash.com/photo-1545156521-77bd85671d30?w=1920&q=80", // Saturn
-  "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=1920&q=80", // Earth horizon
-  "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920&q=80", // Earth night lights
-  "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=1920&q=80", // Nebula
-  "https://images.unsplash.com/photo-1543722530-d2c3201371e7?w=1920&q=80", // Galaxy
-];
-
-// Pre-generate deterministic star positions (no randomness during render)
-const STARS = [...Array(60)].map((_, i) => ({
-  id: i,
-  width: 1 + (i % 3),
-  left: (i * 17) % 100,
-  top: (i * 23) % 100,
-  opacity: 0.3 + ((i % 7) / 10),
-  delay: (i % 4),
-  duration: 2 + (i % 3),
-}));
 
 interface RoomPageProps {
   params: Promise<{ roomId: string }>;
@@ -59,7 +39,8 @@ export default function RoomPage({ params }: RoomPageProps) {
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [nameError, setNameError] = useState<string | undefined>(undefined);
   const [showSettings, setShowSettings] = useState(false);
-  const [planetImage, setPlanetImage] = useState(PLANET_IMAGES[0]);
+  const bg = useBackground();
+  const [showTheme, setShowTheme] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [lastReadMessageId, setLastReadMessageId] = useState<string | null>(null);
   const [showSessionPrompt, setShowSessionPrompt] = useState(false);
@@ -82,11 +63,6 @@ export default function RoomPage({ params }: RoomPageProps) {
       setUserName(savedName);
     }
     // We'll show welcome prompt later, not name prompt
-  }, []);
-
-  // Pick random planet on client only to avoid hydration mismatch
-  useEffect(() => {
-    setPlanetImage(PLANET_IMAGES[Math.floor(Math.random() * PLANET_IMAGES.length)]);
   }, []);
 
   const handleNameSubmit = (name: string) => {
@@ -294,21 +270,7 @@ export default function RoomPage({ params }: RoomPageProps) {
       <div className="min-h-screen bg-black">
         {/* Stars background */}
         <div className="fixed inset-0 overflow-hidden pointer-events-none">
-          {STARS.map((star) => (
-            <div
-              key={star.id}
-              className="absolute rounded-full bg-white animate-twinkle"
-              style={{
-                width: `${star.width}px`,
-                height: `${star.width}px`,
-                left: `${star.left}%`,
-                top: `${star.top}%`,
-                opacity: star.opacity,
-                animationDelay: `${star.delay}s`,
-                animationDuration: `${star.duration}s`,
-              }}
-            />
-          ))}
+          <StarField />
         </div>
         <NamePrompt
           isOpen={true}
@@ -327,21 +289,7 @@ export default function RoomPage({ params }: RoomPageProps) {
       <div className="min-h-screen bg-black flex items-center justify-center">
         {/* Stars in loading */}
         <div className="fixed inset-0 overflow-hidden pointer-events-none">
-          {STARS.map((star) => (
-            <div
-              key={star.id}
-              className="absolute rounded-full bg-white animate-twinkle"
-              style={{
-                width: `${star.width}px`,
-                height: `${star.width}px`,
-                left: `${star.left}%`,
-                top: `${star.top}%`,
-                opacity: star.opacity,
-                animationDelay: `${star.delay}s`,
-                animationDuration: `${star.duration}s`,
-              }}
-            />
-          ))}
+          <StarField />
         </div>
         <div className="flex flex-col items-center gap-4 relative z-10">
           <div className="w-12 h-12 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
@@ -389,37 +337,7 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col relative overflow-hidden">
-      {/* Space background with planet */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        {/* Planet image */}
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-50 scale-110"
-          style={{
-            backgroundImage: `url(${planetImage})`,
-            filter: 'blur(1px)',
-          }}
-        />
-
-        {/* Dark gradient overlay for readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/70" />
-
-        {/* Star field */}
-        {STARS.map((star) => (
-          <div
-            key={star.id}
-            className="absolute rounded-full bg-white animate-twinkle"
-            style={{
-              width: `${star.width}px`,
-              height: `${star.width}px`,
-              left: `${star.left}%`,
-              top: `${star.top}%`,
-              opacity: star.opacity,
-              animationDelay: `${star.delay}s`,
-              animationDuration: `${star.duration}s`,
-            }}
-          />
-        ))}
-      </div>
+      <RoomBackground bg={bg} />
 
       {/* Header */}
       <header className="flex items-center justify-between p-4 sm:p-6 relative z-20">
@@ -437,6 +355,7 @@ export default function RoomPage({ params }: RoomPageProps) {
           <ParticipantCount participants={participants} isConnected={isConnected} hostId={hostId} />
           <ShareButton roomId={roomId} />
           <AudioPlayer />
+          <BackgroundPicker bg={bg} open={showTheme} setOpen={setShowTheme} />
           {/* Settings button */}
           <button
             onClick={() => setShowSettings(!showSettings)}
@@ -461,6 +380,7 @@ export default function RoomPage({ params }: RoomPageProps) {
             onLeaderboard={() => setShowLeaderboard(true)}
             onSchedule={controlsLocked ? undefined : () => setShowSchedule(true)}
             onFeedback={() => setShowSuggest(true)}
+            onTheme={() => setShowTheme(true)}
             hasSchedule={!!room?.schedule}
           />
         </div>
