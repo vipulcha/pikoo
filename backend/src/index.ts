@@ -265,6 +265,7 @@ const TRACE_EVENTS: Record<string, string> = {
   share: "📤 shared", join_form: "🔗 tried to join with a link", create_room: "🏠 tried to create a room",
   solo_timer: "⏱️ solo timer", obs: "🎥 OBS builder", intro: "📖 silent-room intro", hint: "💡 music hint", error: "⚠️ saw an error",
   auto_room: "➡️ sent straight into a room",
+  background: "🖼️ picked background",
 };
 const traceLimiter = new Map<string, { n: number; at: number }>();
 
