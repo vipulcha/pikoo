@@ -3,6 +3,11 @@ import { notFound } from "next/navigation";
 import { LIBRARY_ROOMS, getLibraryRoom, examDateLabel } from "@/lib/library";
 import { absoluteUrl } from "@/lib/site";
 import { LibraryRoomView } from "./LibraryRoomView";
+import { newsreader } from "@/lib/fonts";
+import { librarySnapshot } from "@/lib/libraryCounts";
+
+// Re-rendered every 30s so the HTML carries the current timer, countdown and headcount
+export const revalidate = 30;
 
 export const dynamicParams = false;
 export const generateStaticParams = () => LIBRARY_ROOMS.map((r) => ({ id: r.id }));
@@ -29,5 +34,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function LibraryRoomPage({ params }: Props) {
   const room = getLibraryRoom((await params).id);
   if (!room) notFound();
-  return <LibraryRoomView room={room} />;
+  const { now, counts } = await librarySnapshot();
+  return (
+    <div className={newsreader.variable}>
+      <LibraryRoomView room={room} initialNow={now} initialCount={counts?.[room.id]} />
+    </div>
+  );
 }

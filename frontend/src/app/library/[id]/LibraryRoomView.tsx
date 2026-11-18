@@ -16,19 +16,24 @@ import { notifyFocusEnd, notifyBreakEnd, getNotificationPermission, requestNotif
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
+// Once we're in, the count includes us
+const peopleHere = (n: number, joined: boolean) =>
+  joined ? (n <= 1 ? "Just you so far" : `You + ${n - 1} focusing`) : n === 0 ? "Empty right now" : `${n} focusing`;
+
 const INTRO_KEY = "pikoo:library-intro-seen";
 
 interface Floating { id: number; emoji: string; left: number }
 
-export function LibraryRoomView({ room }: { room: LibraryRoom }) {
+export function LibraryRoomView({ room, initialNow, initialCount }: { room: LibraryRoom; initialNow?: number; initialCount?: number }) {
   const socketRef = useRef<Socket | null>(null);
-  const [now, setNow] = useState<number | null>(null);
-  const [count, setCount] = useState<number | null>(null);
+  const [now, setNow] = useState<number | null>(initialNow ?? null);
+  const [count, setCount] = useState<number | null>(initialCount ?? null);
   const [floating, setFloating] = useState<Floating[]>([]);
   const [finishedKey, setFinishedKey] = useState<string | null>(null);
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [showIntro, setShowIntro] = useState(false);
+  const [joined, setJoined] = useState(false);
   const prevPhase = useRef<"focus" | "break" | null>(null);
   const lastAmbientSec = useRef<number | null>(null);
 
@@ -61,7 +66,7 @@ export function LibraryRoomView({ room }: { room: LibraryRoom }) {
       syncClock(socket);
     });
     socket.on("library_count", ({ id, count }: { id: string; count: number }) => {
-      if (id === room.id) setCount(count);
+      if (id === room.id) { setCount(count); setJoined(true); }
     });
     socket.on("library_reaction", ({ emoji }: { emoji: string }) => float(emoji));
     return () => { socket.disconnect(); };
@@ -115,7 +120,7 @@ export function LibraryRoomView({ room }: { room: LibraryRoom }) {
         <div className="flex shrink-0 items-center gap-2">
           <span className="whitespace-nowrap flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-sm text-white/75">
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            {count === null || now === null ? "…" : `${displayedLibraryCount(room.id, count, now)} focusing`}
+            {count === null || now === null ? "…" : peopleHere(displayedLibraryCount(room.id, count, now), joined)}
           </span>
           <AudioPlayer />
           <button
@@ -131,9 +136,10 @@ export function LibraryRoomView({ room }: { room: LibraryRoom }) {
 
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 pb-16">
         {room.exam && now && (
-          <p className="mb-6 px-4 py-1.5 rounded-full border border-amber-300/25 bg-amber-300/[0.08] text-sm text-amber-100 text-center">
-            ⏳ <b className="font-semibold">{examCountdownText(room.exam, now)}</b> <span className="text-amber-100/60">· {examDateLabel(room.exam, now)}</span>
-          </p>
+          <div className="mb-8 text-center">
+            <p className="font-serif text-3xl sm:text-4xl text-amber-100">{examCountdownText(room.exam, now)}</p>
+            <p className="mt-1 text-sm text-amber-100/55">{room.exam.name} · {examDateLabel(room.exam, now)}</p>
+          </div>
         )}
         <p className={`text-sm font-semibold uppercase tracking-[0.25em] ${color}`}>{s ? (s.phase === "focus" ? "Focus" : "Break") : " "}</p>
         <div className="font-mono font-light leading-none tracking-tighter text-[clamp(4.5rem,22vw,14rem)]" style={{ fontFeatureSettings: '"tnum"' }}>
