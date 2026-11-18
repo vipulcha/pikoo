@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { SITE_NAME } from "@/lib/site";
 
+// The timer links keep the /timer pages reachable (each one links all the others);
+// the guides are linked from the homepage and from each other.
 const LINKS = [
   { href: "/library", label: "Silent study rooms" },
   { href: "/", label: "Private rooms" },
+  { href: "/timer/25-minutes", label: "25 min timer" },
+  { href: "/timer/50-10", label: "50/10 timer" },
   { href: "/obs", label: "Stream overlay" },
   { href: "/pomodoro-technique", label: "How Pomodoro works" },
 ];
 
-// Short footer: the main places to go. Guide pages link to each other and are in the sitemap.
+// Short footer: the main places to go
 export function SiteFooter({ children }: { children?: React.ReactNode }) {
   return (
     <footer className="relative z-10 border-t border-white/5 px-6 py-8">

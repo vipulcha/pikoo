@@ -8,11 +8,12 @@ import { absoluteUrl } from "@/lib/site";
 import { newsreader } from "@/lib/fonts";
 import { librarySnapshot } from "@/lib/libraryCounts";
 
-// Re-rendered every 30s so the HTML carries current phases and real headcounts
-export const revalidate = 30;
+// Rendered per request: the HTML states the current phase, minutes left and real
+// headcounts, which a cached copy would get wrong
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: { absolute: "Silent Study Rooms on a Fixed Clock – Free, No Sign-Up | Pikoo" },
+  title: { absolute: "Live Online Study Rooms – Silent, Free, No Sign-Up | Pikoo" },
   description:
     "Public silent study rooms where the Pomodoro timer runs on a fixed schedule for everyone. No chat, no names, no camera, no sign-up. Exam rooms count down to JEE, NEET, SAT, AP, A-levels and more.",
   alternates: { canonical: absoluteUrl("/library") },
@@ -22,7 +23,7 @@ export default async function LibraryPage() {
   const { now, counts } = await librarySnapshot();
   return (
     <div className={`${newsreader.variable} min-h-screen bg-stone-950 text-stone-200`}>
-      <CampaignRedirect />
+      <CampaignRedirect counts={counts} />
       <header className="border-b border-stone-800">
         <div className="max-w-4xl mx-auto px-5 sm:px-6 py-4 flex items-center justify-between">
           <Link href="/" className="font-semibold tracking-tight text-stone-100 hover:text-white">Pikoo</Link>
