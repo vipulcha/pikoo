@@ -31,7 +31,7 @@ import {
   setSchedule,
 } from "./store.js";
 import { ChatMessage, UserTodos } from "./types.js";
-import { track, logJoin, logVisitor, formatStay } from "./stats.js";
+import { track, logJoin, logVisitor, formatStay, markCrawler } from "./stats.js";
 import { setupLibraryHandlers } from "./library.js";
 import { log } from "./logger.js";
 import { withRoomLock } from "./room-lock.js";
@@ -316,6 +316,7 @@ export function setupSocketHandlers(io: Server): void {
 
         socket.join(roomId);
         socket.data.uniqueId = uniqueId;
+        markCrawler(uniqueId, socket.handshake.headers["user-agent"]);
         currentRoomId = roomId;
         currentUserName = name;
         currentUniqueId = uniqueId;

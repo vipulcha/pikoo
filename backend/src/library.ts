@@ -6,7 +6,7 @@
 // reactions. Each cycle divides an hour evenly, so sessions start on the hour.
 
 import { Server, Socket } from "socket.io";
-import { track, logJoin, logVisitor, formatStay } from "./stats.js";
+import { track, logJoin, logVisitor, formatStay, markCrawler } from "./stats.js";
 
 export interface LibraryRoom {
   id: string;
@@ -60,6 +60,7 @@ export function setupLibraryHandlers(io: Server, socket: Socket, rateLimited: (s
     }
     const uid = typeof payload?.uniqueId === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(payload.uniqueId) ? payload.uniqueId : undefined;
     if (uid) socket.data.uniqueId = uid; // also counts toward "people focusing right now"
+    markCrawler(uid, socket.handshake.headers["user-agent"]);
     socket.data.libraryRoom = room.id;
     socket.data.libraryJoinedAt = Date.now();
     socket.join(channel(room.id));

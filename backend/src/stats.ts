@@ -29,6 +29,7 @@ const day = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
 const memoryTotals = new Map<string, number>();
 
 export function track(event: StatEvent, uniqueId?: string, amount = 1): void {
+  if (uniqueId && crawlerIds.has(uniqueId)) return;
   const d = day();
   const redis = getRedis();
   if (redis) {
@@ -121,18 +122,43 @@ export function visitorTag(uniqueId: string | undefined, name?: string): string 
   return `[${tag}${name && name !== "Anonymous" ? ` ${name}` : ""}]`;
 }
 
-export function logVisitor(uniqueId: string | undefined, msg: string, name?: string): void {
-  log.visitors.info(`${visitorTag(uniqueId, name)} ${msg}`);
-}
-
 // Search engines and link-preview bots run our JS and fire trace events too.
 // They go to a separate "crawlers" log so "visitors" only shows people.
 const CRAWLER_RE = /(googlebot|google-inspectiontool|googleother|adsbot|mediapartners|bingbot|bingpreview|adidxbot|msnbot|yandex|baiduspider|duckduckbot|applebot|slurp|petalbot|bytespider|gptbot|claudebot|perplexitybot|ahrefsbot|semrushbot|facebookexternalhit|twitterbot|linkedinbot|slackbot|discordbot|telegrambot|headlesschrome|lighthouse|chrome-lighthouse|crawler|spider|\bbot\b)/i;
 
-export function crawlerName(ua: string | undefined): string | null {
+// Some bots pass as an ordinary desktop Chrome but months out of date (one opens
+// a random page every ~50 minutes from a new cloud IP each time). Real Chrome
+// updates itself every 4 weeks. Only the plain Chrome string is checked, so Edge,
+// Opera, Samsung Internet, phones and Chromebooks, which can lag, never match.
+const DESKTOP_CHROME_RE = /^Mozilla\/5\.0 \((?:Windows NT [\d.]+; Win64; x64|Macintosh; Intel Mac OS X [\d_]+|X11; Linux x86_64)\) AppleWebKit\/537\.36 \(KHTML, like Gecko\) Chrome\/(\d+)\.[\d.]+ Safari\/537\.36$/;
+const STALE_CHROME_VERSIONS = 6;
+// Chrome 131 shipped on 2024-11-12 and a new major version comes about every 4 weeks
+export const currentChromeVersion = (now = Date.now()) => 131 + Math.floor((now - Date.UTC(2024, 10, 12)) / (28 * 86_400_000));
+
+export function crawlerName(ua: string | undefined, now = Date.now()): string | null {
   if (!ua) return "no-user-agent";
   const m = ua.match(CRAWLER_RE);
-  return m ? m[1] : null;
+  if (m) return m[1];
+  const chrome = ua.match(DESKTOP_CHROME_RE);
+  if (chrome && Number(chrome[1]) < currentChromeVersion(now) - STALE_CHROME_VERSIONS) return `old-chrome-${chrome[1]}`;
+  return null;
+}
+
+// Browser ids seen with a bot user agent. Their room joins, leaves and reactions
+// (which come over the socket) are logged as crawlers too, and not counted in stats.
+const crawlerIds = new Map<string, string>();
+
+export function markCrawler(uniqueId: string | undefined, ua: string | undefined): void {
+  const bot = crawlerName(ua);
+  if (!uniqueId || !bot) return;
+  if (crawlerIds.size > 5000) crawlerIds.clear();
+  crawlerIds.set(uniqueId, bot);
+}
+
+export function logVisitor(uniqueId: string | undefined, msg: string, name?: string): void {
+  const bot = uniqueId ? crawlerIds.get(uniqueId) : undefined;
+  if (bot) log.crawlers.info(`🤖 ${bot} ${visitorTag(uniqueId, name)} ${msg}`);
+  else log.visitors.info(`${visitorTag(uniqueId, name)} ${msg}`);
 }
 
 export function formatStay(ms: number): string {
