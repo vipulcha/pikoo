@@ -1,3 +1,5 @@
+import { EXAM_ROOMS, STUDY_ROOMS } from "./library";
+
 // Content for the search landing pages served at /<slug>.
 // Each page targets one search intent, opens with a direct answer (for
 // featured snippets and AI answers), and ends with an FAQ marked up as FAQPage.
@@ -6,6 +8,7 @@ export interface GuideSection {
   heading: string;
   paragraphs?: string[];
   bullets?: string[];
+  links?: { href: string; label: string; note?: string }[]; // internal links shown as cards
 }
 
 export interface Guide {
@@ -15,6 +18,9 @@ export interface Guide {
   description: string;  // meta description, ~155 chars
   h1: string;
   answer: string;       // 40–70 word direct answer shown first
+  secondaryCta?: { href: string; label: string }; // shown next to Create Room
+  lead?: GuideSection[];  // sections shown before the steps
+  stepsHeading?: string;  // defaults to "How to do it"
   sections: GuideSection[];
   steps?: { name: string; text: string }[];
   faqs: { q: string; a: string }[];
@@ -23,6 +29,9 @@ export interface Guide {
 }
 
 const UPDATED = "2026-11-09";
+
+const studyRoomLinks = STUDY_ROOMS.map((r) => ({ href: `/library/${r.id}`, label: r.name, note: `${r.focusMin}/${r.breakMin} · ${r.blurb ?? ""}` }));
+const examRoomLinks = EXAM_ROOMS.map((r) => ({ href: `/library/${r.id}`, label: r.name, note: `Countdown to ${r.exam!.name}` }));
 
 export const GUIDES: Guide[] = [
   {
@@ -73,12 +82,28 @@ export const GUIDES: Guide[] = [
   {
     slug: "online-study-room",
     label: "Online study room",
-    title: "Online Study Room – Study Together With a Timer",
+    title: "Online Study Room – Join One Now, Free and No Camera",
     description:
-      "Join or create a free online study room. Study with friends or classmates on one synced Pomodoro timer with goals, focus music and chat. No sign-up.",
-    h1: "An online study room with a shared Pomodoro timer",
+      "Join a free online study room now and focus alongside others on one shared timer, or make a private room for your friends. No sign-up, no camera.",
+    h1: "Online study room: join one now or make your own",
     answer:
-      "An online study room is a virtual space where people study at the same time to stay motivated. With Pikoo you create a free room, share the link with classmates or friends, and everyone studies on the same Pomodoro timer, with session goals, focus music and a chat for breaks.",
+      "An online study room is a virtual space where people study at the same time to stay motivated. On Pikoo you can join a silent public study room right now, where everyone follows the same timer, or create a private room and share the link with classmates. It's free, with no sign-up and no camera.",
+    secondaryCta: { href: "/library", label: "Join a study room now" },
+    lead: [
+      {
+        heading: "Join a public study room now",
+        paragraphs: [
+          "These rooms are always open. The timer runs on the clock, so everyone in a room starts and takes breaks together. There's no chat and no camera; you just see how many people are studying with you.",
+        ],
+        links: studyRoomLinks,
+      },
+      {
+        heading: "Exam study rooms",
+        paragraphs: ["Silent rooms on a 50/10 timer, each with a countdown to the exam."],
+        links: examRoomLinks,
+      },
+    ],
+    stepsHeading: "Or make a private room for your group",
     steps: [
       { name: "Create a study room", text: "Press Create Room on Pikoo. The default is 25 minutes of focus and 5 minutes of break." },
       { name: "Invite your study group", text: "Share the room link in your class group chat, Discord or WhatsApp." },
@@ -104,13 +129,14 @@ export const GUIDES: Guide[] = [
       },
     ],
     faqs: [
+      { q: "Is there a study room I can join right now?", a: "Yes. Pikoo's public study rooms are always open: Pomodoro Hall (25/5), Deep Work Library (50/10), Quick Sprints (15/5), and rooms for exams like JEE Main, NEET, the SAT and A-levels. Open one and start studying, no sign-up needed." },
       { q: "How many people can join a study room?", a: "Rooms are designed for small groups such as a study group or a few friends, and anyone with the link can join." },
       { q: "Is there a camera or microphone?", a: "No. Pikoo has no video or audio calls. You share a timer, goals and a text chat, so you can study without being on camera." },
       { q: "Can I study alone?", a: "Yes. A room works fine as a personal Pomodoro timer with focus sounds and a to-do list." },
       { q: "Do rooms expire?", a: "A room stays available for 30 days after it was last used, so your study group can keep using the same link. You can also pick a custom link like /r/physics-group when creating it." },
     ],
     related: ["pomodoro-timer-with-friends", "pomodoro-technique", "body-doubling"],
-    updated: UPDATED,
+    updated: "2026-11-19",
   },
   {
     slug: "body-doubling",
@@ -241,7 +267,7 @@ export const GUIDES: Guide[] = [
       { q: "Do teammates need accounts?", a: "No. Anyone with the link can join with a display name." },
       { q: "Is it secure for work?", a: "Rooms are only reachable by people with the link. Pikoo stores room state temporarily, and you shouldn't put confidential details in goals or chat." },
     ],
-    related: ["virtual-coworking", "pomodoro-timer-with-friends", "pomodoro-technique"],
+    related: ["cuckoo-alternative", "virtual-coworking", "pomodoro-timer-with-friends"],
     updated: UPDATED,
   },
   {
@@ -376,6 +402,64 @@ export const GUIDES: Guide[] = [
     ],
     related: ["body-doubling-adhd", "pomodoro-technique", "body-doubling"],
     updated: "2026-11-10",
+  },
+  {
+    // People still search for Cuckoo (cuckoo.team), a shared timer for remote teams.
+    // Only state what we can check about it, with the date we checked.
+    slug: "cuckoo-alternative",
+    label: "Cuckoo timer alternative",
+    title: "Cuckoo Team Timer Alternative – Free Shared Timer | Pikoo",
+    description:
+      "Looking for Cuckoo, the shared timer for remote teams? Pikoo works the same way: one link per team and everyone sees the same timer. Free, no sign-up.",
+    h1: "A free alternative to the Cuckoo team timer",
+    answer:
+      "Cuckoo (cuckoo.team) is a productivity timer for remote teams: you make a link and everyone on it sees the same timer. When we checked on 19 November 2026, its site said the service had been suspended by its owner. Pikoo works the same way. Create a room with your team's name, share the link, and everyone runs on one synced timer. It's free, with no sign-up.",
+    stepsHeading: "Move your team over",
+    steps: [
+      { name: "Pick your team's link", text: "On the Pikoo homepage, press Customize timer and type your team's name under Custom link, for example design-team. If you used a name on Cuckoo, you can keep it as long as nobody has taken it here." },
+      { name: "Set the rhythm", text: "Choose focus, break and long break lengths. Pick host mode if one person should run the timer for everyone." },
+      { name: "Share the new link", text: "Post the room link (it ends in /r/your-team-name) in your team channel, or pin it, so everyone lands in the same room." },
+      { name: "Start a sprint", text: "Press play. Everyone in the room sees the same countdown, and breaks start at the same moment for the whole team." },
+    ],
+    sections: [
+      {
+        heading: "What works the same as Cuckoo",
+        bullets: [
+          "One shareable link per team, with a name you choose.",
+          "Everyone on the link sees the same timer in real time.",
+          "It runs in the browser, with nothing to install.",
+        ],
+      },
+      {
+        heading: "What Pikoo adds",
+        bullets: [
+          "Goals and a to-do list you can share with the room, so the team can see what everyone is working on.",
+          "Chat for breaks, focus sounds and live lo-fi stations.",
+          "Host-only mode, and adding 5 or 10 minutes when you're in the flow.",
+          "Recurring schedules you can add to your calendar.",
+          "Silent public rooms for working alongside other people.",
+          "A stream overlay and an embed for Notion.",
+          "The code is open source under the MIT license.",
+        ],
+      },
+      {
+        heading: "Things to know before you switch",
+        bullets: [
+          "There are no accounts, so there's no admin panel or team billing. Anyone with the link can join.",
+          "A room stays available for 30 days after it was last used, so a team that uses it every week keeps the same link.",
+          "There's no Slack app. Share the room link in any channel and people join from their browser.",
+        ],
+      },
+    ],
+    faqs: [
+      { q: "Is Cuckoo shut down?", a: "When we checked on 19 November 2026, cuckoo.team showed the message \"This service has been suspended by its owner.\" We're not connected to Cuckoo and don't know whether it will come back." },
+      { q: "Can I keep my team's link name?", a: "Yes, if it's free on Pikoo. Type it under Custom link when you create the room, and the room lives at /r/your-team-name." },
+      { q: "Is Pikoo free?", a: "Yes. Pikoo is free, with no account, trial or download." },
+      { q: "Can one person control the timer for the team?", a: "Yes. Choose host mode when creating the room and only the host can start, pause, skip or add time." },
+      { q: "Is Pikoo made by the people behind Cuckoo?", a: "No. Pikoo is an independent open-source project and isn't affiliated with Cuckoo." },
+    ],
+    related: ["focus-timer-for-remote-teams", "virtual-coworking", "pomodoro-timer-with-friends"],
+    updated: "2026-11-19",
   },
 ];
 
