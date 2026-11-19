@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CreateRoomButton } from "@/components/CreateRoomPanel";
 import { SiteFooter } from "@/components/SiteFooter";
-import { GUIDES, getGuide } from "@/lib/guides";
+import { GUIDES, getGuide, type GuideSection } from "@/lib/guides";
 import { SITE_NAME, absoluteUrl } from "@/lib/site";
 import { guideGraph, jsonLd } from "@/lib/structured-data";
 
@@ -87,12 +87,24 @@ export default async function GuidePage({ params }: Props) {
 
           <div className="mt-8 flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="sm:w-64"><CreateRoomButton /></div>
-            <p className="text-sm text-white/40">Free · No sign-up · Works in your browser</p>
+            {guide.secondaryCta ? (
+              <Link
+                href={guide.secondaryCta.href}
+                className="self-start px-8 py-3 sm:px-10 sm:py-4 rounded-full font-semibold text-base sm:text-lg border border-white/15 hover:border-white/35 bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
+              >
+                {guide.secondaryCta.label} →
+              </Link>
+            ) : (
+              <p className="text-sm text-white/40">Free · No sign-up · Works in your browser</p>
+            )}
           </div>
+          {guide.secondaryCta && <p className="mt-3 text-sm text-white/40">Free · No sign-up · Works in your browser</p>}
+
+          {guide.lead?.map((section) => <SectionBlock key={section.heading} section={section} />)}
 
           {guide.steps && (
             <section className="mt-16">
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-6">How to do it</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-6">{guide.stepsHeading ?? "How to do it"}</h2>
               <ol className="space-y-4">
                 {guide.steps.map((step, i) => (
                   <li key={step.name} id={`step-${i + 1}`} className="flex gap-4 p-5 rounded-2xl bg-white/[0.03] border border-white/10">
@@ -107,19 +119,7 @@ export default async function GuidePage({ params }: Props) {
             </section>
           )}
 
-          {guide.sections.map((section) => (
-            <section key={section.heading} className="mt-16">
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-5">{section.heading}</h2>
-              {section.paragraphs?.map((p) => (
-                <p key={p} className="text-white/70 leading-relaxed mb-4">{p}</p>
-              ))}
-              {section.bullets && (
-                <ul className="space-y-2.5 list-disc pl-5 marker:text-rose-400/70 text-white/70 leading-relaxed">
-                  {section.bullets.map((b) => <li key={b}>{b}</li>)}
-                </ul>
-              )}
-            </section>
-          ))}
+          {guide.sections.map((section) => <SectionBlock key={section.heading} section={section} />)}
 
           <section className="mt-16">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-6">Frequently asked questions</h2>
@@ -162,5 +162,33 @@ export default async function GuidePage({ params }: Props) {
 
       <SiteFooter />
     </div>
+  );
+}
+
+function SectionBlock({ section }: { section: GuideSection }) {
+  return (
+    <section className="mt-16">
+      <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-5">{section.heading}</h2>
+      {section.paragraphs?.map((p) => (
+        <p key={p} className="text-white/70 leading-relaxed mb-4">{p}</p>
+      ))}
+      {section.bullets && (
+        <ul className="space-y-2.5 list-disc pl-5 marker:text-rose-400/70 text-white/70 leading-relaxed">
+          {section.bullets.map((b) => <li key={b}>{b}</li>)}
+        </ul>
+      )}
+      {section.links && (
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {section.links.map((l) => (
+            <li key={l.href}>
+              <Link href={l.href} className="block h-full p-4 rounded-xl border border-white/10 hover:border-white/25 bg-white/[0.02] transition-colors">
+                <span className="font-medium text-white/90">{l.label}</span>
+                {l.note && <span className="block mt-1 text-sm text-white/50">{l.note}</span>}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
