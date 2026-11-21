@@ -62,7 +62,7 @@ Open http://localhost:3000, create a room, and open the link in a second window 
 ## Self-host
 
 1. **Redis:** any Redis 6+ (Railway, Upstash, Redis Cloud, or your own).
-2. **Backend:** deploy `backend/` to any Node host (Railway, Render, Fly.io, a VPS). Start command `npm start`. Set `REDIS_URL`, `FRONTEND_URL` (your site's origin), `NODE_ENV=production` and `DEBUG_SECRET`. It needs WebSocket support.
+2. **Backend:** deploy `backend/` to any Node host (Railway, Render, Fly.io, a VPS). Start command `node --import tsx src/index.ts` (run node directly rather than `npm start`, because npm doesn't pass SIGTERM on and the server saves queued room writes when it gets one; on Railway also set a draining time of about 15 seconds). Set `REDIS_URL`, `FRONTEND_URL` (your site's origin), `NODE_ENV=production` and `DEBUG_SECRET`. It needs WebSocket support.
 3. **Frontend:** deploy `frontend/` to Vercel (set the project's root directory to `frontend`) or any Next.js host. Set `NEXT_PUBLIC_BACKEND_URL` to the backend's URL and `NEXT_PUBLIC_SITE_URL` to your site's URL.
 
 All variables are documented in [`backend/.env.example`](backend/.env.example) and [`frontend/.env.example`](frontend/.env.example).

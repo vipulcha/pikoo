@@ -408,9 +408,17 @@ httpServer.listen(PORT, () => {
 });
 
 // Room changes reach Redis in the background (see store.ts), so on a deploy or
-// restart let queued writes land before the process exits
+// restart let queued writes land before the process exits.
+// This only works if the signal reaches this process: npm doesn't pass SIGTERM
+// on, so Railway's start command runs node directly (see the start script), and
+// the service's draining time gives the save a few seconds before SIGKILL.
+let shuttingDown = false;
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
-  process.once(signal, async () => {
+  process.on(signal, async () => {
+    // A second signal (some runners send one to every process) must not kill
+    // the process halfway through saving
+    if (shuttingDown) return;
+    shuttingDown = true;
     log.server.info("Shutting down, saving queued room writes", { signal });
     if (!(await flushRoomWrites(8000))) log.server.warn("Some room writes did not finish before exit");
     process.exit(0);
