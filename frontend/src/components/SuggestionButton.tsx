@@ -44,7 +44,7 @@ export function SuggestionButton({ roomId, name, open, onClose }: SuggestionButt
       }, 1500);
     } catch (err) {
       setStatus("error");
-      setError(err instanceof Error ? err.message : "Failed to send suggestion");
+      setError(err instanceof Error ? err.message : "Couldn't send it, please try again");
     }
   };
 
@@ -57,7 +57,7 @@ export function SuggestionButton({ roomId, name, open, onClose }: SuggestionButt
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
         </svg>
-        <span className="text-sm font-medium hidden sm:inline">Suggest</span>
+        <span className="text-sm font-medium hidden sm:inline">Feedback</span>
       </button>}
 
       {isOpen && (
@@ -71,7 +71,7 @@ export function SuggestionButton({ roomId, name, open, onClose }: SuggestionButt
             className="relative w-full max-w-md bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-5 animate-fade-in"
           >
             <div className="flex items-center justify-between mb-2">
-              <h3 className="font-medium text-white">Got a suggestion?</h3>
+              <h3 className="font-medium text-white">Suggestion or bug?</h3>
               <button
                 type="button"
                 onClick={close}
@@ -83,12 +83,12 @@ export function SuggestionButton({ roomId, name, open, onClose }: SuggestionButt
               </button>
             </div>
             <p className="text-white/60 text-sm mb-4">
-              Ideas, bugs, features you&apos;d love to see. We read every one.
+              Tell us what you&apos;d add, or what isn&apos;t working and on which device. We read every one.
             </p>
 
             {status === "sent" ? (
               <div className="py-8 text-center text-green-300">
-                Thanks! Your suggestion was sent.
+                Thanks! We got it.
               </div>
             ) : (
               <>
@@ -98,7 +98,7 @@ export function SuggestionButton({ roomId, name, open, onClose }: SuggestionButt
                   maxLength={2000}
                   rows={5}
                   autoFocus
-                  placeholder="I wish Pikoo could..."
+                  placeholder="I wish Pikoo could... / When I pressed Start on my phone..."
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-white/30 resize-none"
                 />
                 {error && <p className="mt-2 text-sm text-red-400">{error}</p>}

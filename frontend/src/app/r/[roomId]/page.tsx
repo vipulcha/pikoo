@@ -27,6 +27,7 @@ import { RoomSettings, Phase } from "@/lib/types";
 import { notifyFocusEnd, notifyBreakEnd, requestNotificationPermission, getNotificationPermission } from "@/lib/audio";
 import Link from "next/link";
 import { serverNow } from "@/lib/clock";
+import { trace } from "@/lib/trace";
 
 interface RoomPageProps {
   params: Promise<{ roomId: string }>;
@@ -338,7 +339,21 @@ export default function RoomPage({ params }: RoomPageProps) {
   return (
     <div className="min-h-screen bg-black text-white flex flex-col relative overflow-hidden">
       <RoomBackground bg={bg} />
-      <NextWallpaperButton bg={bg} />
+      {/* Bottom-left corner: next wallpaper (only for themes with several photos) and feedback */}
+      <div className="fixed bottom-4 left-4 z-30 flex items-center gap-2">
+        <NextWallpaperButton bg={bg} />
+        <button
+          onClick={() => { trace("click", { what: "feedback_button" }); setShowSuggest(true); }}
+          title="Suggest something or report a bug"
+          aria-label="Suggest something or report a bug"
+          className="h-10 min-w-10 px-2.5 sm:px-4 rounded-full bg-black/40 backdrop-blur-md border border-white/15 text-white/75 hover:text-white hover:bg-black/60 flex items-center justify-center gap-2 text-sm transition-colors"
+        >
+          <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+          </svg>
+          <span className="hidden sm:inline">Feedback</span>
+        </button>
+      </div>
 
       {/* Header */}
       <header className="flex items-center justify-between p-4 sm:p-6 relative z-20">

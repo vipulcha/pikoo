@@ -154,7 +154,7 @@ export function NextWallpaperButton({ bg }: { bg: BackgroundState }) {
       onClick={next}
       title={`Next ${label.toLowerCase()} wallpaper (${bg.photoIndex + 1} of ${bg.photoCount})`}
       aria-label="Next wallpaper"
-      className="fixed bottom-4 left-4 z-30 h-10 w-10 rounded-full bg-black/40 backdrop-blur-md border border-white/15 text-white/75 hover:text-white hover:bg-black/60 flex items-center justify-center transition-colors"
+      className="shrink-0 h-10 w-10 rounded-full bg-black/40 backdrop-blur-md border border-white/15 text-white/75 hover:text-white hover:bg-black/60 flex items-center justify-center transition-colors"
     >
       {loading ? (
         <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
