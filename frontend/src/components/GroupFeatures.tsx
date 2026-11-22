@@ -177,7 +177,7 @@ export function RoomMoreMenu({ onLeaderboard, onSchedule, onFeedback, onTheme, h
             <button role="menuitem" className={item} onClick={pick(onSchedule)}><span aria-hidden>📅</span>{hasSchedule ? "Edit session schedule" : "Schedule a session"}</button>
           )}
           <div className="my-1 h-px bg-white/10" />
-          <button role="menuitem" className={`${item} text-white/70`} onClick={pick(onFeedback)}><span aria-hidden>💡</span>Send a suggestion</button>
+          <button role="menuitem" className={`${item} text-white/70`} onClick={pick(onFeedback)}><span aria-hidden>💡</span>Suggestion or bug</button>
         </div>
       )}
     </div>

@@ -303,13 +303,16 @@ app.post("/suggestions", async (req, res) => {
   }
 
   try {
+    const roomId = sanitizeRoomId(req.body?.roomId) ?? undefined;
     await addSuggestion({
       text,
       name: sanitizeName(req.body?.name) ?? undefined,
-      roomId: sanitizeRoomId(req.body?.roomId) ?? undefined,
+      roomId,
       createdAt: Date.now(),
     });
-    log.server.info("Suggestion received", { length: text.length });
+    // The text goes in the log too, so new suggestions show up without the
+    // debug endpoint
+    log.server.info("Suggestion received", { roomId, text });
     res.status(201).json({ ok: true });
   } catch (err) {
     log.server.error("Failed to save suggestion", { error: String(err) });
