@@ -8,7 +8,7 @@ import dotenv from "dotenv";
 
 import { initRedis, createRoom, getRoom, addSuggestion, getSuggestions, flushRoomWrites } from "./store.js";
 import { track, readDailyStats, readTotals, logVisitor, markCrawler } from "./stats.js";
-import { LIBRARY_ROOMS, libraryCount } from "./library.js";
+import { LIBRARY_ROOMS, libraryCount, focusedThisWeek } from "./library.js";
 import { setupSocketHandlers } from "./socket.js";
 import { RoomSettings, DEFAULT_SETTINGS } from "./types.js";
 import { log } from "./logger.js";
@@ -232,7 +232,11 @@ app.get("/library", async (req, res) => {
     res.status(429).json({ error: "Too many requests" });
     return;
   }
-  const rooms = await Promise.all(LIBRARY_ROOMS.map(async (r) => ({ ...r, count: await libraryCount(io, r.id) })));
+  const rooms = await Promise.all(LIBRARY_ROOMS.map(async (r) => ({
+    ...r,
+    count: await libraryCount(io, r.id),
+    focusedThisWeek: await focusedThisWeek(r.id),
+  })));
   res.set("Cache-Control", "public, max-age=15");
   res.json({ rooms });
 });

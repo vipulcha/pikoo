@@ -6,7 +6,8 @@
 // reactions. Each cycle divides an hour evenly, so sessions start on the hour.
 
 import { Server, Socket } from "socket.io";
-import { track, logJoin, logVisitor, formatStay, markCrawler } from "./stats.js";
+import { track, logJoin, logVisitor, formatStay, markCrawler, isCrawler } from "./stats.js";
+import { getRedis } from "./store.js";
 
 export interface LibraryRoom {
   id: string;
@@ -44,6 +45,40 @@ async function broadcastCount(io: Server, id: string) {
   io.to(channel(id)).emit("library_count", { id, count: await libraryCount(io, id) });
 }
 
+// "N people focused here this week": browsers that stayed at least 10 minutes in
+// a room, kept per UTC day as a HyperLogLog (ids can't be read back) for 8 days.
+// The page only shows the number once it's big enough to mean something.
+const FOCUSED_MIN_MS = 10 * 60_000;
+const utcDay = (t: number) => new Date(t).toISOString().slice(0, 10);
+const focusedKey = (id: string, day: string) => `library:focused:${id}:${day}`;
+const memoryFocused = new Map<string, Set<string>>();
+
+function recordStay(socket: Socket, id: string) {
+  const uid = socket.data.uniqueId as string | undefined;
+  const stayed = Date.now() - ((socket.data.libraryJoinedAt as number | undefined) ?? Date.now());
+  logVisitor(uid, `🚪 left silent room ${id} after ${formatStay(stayed)}`);
+  if (!uid || stayed < FOCUSED_MIN_MS || isCrawler(uid)) return;
+  const key = focusedKey(id, utcDay(Date.now()));
+  const redis = getRedis();
+  if (redis) {
+    redis.multi().pfadd(key, uid).expire(key, 8 * 86_400).exec().catch(() => {});
+    return;
+  }
+  if (memoryFocused.size > 1000) memoryFocused.clear();
+  const people = memoryFocused.get(key) ?? new Set<string>();
+  people.add(uid);
+  memoryFocused.set(key, people);
+}
+
+export async function focusedThisWeek(id: string): Promise<number> {
+  const [first, ...rest] = Array.from({ length: 7 }, (_, i) => focusedKey(id, utcDay(Date.now() - i * 86_400_000)));
+  const redis = getRedis();
+  if (redis) return redis.pfcount(first, ...rest).catch(() => 0);
+  const people = new Set<string>();
+  for (const key of [first, ...rest]) for (const uid of memoryFocused.get(key) ?? []) people.add(uid);
+  return people.size;
+}
+
 export function setupLibraryHandlers(io: Server, socket: Socket, rateLimited: (s: Socket) => boolean) {
   let lastReactionAt = 0;
 
@@ -54,7 +89,7 @@ export function setupLibraryHandlers(io: Server, socket: Socket, rateLimited: (s
     const prev = socket.data.libraryRoom as string | undefined;
     if (prev === room.id) return;
     if (prev) {
-      logVisitor(socket.data.uniqueId, `🚪 left silent room ${prev} after ${formatStay(Date.now() - (socket.data.libraryJoinedAt ?? Date.now()))}`);
+      recordStay(socket, prev);
       socket.leave(channel(prev));
       await broadcastCount(io, prev);
     }
@@ -83,7 +118,7 @@ export function setupLibraryHandlers(io: Server, socket: Socket, rateLimited: (s
   socket.on("disconnect", () => {
     const id = socket.data.libraryRoom as string | undefined;
     if (id) {
-      logVisitor(socket.data.uniqueId, `🚪 left silent room ${id} after ${formatStay(Date.now() - (socket.data.libraryJoinedAt ?? Date.now()))}`);
+      recordStay(socket, id);
       broadcastCount(io, id).catch(() => {});
     }
   });

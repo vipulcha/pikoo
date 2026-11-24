@@ -47,17 +47,25 @@ export function AudioPlayer() {
     }
   }, []);
 
-  // One-time nudge so people notice the music button
+  // One-time nudge so people notice the music button. It waits a minute so it
+  // doesn't pile onto whatever greets a new visitor (intro card, name prompt),
+  // and keeps waiting while a dialog is open or the tab is in the background.
   useEffect(() => {
     let seen = false;
     try { seen = localStorage.getItem(STORAGE_KEY_HINT) === "1"; } catch { /* storage blocked */ }
     if (seen) return;
-    const t = setTimeout(() => {
+    let t: ReturnType<typeof setTimeout>;
+    const show = () => {
+      if (document.hidden || document.querySelector('[role="dialog"]')) {
+        t = setTimeout(show, 15_000);
+        return;
+      }
       const r = buttonRef.current?.getBoundingClientRect();
       if (!r) return;
       setHintPos({ top: r.bottom + 10, right: Math.max(12, window.innerWidth - r.right) });
       setShowHint(true);
-    }, 6000);
+    };
+    t = setTimeout(show, 60_000);
     return () => clearTimeout(t);
   }, []);
 
