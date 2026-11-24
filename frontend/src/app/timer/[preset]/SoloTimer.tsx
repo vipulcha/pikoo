@@ -80,6 +80,23 @@ export function SoloTimer({ focusMin, breakMin }: { focusMin: number; breakMin: 
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  // "Start my own timer" in an empty silent room links here with ?start=1, so the
+  // timer is already running when the page opens
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("start") !== "1") return;
+    const t = setTimeout(() => {
+      // Drop the flag only once the timer actually starts (dev mode runs effects twice)
+      const params = new URLSearchParams(window.location.search);
+      params.delete("start");
+      const rest = params.toString();
+      window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
+      start();
+    }, 0);
+    return () => clearTimeout(t);
+    // Runs once on arrival; start() only needs the initial focus length
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const makeShared = async () => {
     trace("solo_timer", { action: "make_shared", focus: focusMin });
     setSharing(true);

@@ -155,6 +155,8 @@ export function markCrawler(uniqueId: string | undefined, ua: string | undefined
   crawlerIds.set(uniqueId, bot);
 }
 
+export const isCrawler = (uniqueId: string | undefined): boolean => !!uniqueId && crawlerIds.has(uniqueId);
+
 export function logVisitor(uniqueId: string | undefined, msg: string, name?: string): void {
   const bot = uniqueId ? crawlerIds.get(uniqueId) : undefined;
   if (bot) log.crawlers.info(`🤖 ${bot} ${visitorTag(uniqueId, name)} ${msg}`);

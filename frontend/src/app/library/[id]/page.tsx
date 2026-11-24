@@ -5,6 +5,7 @@ import { absoluteUrl } from "@/lib/site";
 import { LibraryRoomView } from "./LibraryRoomView";
 import { newsreader } from "@/lib/fonts";
 import { librarySnapshot } from "@/lib/libraryCounts";
+import { getTimerPreset } from "@/lib/timers";
 
 // Rendered per request so the timer in the HTML is the real one (a cached copy
 // would show a stale time that jumps when the page loads)
@@ -35,10 +36,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function LibraryRoomPage({ params }: Props) {
   const room = getLibraryRoom((await params).id);
   if (!room) notFound();
-  const { now, counts } = await librarySnapshot();
+  const { now, counts, focused } = await librarySnapshot();
+  // A solo timer with the same rhythm, offered when nobody else is in the room
+  const solo = getTimerPreset(`${room.focusMin}-${room.breakMin}`) ?? getTimerPreset(`${room.focusMin}-minutes`);
   return (
     <div className={newsreader.variable}>
-      <LibraryRoomView room={room} initialNow={now} initialCount={counts?.[room.id]} />
+      <LibraryRoomView
+        room={room}
+        initialNow={now}
+        initialCount={counts?.[room.id]}
+        focusedThisWeek={focused?.[room.id] ?? 0}
+        soloTimerSlug={solo?.slug}
+      />
     </div>
   );
 }

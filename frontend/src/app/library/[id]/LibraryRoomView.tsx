@@ -22,9 +22,22 @@ const peopleHere = (n: number, joined: boolean) =>
 
 const INTRO_KEY = "pikoo:library-intro-seen";
 
+// Below this, "N people focused here this week" reads as empty rather than busy
+const FOCUSED_SHOWN_FROM = 3;
+
 interface Floating { id: number; emoji: string; left: number }
 
-export function LibraryRoomView({ room, initialNow, initialCount }: { room: LibraryRoom; initialNow?: number; initialCount?: number }) {
+interface Props {
+  room: LibraryRoom;
+  initialNow?: number;
+  initialCount?: number;
+  /** People who stayed 10+ minutes in this room over the last 7 days */
+  focusedThisWeek?: number;
+  /** /timer/<slug> with the same rhythm, offered when the room is empty */
+  soloTimerSlug?: string;
+}
+
+export function LibraryRoomView({ room, initialNow, initialCount, focusedThisWeek = 0, soloTimerSlug }: Props) {
   const socketRef = useRef<Socket | null>(null);
   const [now, setNow] = useState<number | null>(initialNow ?? null);
   const [count, setCount] = useState<number | null>(initialCount ?? null);
@@ -34,6 +47,8 @@ export function LibraryRoomView({ room, initialNow, initialCount }: { room: Libr
   const [copied, setCopied] = useState(false);
   const [showIntro, setShowIntro] = useState(false);
   const [joined, setJoined] = useState(false);
+  const [emptyHidden, setEmptyHidden] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
   const prevPhase = useRef<"focus" | "break" | null>(null);
   const lastAmbientSec = useRef<number | null>(null);
 
@@ -110,6 +125,23 @@ export function LibraryRoomView({ room, initialNow, initialCount }: { room: Libr
   const react = (emoji: string) => socketRef.current?.emit("library_react", { emoji });
   const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/library/${room.id}` : "";
 
+  // Nobody else here: instead of a bare timer, offer the two things that work
+  // alone (bring someone, or run your own timer from now)
+  const shown = count === null || now === null ? null : displayedLibraryCount(room.id, count, now);
+  const alone = joined && shown !== null && shown <= 1;
+  const invite = async () => {
+    trace("click", { what: "empty_invite", room: room.id });
+    if (navigator.share) {
+      try { await navigator.share({ title: room.name, text: `Focus with me in ${room.name} on Pikoo`, url: shareUrl }); return; }
+      catch (e) { if ((e as Error).name === "AbortError") return; }
+    }
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2000);
+    } catch { /* clipboard blocked */ }
+  };
+
   return (
     <div className="min-h-screen bg-black text-white flex flex-col relative overflow-hidden">
       <div className={`pointer-events-none absolute inset-0 transition-colors duration-1000 ${s?.phase === "break" ? "bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.12),transparent_60%)]" : "bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.12),transparent_60%)]"}`} />
@@ -121,7 +153,7 @@ export function LibraryRoomView({ room, initialNow, initialCount }: { room: Libr
         <div className="flex shrink-0 items-center gap-2">
           <span className="whitespace-nowrap flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-sm text-white/75">
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            {count === null || now === null ? "…" : peopleHere(displayedLibraryCount(room.id, count, now), joined)}
+            {shown === null ? "…" : peopleHere(shown, joined)}
           </span>
           <AudioPlayer />
           <button
@@ -160,6 +192,37 @@ export function LibraryRoomView({ room, initialNow, initialCount }: { room: Libr
           Silent room · {room.focusMin} min focus, {room.breakMin} min break · the timer runs on a fixed schedule for everyone
         </p>
         <NextSessionLine roomId={room.id} className="mt-2 text-center" />
+
+        {alone && !emptyHidden && !showIntro && (
+          <div className="relative mt-8 w-full max-w-md rounded-2xl bg-white/5 border border-white/10 px-5 pt-4 pb-5 text-center animate-fade-in">
+            <button
+              onClick={() => setEmptyHidden(true)}
+              aria-label="Hide"
+              className="absolute top-1.5 right-1.5 w-8 h-8 rounded-full text-lg leading-none text-white/35 hover:text-white/75"
+            >
+              ×
+            </button>
+            <p className="text-sm font-medium text-white/85">It&apos;s just you right now</p>
+            <p className="mt-1.5 text-xs leading-relaxed text-white/50">
+              {focusedThisWeek >= FOCUSED_SHOWN_FROM && `${focusedThisWeek} people focused here this week. `}
+              The timer keeps running for anyone who drops in. Bring a friend, or start your own timer now.
+            </p>
+            <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-center">
+              <button onClick={invite} className="h-10 px-4 rounded-full bg-rose-500 hover:bg-rose-400 text-sm font-medium whitespace-nowrap">
+                {inviteCopied ? "Link copied" : "Invite a friend"}
+              </button>
+              {soloTimerSlug && (
+                <Link
+                  href={`/timer/${soloTimerSlug}?start=1`}
+                  onClick={() => trace("click", { what: "empty_solo_timer", room: room.id })}
+                  className="h-10 px-4 rounded-full bg-white/10 hover:bg-white/15 text-sm whitespace-nowrap flex items-center justify-center"
+                >
+                  Start my own {room.focusMin}-min timer
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="mt-10 flex items-center gap-2" aria-label="Send a reaction">
           {LIBRARY_REACTIONS.map((e) => (
