@@ -43,10 +43,12 @@ export function InviteNudge({ roomId, onDismiss }: { roomId: string; onDismiss: 
 
 // Shown during the break after a focus session ran to the end
 export function SessionSummary({
-  shareUrl, stats, others, phase, onDismiss, canEnableNotifications, onEnableNotifications,
+  shareUrl, stats, others, phase, onDismiss, canEnableNotifications, onEnableNotifications, onInvite,
 }: {
   shareUrl: string; stats: FocusStats; others: number; phase: Phase; onDismiss: () => void;
   canEnableNotifications?: boolean; onEnableNotifications?: () => void;
+  /** "Invite a friend" opens the room's Share menu; without it, it's a WhatsApp link */
+  onInvite?: () => void;
 }) {
   const [sharing, setSharing] = useState(false);
   const [notifAsked, setNotifAsked] = useState(false);
@@ -109,9 +111,15 @@ export function SessionSummary({
         <button onClick={share} disabled={sharing} className={`${btn} bg-white text-black hover:bg-white/85 disabled:opacity-60`}>
           {sharing ? "Preparing…" : "Share my progress"}
         </button>
-        <a href={whatsapp} target="_blank" rel="noopener" onClick={() => trace("share", { how: "whatsapp", from: "summary" })} className={`${btn} inline-flex items-center bg-white/10 hover:bg-white/20 text-white`}>
-          Invite a friend
-        </a>
+        {onInvite ? (
+          <button onClick={() => { trace("click", { what: "summary_invite" }); onInvite(); }} className={`${btn} bg-white/10 hover:bg-white/20 text-white`}>
+            Invite a friend
+          </button>
+        ) : (
+          <a href={whatsapp} target="_blank" rel="noopener" onClick={() => trace("share", { how: "whatsapp", from: "summary" })} className={`${btn} inline-flex items-center bg-white/10 hover:bg-white/20 text-white`}>
+            Invite a friend
+          </a>
+        )}
       </div>
       {canEnableNotifications && !notifAsked && (
         <button

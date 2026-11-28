@@ -668,6 +668,7 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
                 onDismiss={() => setDismissedSummaryId(finishedId)}
                 canEnableNotifications={getNotificationPermission() === "default"}
                 onEnableNotifications={() => { void requestNotificationPermission("summary"); }}
+                onInvite={() => setShareSignal((n) => n + 1)}
               />
             ) : (
               !dev && !inviteDismissed &&

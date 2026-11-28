@@ -100,6 +100,7 @@ const CLICK_LABELS: Record<string, string> = {
   tasks_panel: "Opened tasks (phone)",
   invite_nudge_dismiss: "Closed the invite nudge",
   summary_dismiss: "Closed the Session done card",
+  summary_invite: "Invite a friend (Session done card)",
   session_prompt_skip: "Skipped picking a task",
   features_button: "Opened Features",
   features_more: "Show more (Features)",
