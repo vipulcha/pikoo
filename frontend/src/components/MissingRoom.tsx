@@ -23,6 +23,20 @@ interface MissingRoomProps {
 //   name; goes there if found, otherwise offers to create it in one click.
 // - Room link (/r/<code>): only the exact code is checked again (an /r/ link must
 //   never land in a different room); if it exists now, the page reloads into it.
+// The /r/ room exists after all (created a moment ago): reload into it, but only
+// once per 30 seconds, so a room that keeps failing to open can't reload forever
+function reloadOnce(id: string): boolean {
+  try {
+    const key = `pikoo_missing_reload_${id}`;
+    const last = Number(sessionStorage.getItem(key) ?? 0);
+    if (Date.now() - last < 30_000) return false;
+    sessionStorage.setItem(key, String(Date.now()));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function MissingRoom({ name, short, reserved = [] }: MissingRoomProps) {
   const router = useRouter();
   const [state, setState] = useState<"checking" | "missing" | "offline">("checking");
@@ -48,8 +62,8 @@ export function MissingRoom({ name, short, reserved = [] }: MissingRoomProps) {
       if (short) trace("short_link", { name: name.slice(0, 40), found });
       else trace("missing_room", { code: name.slice(0, 40), found });
       if (id && (short || id !== name)) router.replace(`/r/${id}`);
-      else if (id) window.location.reload(); // created a moment ago: join it
-      else setState(failed ? "offline" : "missing");
+      else if (id && reloadOnce(id)) window.location.reload(); // created a moment ago: join it
+      else setState(id || failed ? "offline" : "missing");
     });
     return () => { cancelled = true; };
   }, [name, short, router]);
@@ -109,6 +123,11 @@ export function MissingRoom({ name, short, reserved = [] }: MissingRoomProps) {
               {creating ? "Creating…" : `Create “${candidate}”`}
             </button>
             {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
+            {!short && (
+              <p className="mt-4 text-xs text-white/45 leading-relaxed">
+                Got this link from someone? Check it&apos;s exactly what they sent: room codes care about capital letters.
+              </p>
+            )}
             <p className="mt-6 text-sm">
               <Link href="/" className="text-white/50 hover:text-white">Go to the homepage</Link>
             </p>
