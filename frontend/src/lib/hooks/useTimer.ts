@@ -43,8 +43,7 @@ interface UseTimerReturn {
 }
 
 // Join refusals that retrying won't fix
-// The room page shows its own screen for these instead of a toast (and stops rejoining)
-const BLOCKING_ERRORS = new Set(["REMOVED", "DEV_OFFLINE", "ROOM_NOT_FOUND"]);
+const BLOCKING_ERRORS = new Set(["REMOVED", "DEV_OFFLINE"]);
 
 export function useTimer(roomId: string, userName: string, uniqueId: string): UseTimerReturn {
   const [room, setRoom] = useState<RoomState | null>(null);
