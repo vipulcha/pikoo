@@ -177,7 +177,7 @@ export function CreateRoomPanel({ reserved = [] }: { reserved?: string[] }) {
         ) : null}
 
         <div className="space-y-4">
-          {/* Optional room name: gives the room a link anyone can type */}
+          {/* Optional room name: gives the room a link that's easy to share */}
           <div id="name-your-room" className="scroll-mt-24 text-left">
             <label htmlFor="room-name" className="sr-only">Name your room (optional)</label>
             <div className={`flex items-center h-11 rounded-full border bg-white/5 px-4 transition-colors focus-within:border-rose-400/60 ${
@@ -202,15 +202,12 @@ export function CreateRoomPanel({ reserved = [] }: { reserved?: string[] }) {
             </div>
             <p id="room-name-status" aria-live="polite" className="mt-1.5 px-4 min-h-[1.25rem] text-xs text-white/45 truncate">
               {!name ? (
-                "Get a link anyone can type, like study-buddies"
+                "Get a link that's easy to share, like study-buddies"
               ) : problem ? (
                 <span className="text-amber-200/90">{problem}</span>
               ) : status === "taken" ? (
-                <span className="text-amber-200/90">
-                  Already taken.{" "}
-                  <button type="button" onClick={() => router.push(`/r/${name}`)} className="underline underline-offset-2 hover:text-white">Join it</button>
-                  {" "}or pick another name.
-                </span>
+                // No way into the existing room from here: it belongs to someone else's group
+                <span className="text-amber-200/90 whitespace-normal">Taken. Add a number or try another.</span>
               ) : (
                 <>
                   <span className="font-mono text-white/70">{host || "pikoo"}/{name}</span>

@@ -18,7 +18,7 @@ export const SHIPPED: ShippedItem[] = [
     id: "named-rooms",
     date: "2026-11-28",
     title: "Name your room",
-    desc: "Give your room a name and get a link anyone can type, like pikoo…/study-buddies. Capitals don't matter.",
+    desc: "Give your room a name and get a link that's easy to share, like pikoo…/study-buddies. Capitals don't matter.",
     href: "/#name-your-room",
   },
   {
