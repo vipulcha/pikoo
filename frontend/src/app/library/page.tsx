@@ -7,6 +7,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { absoluteUrl } from "@/lib/site";
 import { newsreader } from "@/lib/fonts";
 import { librarySnapshot } from "@/lib/libraryCounts";
+import { DevLiveBadge } from "@/components/DevRoomBits";
 
 // Rendered per request: the HTML states the current phase, minutes left and real
 // headcounts, which a cached copy would get wrong
@@ -40,6 +41,9 @@ export default async function LibraryPage() {
           Every room runs one timer for everyone, starting on the hour, so nobody has to organise anything. Walk in, see
           how long is left, and start working. No chat, no names, no camera.
         </p>
+        <div className="mt-6 empty:hidden">
+          <DevLiveBadge from="library" />
+        </div>
 
         <section aria-labelledby="rooms" className="mt-14">
           <h2 id="rooms" className="font-serif text-2xl text-stone-100">Rooms</h2>

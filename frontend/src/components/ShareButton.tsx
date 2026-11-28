@@ -5,13 +5,16 @@ import { useEffect, useRef, useState } from "react";
 
 interface ShareButtonProps {
   roomId: string;
+  /** A page to share instead of the room link (no embed options then) */
+  link?: string;
 }
 
 export const roomUrl = (roomId: string) => `${window.location.origin}/r/${roomId}`;
-export const inviteText = (roomId: string) => `Focus with me on Pikoo (shared Pomodoro timer, free, no sign-up): ${roomUrl(roomId)}`;
+const inviteTextFor = (url: string) => `Focus with me on Pikoo (shared Pomodoro timer, free, no sign-up): ${url}`;
+export const inviteText = (roomId: string) => inviteTextFor(roomUrl(roomId));
 export const whatsappUrl = (roomId: string) => `https://wa.me/?text=${encodeURIComponent(inviteText(roomId))}`;
 
-export function ShareButton({ roomId }: ShareButtonProps) {
+export function ShareButton({ roomId, link }: ShareButtonProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -63,14 +66,15 @@ export function ShareButton({ roomId }: ShareButtonProps) {
 
       {open && (
         <div role="menu" className="absolute right-0 mt-2 w-72 p-1.5 rounded-xl bg-neutral-900/95 backdrop-blur-md border border-white/10 shadow-2xl z-50 text-sm">
-          <button role="menuitem" className={item} onClick={() => copy("link", roomUrl(roomId))}>
-            <div className="font-medium text-white">{copied === "link" ? "Copied!" : "Copy room link"}</div>
+          <button role="menuitem" className={item} onClick={() => copy("link", link ?? roomUrl(roomId))}>
+            <div className="font-medium text-white">{copied === "link" ? "Copied!" : link ? "Copy link" : "Copy room link"}</div>
             <div className="text-xs text-white/45">Anyone with the link can join</div>
           </button>
-          <a role="menuitem" className={`${item} block`} href={whatsappUrl(roomId)} target="_blank" rel="noopener" onClick={() => setOpen(false)}>
+          <a role="menuitem" className={`${item} block`} href={link ? `https://wa.me/?text=${encodeURIComponent(inviteTextFor(link))}` : whatsappUrl(roomId)} target="_blank" rel="noopener" onClick={() => setOpen(false)}>
             <div className="font-medium text-white">Share on WhatsApp</div>
             <div className="text-xs text-white/45">Send the invite to a chat or group</div>
           </a>
+          {!link && <>
           <div className="my-1 h-px bg-white/10" />
           <button role="menuitem" className={item} onClick={() => copy("embed", embedUrl(false))}>
             <div className="font-medium text-white">{copied === "embed" ? "Copied!" : "Copy timer for Notion"}</div>
@@ -80,6 +84,7 @@ export function ShareButton({ roomId }: ShareButtonProps) {
             <div className="font-medium text-white">{copied === "obs" ? "Copied!" : "Copy timer for streaming"}</div>
             <div className="text-xs text-white/45">Transparent overlay: add as a Browser Source in OBS</div>
           </button>
+          </>}
         </div>
       )}
     </div>

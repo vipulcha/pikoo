@@ -10,9 +10,13 @@ interface ChatPanelProps {
   onToggle: () => void;
   hasUnread: boolean;
   currentUserId: string;
+  /** Marks this person's messages with a "developer" badge (work-with-dev room) */
+  hostId?: string | null;
+  /** Lets the viewer delete other people's messages (work-with-dev room, developer only) */
+  onDelete?: (messageId: string) => void;
 }
 
-export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, hasUnread, currentUserId }: ChatPanelProps) {
+export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, hasUnread, currentUserId, hostId, onDelete }: ChatPanelProps) {
   const [inputText, setInputText] = useState("");
   const isMounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -121,7 +125,18 @@ export function ChatPanel({ messages, onSendMessage, isOpen, onToggle, hasUnread
                     {/* Name and time */}
                     <div className="flex items-baseline gap-2">
                       <span className="text-sm font-medium text-white/90">{msg.senderName}</span>
+                      {hostId && msg.senderUniqueId === hostId && (
+                        <span className="text-[10px] uppercase tracking-wide text-amber-300/90 bg-amber-400/10 px-1.5 py-0.5 rounded">host</span>
+                      )}
                       <span className="text-xs text-white/30">{formatTime(msg.timestamp)}</span>
+                      {onDelete && (
+                        <button
+                          onClick={() => onDelete(msg.id)}
+                          className="ml-auto text-xs text-white/40 hover:text-red-300 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                     
                     {/* Message text */}

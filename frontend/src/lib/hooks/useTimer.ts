@@ -15,6 +15,8 @@ interface UseTimerReturn {
   error: string | null;
   nameTakenError: boolean;  // True when name is already taken in room
   newMessageReceived: number;  // Increments each time a new message is received (for tracking unread)
+  /** The server refused this browser for good (removed from, or offline, work-with-dev room) */
+  blocked: { code: string; message: string } | null;
   actions: {
     start: () => void;
     pause: () => void;
@@ -32,8 +34,16 @@ interface UseTimerReturn {
     setActiveTodo: (todoId: string | null) => void;
     setTodoVisibility: (isPublic: boolean) => void;
     clearNameTakenError: () => void;
+    // Work-with-dev room, developer only
+    goLive: () => void;
+    endLive: () => void;
+    deleteMessage: (messageId: string) => void;
+    removePerson: (uniqueId: string) => void;
   };
 }
+
+// Join refusals that retrying won't fix
+const BLOCKING_ERRORS = new Set(["REMOVED", "DEV_OFFLINE"]);
 
 export function useTimer(roomId: string, userName: string, uniqueId: string): UseTimerReturn {
   const [room, setRoom] = useState<RoomState | null>(null);
@@ -42,6 +52,8 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
   const [error, setError] = useState<string | null>(null);
   const [nameTakenError, setNameTakenError] = useState(false);
   const [newMessageReceived, setNewMessageReceived] = useState(0);
+  const [blocked, setBlocked] = useState<{ code: string; message: string } | null>(null);
+  const blockedRef = useRef(false);
   const socketRef = useRef<Socket | null>(null);
   const userNameRef = useRef(userName);
   // "pending" until the server confirms the join with ROOM_STATE; "failed" after NAME_TAKEN
@@ -134,6 +146,7 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
 
     const handleDisconnect = (reason: Socket.DisconnectReason) => {
       setIsConnected(false);
+      if (blockedRef.current) return;
       // Socket.IO doesn't auto-reconnect when the server closed the connection
       if (reason === "io server disconnect") {
         socket.connect();
@@ -286,7 +299,10 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     };
 
     const handleError = ({ message, code }: { message: string; code?: string }) => {
-      if (code === "NAME_TAKEN") {
+      if (code && BLOCKING_ERRORS.has(code)) {
+        blockedRef.current = true;
+        setBlocked({ code, message });
+      } else if (code === "NAME_TAKEN") {
         if (joinStatusRef.current === "pending") joinStatusRef.current = "failed";
         setNameTakenError(true);
         setError(message);
@@ -666,7 +682,12 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
       setNameTakenError(false);
       setError(null);
     },
+
+    goLive: () => socketRef.current?.emit(SOCKET_EVENTS.DEV_GO_LIVE),
+    endLive: () => socketRef.current?.emit(SOCKET_EVENTS.DEV_END_LIVE),
+    deleteMessage: (messageId: string) => socketRef.current?.emit(SOCKET_EVENTS.DEV_DELETE_MESSAGE, { messageId }),
+    removePerson: (targetId: string) => socketRef.current?.emit(SOCKET_EVENTS.DEV_REMOVE_PERSON, { uniqueId: targetId }),
   };
 
-  return { room, remaining, isConnected, error, nameTakenError, newMessageReceived, actions };
+  return { room, remaining, isConnected, error, nameTakenError, newMessageReceived, blocked, actions };
 }

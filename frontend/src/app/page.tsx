@@ -10,6 +10,7 @@ import { GUIDES, HOME_FAQS } from "@/lib/guides";
 import { SITE_SUMMARY } from "@/lib/site";
 import { homeGraph, jsonLd } from "@/lib/structured-data";
 import { librarySnapshot } from "@/lib/libraryCounts";
+import { DevLiveBadge } from "@/components/DevRoomBits";
 
 // Re-rendered every 30s so the silent-room list ships with real phases and headcounts
 export const revalidate = 30;
@@ -170,6 +171,10 @@ export default async function Home() {
           <p className="relative text-white/80 text-lg sm:text-xl max-w-xl mx-auto opacity-0 animate-slide-up animation-delay-200">
             Start a private room with friends, or slip into a silent room with people studying right now. Free, no sign-up.
           </p>
+          {/* Only while the developer is live (checked in the browser, so a cached page can't show it stale) */}
+          <div className="relative mt-5 flex justify-center empty:hidden">
+            <DevLiveBadge from="home" />
+          </div>
           <a href="#silent-rooms" className="relative lg:hidden mt-5 inline-flex items-center gap-2 h-9 px-4 rounded-full border border-emerald-400/30 bg-emerald-400/10 text-sm text-emerald-200 opacity-0 animate-slide-up animation-delay-200">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             Jump into a silent room ↓

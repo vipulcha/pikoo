@@ -18,8 +18,8 @@ export function todosForUser(
   return visible;
 }
 
-export function roomForUser(room: RoomState, viewerId: string | undefined): Omit<RoomState, "userSecrets"> {
+export function roomForUser(room: RoomState, viewerId: string | undefined): Omit<RoomState, "userSecrets" | "devBlocked"> {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { userSecrets, ...publicRoom } = room;
+  const { userSecrets, devBlocked, ...publicRoom } = room;
   return { ...publicRoom, userTodos: todosForUser(room.userTodos, viewerId) };
 }

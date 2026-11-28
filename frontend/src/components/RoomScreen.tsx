@@ -1,0 +1,768 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { useTimer } from "@/lib/hooks/useTimer";
+import { Timer } from "@/components/Timer";
+import { Controls } from "@/components/Controls";
+import { AddTimeButtons } from "@/components/AddTimeButtons";
+import { InviteNudge, SessionSummary } from "@/components/GrowthCards";
+import { ScheduleChip, ScheduleDialog, RoomMoreMenu, LeaderboardDialog } from "@/components/GroupFeatures";
+import { useFocusStats } from "@/lib/hooks/useFocusStats";
+import { ParticipantCount } from "@/components/ParticipantCount";
+import { ShareButton } from "@/components/ShareButton";
+import { SettingSlider } from "@/components/SettingSlider";
+import { SuggestionButton } from "@/components/SuggestionButton";
+import { NamePrompt, getSavedName, saveName, getUserId, clearSavedName } from "@/components/NamePrompt";
+import { ChatPanel } from "@/components/ChatPanel";
+import { AudioPlayer } from "@/components/AudioPlayer";
+import { BackgroundPicker, NextWallpaperButton } from "@/components/BackgroundPicker";
+import { RoomBackground, StarField } from "@/components/RoomBackground";
+import { useBackground } from "@/lib/backgrounds";
+import { TodoList } from "@/components/TodoList";
+import { OthersTodos } from "@/components/OthersTodos";
+import { SessionPrompt } from "@/components/SessionPrompt";
+import { WelcomePrompt } from "@/components/WelcomePrompt";
+import { HistoryPanel } from "@/components/HistoryPanel";
+import { RoomSettings, Phase } from "@/lib/types";
+import { notifyFocusEnd, notifyBreakEnd, requestNotificationPermission, getNotificationPermission } from "@/lib/audio";
+import Link from "next/link";
+import { serverNow } from "@/lib/clock";
+import { trace } from "@/lib/trace";
+import { DevHostBar, DevLiveChip } from "@/components/DevRoomBits";
+
+/** Set for the work-with-dev room (/work-with-dev) */
+export interface DevRoomOptions {
+  /** This browser is the developer's */
+  isHost: boolean;
+  /** The page to share instead of /r/<id> */
+  path: string;
+  /** The session ended, or the server refused this browser (code from the server) */
+  onClosed: (reason: "ended" | string) => void;
+}
+
+interface RoomScreenProps {
+  roomId: string;
+  dev?: DevRoomOptions;
+}
+
+export function RoomScreen({ roomId, dev }: RoomScreenProps) {
+  const [userName, setUserName] = useState<string | null>(null);
+  const [uniqueId, setUniqueId] = useState<string>("");
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [nameError, setNameError] = useState<string | undefined>(undefined);
+  const [showSettings, setShowSettings] = useState(false);
+  const bg = useBackground();
+  const [showTheme, setShowTheme] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [lastReadMessageId, setLastReadMessageId] = useState<string | null>(null);
+  const [showSessionPrompt, setShowSessionPrompt] = useState(false);
+  const [showWelcomePrompt, setShowWelcomePrompt] = useState(false);
+  const [hasShownWelcome, setHasShownWelcome] = useState(false);
+  const [pendingActiveFromWelcome, setPendingActiveFromWelcome] = useState(false);
+  const prevPhaseRef = useRef<Phase | null>(null);
+  const [inviteDismissed, setInviteDismissed] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showSuggest, setShowSuggest] = useState(false);
+  const [dismissedSummaryId, setDismissedSummaryId] = useState<string | null>(null);
+  const processedTransitionRef = useRef<string | null>(null); // Track processed transitions to avoid duplicates
+
+  // Check for saved name and get uniqueId on mount
+  useEffect(() => {
+    setUniqueId(getUserId());
+    const savedName = getSavedName();
+    if (savedName) {
+      setUserName(savedName);
+    }
+    // We'll show welcome prompt later, not name prompt
+  }, []);
+
+  const handleNameSubmit = (name: string) => {
+    actions.clearNameTakenError();
+    setUserName(name);
+    setNameError(undefined);
+    setShowNamePrompt(false);
+  };
+
+  // Only connect to room after we have a name and uniqueId
+  const { room, remaining, isConnected, error, nameTakenError, blocked, actions } = useTimer(
+    roomId,
+    userName || "",
+    uniqueId
+  );
+
+  const { stats: focusStats, finishedId } = useFocusStats(room?.timer, room?.history);
+
+  // Work-with-dev room: leave when the developer ends the session (they themselves stay
+  // to go live again), or when the server refuses this browser
+  const devLive = !!room?.devLive;
+  const onDevClosed = dev?.onClosed;
+  const devIsHost = !!dev?.isHost;
+  useEffect(() => {
+    if (onDevClosed && blocked) onDevClosed(blocked.code);
+  }, [onDevClosed, blocked]);
+  const wasLiveRef = useRef(false);
+  useEffect(() => {
+    if (!onDevClosed || !room) return;
+    if (devLive) wasLiveRef.current = true;
+    else if (wasLiveRef.current && !devIsHost) onDevClosed("ended");
+  }, [onDevClosed, room, devLive, devIsHost]);
+
+  // Handle name taken error - show prompt again
+  useEffect(() => {
+    if (nameTakenError && error) {
+      clearSavedName();
+      setUserName(null);
+      setNameError(error);
+      setShowNamePrompt(true);
+    }
+  }, [nameTakenError, error]);
+
+  // Calculate if there are unread messages
+  const messages = room?.messages || [];
+  const latestMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
+  const hasUnreadMessages = latestMessageId !== null && latestMessageId !== lastReadMessageId;
+
+  // Mark messages as read when opening chat
+  const handleToggleChat = () => {
+    if (!isChatOpen && latestMessageId) {
+      // Opening chat - mark all messages as read
+      setLastReadMessageId(latestMessageId);
+    }
+    setIsChatOpen(!isChatOpen);
+  };
+
+  // Also mark as read when new messages arrive while chat is open
+  useEffect(() => {
+    if (isChatOpen && latestMessageId && latestMessageId !== lastReadMessageId) {
+      setLastReadMessageId(latestMessageId);
+    }
+  }, [isChatOpen, latestMessageId, lastReadMessageId]);
+
+  // Detect phase transitions - show prompt and play notification sounds
+  useEffect(() => {
+    if (!room?.timer) return;
+
+    const currentPhase = room.timer.phase;
+    const prevPhase = prevPhaseRef.current;
+
+    // Create a unique transition key to prevent duplicate processing
+    const transitionKey = prevPhase && currentPhase ? `${prevPhase}->${currentPhase}` : null;
+
+    // Only trigger on actual phase changes (not initial load)
+    // Also check if we've already processed this exact transition (handles out-of-order updates)
+    if (prevPhase && prevPhase !== currentPhase && processedTransitionRef.current !== transitionKey) {
+      // Mark this transition as processed
+      processedTransitionRef.current = transitionKey || null;
+
+      // Send notification based on what phase just ended
+      if (prevPhase === "focus") {
+        // Focus session ended → break time! (celebratory notification)
+        notifyFocusEnd();
+      } else if (prevPhase === "break" || prevPhase === "long_break") {
+        // Break ended → back to focus (gentle reminder)
+        notifyBreakEnd();
+      }
+
+      // Show prompt ONLY when transitioning FROM break/long_break TO focus
+      // Never show when transitioning TO break or long_break
+      if (currentPhase === "focus" && (prevPhase === "break" || prevPhase === "long_break")) {
+        console.log(`[PHASE_TRANSITION] Showing session prompt: ${prevPhase} → ${currentPhase}`);
+        setTimeout(() => {
+          // Double-check we're still in focus phase before showing (defense against race conditions)
+          const roomCheck = room?.timer?.phase;
+          if (roomCheck === "focus") {
+            setShowSessionPrompt(true);
+          } else {
+            console.log(`[PHASE_TRANSITION] Aborted showing prompt - phase changed to ${roomCheck}`);
+          }
+        }, 500);
+      } else {
+        // Explicitly hide prompt if transitioning to break or if we're already in break
+        if (currentPhase === "break" || currentPhase === "long_break") {
+          console.log(`[PHASE_TRANSITION] Hiding session prompt - transitioning to ${currentPhase}`);
+          setShowSessionPrompt(false);
+        }
+      }
+    }
+
+    // Update prevPhaseRef at the end, but only if phase actually changed
+    // This prevents duplicate processing if multiple updates arrive with same phase
+    if (prevPhase !== currentPhase) {
+      prevPhaseRef.current = currentPhase;
+      console.log(`[PHASE_CHANGE] Phase changed to ${currentPhase}`);
+    }
+  }, [room?.timer?.phase]);
+
+  // Phase transitions when the timer reaches 0 are done by the server (it broadcasts the new phase)
+
+  // Safety: Close session prompt if we're not in focus phase
+  useEffect(() => {
+    if (showSessionPrompt && room?.timer?.phase !== "focus") {
+      console.log(`[SAFETY] Closing session prompt - current phase is ${room?.timer?.phase}, not focus`);
+      setShowSessionPrompt(false);
+    }
+  }, [showSessionPrompt, room?.timer?.phase]);
+
+  // Show welcome prompt for new users (no name) immediately, or users with no todos after room loads
+  useEffect(() => {
+    if (hasShownWelcome || !uniqueId) return;
+
+    const savedName = getSavedName();
+
+    // Only first-time visitors (no saved name) get the welcome prompt. Returning
+    // people go straight to the timer; their task list is right there if they want it.
+    if (!savedName) {
+      setShowWelcomePrompt(true);
+      setHasShownWelcome(true);
+    }
+  }, [uniqueId, hasShownWelcome]);
+
+  // Auto-set the first todo as active when added from welcome prompt
+  // Wait for the REAL ID from server (not temp_xxx) to avoid race condition
+  useEffect(() => {
+    if (!pendingActiveFromWelcome || !room) return;
+
+    const myTodos = room.userTodos?.[uniqueId];
+    if (myTodos && myTodos.todos.length > 0) {
+      const firstTodo = myTodos.todos[0];
+      // Only set active if it's a real ID from server (not temp from optimistic update)
+      // This prevents race condition between TODO_ADD and TODO_SET_ACTIVE
+      if (!firstTodo.id.startsWith('temp_')) {
+        actions.setActiveTodo(firstTodo.id);
+        setPendingActiveFromWelcome(false);
+      }
+    }
+  }, [room?.userTodos, uniqueId, pendingActiveFromWelcome, actions]);
+
+  // Update browser tab title with timer countdown
+  useEffect(() => {
+    const originalTitle = "Pikoo - Shared Team Timer";
+
+    // If no room/timer yet, don't update title
+    if (!room?.timer) {
+      return;
+    }
+
+    const { timer } = room;
+
+    const formatTime = (seconds: number) => {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const getPhaseLabel = (phase: Phase) => {
+      switch (phase) {
+        case "focus": return "Focus";
+        case "break": return "Break";
+        case "long_break": return "Break";
+        default: return "";
+      }
+    };
+
+    const updateTitle = () => {
+      let remainingSec: number;
+
+      if (timer.running && timer.phaseEndsAt) {
+        remainingSec = Math.max(0, Math.ceil((timer.phaseEndsAt - serverNow()) / 1000));
+      } else {
+        remainingSec = timer.remainingSecWhenPaused;
+      }
+
+      const timeStr = formatTime(remainingSec);
+      const phaseLabel = getPhaseLabel(timer.phase);
+      document.title = `${timeStr} ${phaseLabel} - Pikoo`;
+    };
+
+    // Update immediately
+    updateTitle();
+
+    // If running, set up interval to update every second
+    let intervalId: NodeJS.Timeout | null = null;
+    if (timer.running) {
+      intervalId = setInterval(updateTitle, 1000);
+    }
+
+    // Cleanup: clear interval and restore original title
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      document.title = originalTitle;
+    };
+  }, [room?.timer?.running, room?.timer?.phase, room?.timer?.phaseEndsAt, room?.timer?.remainingSecWhenPaused]);
+
+  // Show name prompt only for errors (name taken) - otherwise WelcomePrompt handles it
+  if (showNamePrompt && nameError) {
+    return (
+      <div className="min-h-screen bg-black">
+        {/* Stars background */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <StarField />
+        </div>
+        <NamePrompt
+          isOpen={true}
+          onSubmit={handleNameSubmit}
+          title="Choose a different name"
+          subtitle="That name is already taken in this room"
+          errorMessage={nameError}
+        />
+      </div>
+    );
+  }
+
+  // Loading state (connecting to room) - but show welcome prompt if no name
+  if (!room) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        {/* Stars in loading */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <StarField />
+        </div>
+        <div className="flex flex-col items-center gap-4 relative z-10">
+          <div className="w-12 h-12 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
+          <p className="text-white/60">Connecting to room...</p>
+        </div>
+
+        {/* Welcome Prompt for new users (shown during loading) */}
+        <WelcomePrompt
+          isVisible={showWelcomePrompt}
+          initialName={userName || ""}
+          onAddTodo={(text) => {
+            // Add todo directly - no reconnection happens now!
+            actions.addTodo(text);
+            setPendingActiveFromWelcome(true);
+          }}
+          onDismiss={(name) => {
+            // Save the name - UPDATE_NAME event will be sent (no reconnection)
+            saveName(name);
+            setUserName(name);
+            setShowWelcomePrompt(false);
+          }}
+        />
+      </div>
+    );
+  }
+
+  const { timer, settings, participants, userTodos } = room;
+
+  // Host mode: only the creator controls the timer, and only while they're in the room
+  const hostId = settings.mode === "host" ? room.hostId : null;
+  const host = hostId ? participants.find(p => p.uniqueId === hostId) : undefined;
+  // In the work-with-dev room only the developer ever controls the timer
+  const controlsLocked = dev ? !dev.isHost : !!host && hostId !== uniqueId;
+  const shareLink = `${typeof window !== "undefined" ? window.location.origin : ""}${dev ? dev.path : `/r/${roomId}`}`;
+
+  // Get current user's todos
+  const myTodos = userTodos?.[uniqueId] || null;
+
+  const handleSettingChange = (key: keyof RoomSettings, value: number) => {
+    actions.updateSettings({ [key]: value });
+  };
+
+  // Start right away; notifications are offered later, in the "Session done" card
+  const handleStart = () => {
+    actions.start();
+  };
+
+  return (
+    <div className="min-h-screen bg-black text-white flex flex-col relative overflow-hidden">
+      <RoomBackground bg={bg} />
+      {/* Bottom-left corner: next wallpaper (only for themes with several photos) and feedback */}
+      <div className="fixed bottom-4 left-4 z-30 flex items-center gap-2">
+        <NextWallpaperButton bg={bg} />
+        <button
+          onClick={() => { trace("click", { what: "feedback_button" }); setShowSuggest(true); }}
+          title="Suggest something or report a bug"
+          aria-label="Suggest something or report a bug"
+          className="h-10 min-w-10 px-2.5 sm:px-4 rounded-full bg-black/40 backdrop-blur-md border border-white/15 text-white/75 hover:text-white hover:bg-black/60 flex items-center justify-center gap-2 text-sm transition-colors"
+        >
+          <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+          </svg>
+          <span className="hidden sm:inline">Feedback</span>
+        </button>
+      </div>
+
+      {/* Header */}
+      <header className="flex items-center justify-between p-4 sm:p-6 relative z-20">
+        <Link
+          href="/"
+          className="flex items-center gap-2 text-white/80 hover:text-white transition-colors drop-shadow-lg"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+          </svg>
+          <span className="font-bold text-lg">Pikoo</span>
+        </Link>
+
+        <div className="flex items-center gap-1.5 sm:gap-3">
+          {dev && <DevLiveChip live={!!room.devLive} since={room.devLive?.since ?? null} />}
+          <ParticipantCount
+            participants={participants}
+            isConnected={isConnected}
+            hostId={hostId}
+            hostLabel={dev ? "host" : undefined}
+            onRemove={dev?.isHost ? (id) => actions.removePerson(id) : undefined}
+            myId={uniqueId}
+          />
+          <ShareButton roomId={roomId} link={dev ? shareLink : undefined} />
+          <AudioPlayer />
+          <BackgroundPicker bg={bg} open={showTheme} setOpen={setShowTheme} />
+          {/* Settings button */}
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            disabled={controlsLocked}
+            title={controlsLocked ? "Only the host can change timer settings" : "Timer settings"}
+            className={`
+              disabled:opacity-40 disabled:cursor-not-allowed
+              h-9 px-3 sm:px-4 rounded-full transition-all duration-200 flex items-center gap-2
+              text-sm font-medium
+              ${showSettings
+                ? "bg-white/20 text-white"
+                : "bg-white/5 border border-white/10 text-white/80 hover:text-white hover:bg-white/10"
+              }
+            `}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="hidden sm:inline">Timer</span>
+          </button>
+          <RoomMoreMenu
+            onLeaderboard={() => setShowLeaderboard(true)}
+            onSchedule={controlsLocked ? undefined : () => setShowSchedule(true)}
+            onFeedback={() => setShowSuggest(true)}
+            onTheme={() => setShowTheme(true)}
+            hasSchedule={!!room?.schedule}
+          />
+        </div>
+      </header>
+
+      {dev?.isHost && (
+        <DevHostBar
+          live={!!room.devLive}
+          since={room.devLive?.since ?? null}
+          people={new Set(participants.map((p) => p.uniqueId)).size}
+          onGoLive={actions.goLive}
+          onEnd={actions.endLive}
+        />
+      )}
+
+      {/* Connection lost banner (room already loaded, so we're reconnecting) */}
+      {!isConnected && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 bg-amber-500/90 text-black text-sm font-medium rounded-full shadow-lg animate-fade-in">
+          <span className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+          Connection lost. Reconnecting...
+        </div>
+      )}
+
+      {/* Error toast */}
+      {error && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-red-500/90 text-white rounded-lg shadow-lg animate-fade-in">
+          {error}
+        </div>
+      )}
+
+      {/* Settings Panel */}
+      {showSettings && (
+        <div className="absolute top-20 left-4 right-4 sm:left-auto sm:right-6 z-40 sm:w-80 animate-fade-in">
+          <div className="bg-black/70 backdrop-blur-xl border border-white/10 rounded-2xl p-5 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-medium text-white">Timer Settings</h3>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="text-white/50 hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-5">
+              <SettingSlider label="Focus" value={settings.focusSec / 60} min={1} sliderMax={60} inputMax={120} unit="m" accent="rose" onCommit={(v) => handleSettingChange("focusSec", v * 60)} />
+              <SettingSlider label="Break" value={settings.breakSec / 60} min={1} sliderMax={30} inputMax={120} unit="m" accent="emerald" onCommit={(v) => handleSettingChange("breakSec", v * 60)} />
+              <SettingSlider label="Long Break" value={settings.longBreakSec / 60} min={1} sliderMax={45} inputMax={120} unit="m" accent="blue" onCommit={(v) => handleSettingChange("longBreakSec", v * 60)} />
+              <SettingSlider label="Long Break After" value={settings.longBreakEvery} min={2} sliderMax={8} inputMax={8} unit="x" accent="purple" onCommit={(v) => handleSettingChange("longBreakEvery", v)} />
+            </div>
+
+            {/* Auto-start next phase */}
+            <label className="mt-5 flex items-center justify-between gap-3 cursor-pointer">
+              <span>
+                <span className="block text-sm text-white/80">Auto-start next phase</span>
+                <span className="block text-xs text-white/40">Breaks and focus sessions start on their own</span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!!settings.autoStart}
+                onClick={() => actions.updateSettings({ autoStart: !settings.autoStart })}
+                className={`
+                  relative shrink-0 w-10 h-6 rounded-full transition-colors
+                  ${settings.autoStart ? "bg-rose-500" : "bg-white/15"}
+                `}
+              >
+                <span
+                  className={`
+                    absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform
+                    ${settings.autoStart ? "translate-x-4" : ""}
+                  `}
+                />
+              </button>
+            </label>
+
+            <p className="mt-4 text-xs text-white/40 text-center">
+              Changes sync to all participants
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Main content */}
+      <main className="flex-1 flex items-center justify-center px-4 [@media(min-height:900px)]:-mt-16 relative z-10">
+        {/* Todo List - Left side. z-20 keeps it clickable if the timer ever overlaps it */}
+        <div className="absolute left-2 sm:left-4 lg:left-8 top-1/2 -translate-y-1/2 hidden md:block z-20">
+          <div className="flex flex-col gap-2">
+            {/* History Panel - Above Todo List */}
+            <HistoryPanel history={room?.history || []} />
+
+            <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl">
+              <TodoList
+                userTodos={myTodos}
+                onAddTodo={actions.addTodo}
+                onUpdateTodo={actions.updateTodo}
+                onDeleteTodo={actions.deleteTodo}
+                onReorderTodos={actions.reorderTodos}
+                onSetActiveTodo={actions.setActiveTodo}
+                onSetVisibility={actions.setTodoVisibility}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Center - Timer and Controls */}
+        <div className="flex flex-col items-center">
+          <div className="drop-shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+            <Timer
+              remaining={remaining}
+              phase={timer.phase}
+              running={timer.running}
+              cycleCount={timer.cycleCount}
+              totalSec={timer.phase === "focus" ? settings.focusSec : timer.phase === "break" ? settings.breakSec : settings.longBreakSec}
+            />
+          </div>
+
+          <div className="mt-8 sm:mt-12">
+            <Controls
+              running={timer.running}
+              phase={timer.phase}
+              onStart={handleStart}
+              onPause={actions.pause}
+              onReset={actions.reset}
+              onSkip={() => actions.skip("manual")}
+              disabled={controlsLocked}
+            />
+            <AddTimeButtons
+              phase={timer.phase}
+              onAdd={actions.addTime}
+              disabled={controlsLocked}
+            />
+            <div className="mt-5 flex items-center justify-center empty:hidden">
+              <ScheduleChip
+                schedule={room.schedule}
+                roomUrl={shareLink}
+                roomName={dev ? "Work with the developer of Pikoo" : roomId}
+                canEdit={!controlsLocked}
+                onEdit={() => setShowSchedule(true)}
+              />
+            </div>
+            {controlsLocked && (
+              <p className="mt-4 text-center text-sm text-white/50">
+                {dev ? "The developer runs the timer. Say hi in the chat during breaks" : `Only ${host?.name} (host) can control the timer`}
+              </p>
+            )}
+            {finishedId && finishedId !== dismissedSummaryId && timer.phase !== "focus" && (focusStats.lastSessionSec ?? 0) >= 60 ? (
+              <SessionSummary
+                shareUrl={shareLink}
+                stats={focusStats}
+                others={Math.max(0, new Set(participants.map((p) => p.uniqueId)).size - 1)}
+                phase={timer.phase}
+                onDismiss={() => setDismissedSummaryId(finishedId)}
+                canEnableNotifications={getNotificationPermission() === "default"}
+                onEnableNotifications={() => { void requestNotificationPermission(); }}
+              />
+            ) : (
+              !dev && !inviteDismissed &&
+              new Set(participants.map((p) => p.uniqueId)).size <= 1 && (
+                <InviteNudge roomId={roomId} onDismiss={() => setInviteDismissed(true)} />
+              )
+            )}
+          </div>
+
+
+          {/* Mobile Todo Toggle - shows todo panel for mobile */}
+          <div className="mt-6 sm:mt-8 md:hidden">
+            <MobileTodoPanel
+              userTodos={myTodos}
+              history={room?.history || []}
+              onAddTodo={actions.addTodo}
+              onUpdateTodo={actions.updateTodo}
+              onDeleteTodo={actions.deleteTodo}
+              onReorderTodos={actions.reorderTodos}
+              onSetActiveTodo={actions.setActiveTodo}
+              onSetVisibility={actions.setTodoVisibility}
+            />
+          </div>
+        </div>
+      </main>
+
+      <ScheduleDialog
+        open={showSchedule}
+        schedule={room.schedule}
+        onSave={(s) => { actions.updateSchedule(s); setShowSchedule(false); }}
+        onClear={() => { actions.updateSchedule(null); setShowSchedule(false); }}
+        onClose={() => setShowSchedule(false)}
+      />
+      <LeaderboardDialog
+        open={showLeaderboard}
+        weekly={room.weekly}
+        myId={uniqueId}
+        roomUrl={shareLink}
+        onClose={() => setShowLeaderboard(false)}
+      />
+      <SuggestionButton roomId={roomId} name={userName} open={showSuggest} onClose={() => setShowSuggest(false)} />
+
+      {/* Chat Panel */}
+      <ChatPanel
+        messages={messages}
+        onSendMessage={actions.sendMessage}
+        isOpen={isChatOpen}
+        onToggle={handleToggleChat}
+        hasUnread={hasUnreadMessages}
+        currentUserId={uniqueId}
+        hostId={dev ? hostId : undefined}
+        onDelete={dev?.isHost ? actions.deleteMessage : undefined}
+      />
+
+      {/* Others' Todos Panel */}
+      <OthersTodos
+        userTodos={userTodos || {}}
+        currentUserId={uniqueId}
+        participants={participants}
+      />
+
+      {/* Session Start Prompt - Only show for focus phase */}
+      <SessionPrompt
+        isVisible={showSessionPrompt && room?.timer?.phase === "focus"}
+        userTodos={myTodos}
+        onSelectTodo={(todoId) => {
+          if (todoId) actions.setActiveTodo(todoId);
+        }}
+        onDismiss={() => setShowSessionPrompt(false)}
+      />
+
+      {/* Welcome Prompt for first-time users */}
+      <WelcomePrompt
+        isVisible={showWelcomePrompt}
+        initialName={userName || ""}
+        onAddTodo={(text) => {
+          // Add todo directly - no reconnection happens now!
+          actions.addTodo(text);
+          setPendingActiveFromWelcome(true);
+        }}
+        onDismiss={(name) => {
+          // Save the name - UPDATE_NAME event will be sent (no reconnection)
+          saveName(name);
+          setUserName(name);
+          setShowWelcomePrompt(false);
+        }}
+      />
+
+    </div>
+  );
+}
+
+// Mobile Todo Panel Component
+function MobileTodoPanel({
+  userTodos,
+  history,
+  onAddTodo,
+  onUpdateTodo,
+  onDeleteTodo,
+  onReorderTodos,
+  onSetActiveTodo,
+  onSetVisibility,
+}: {
+  userTodos: import("@/lib/types").UserTodos | null;
+  history: import("@/lib/types").ActivityLog[];
+  onAddTodo: (text: string) => void;
+  onUpdateTodo: (todoId: string, updates: { text?: string; completed?: boolean }) => void;
+  onDeleteTodo: (todoId: string) => void;
+  onReorderTodos: (todoIds: string[]) => void;
+  onSetActiveTodo: (todoId: string | null) => void;
+  onSetVisibility: (isPublic: boolean) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const todos = userTodos?.todos || [];
+  const completedCount = todos.filter(t => t.completed).length;
+
+  return (
+    <>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`
+          flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl
+          backdrop-blur-xl border transition-all duration-300
+          ${isOpen
+            ? "bg-white/15 border-white/20 text-white"
+            : "bg-black/40 border-white/10 text-white/70 hover:text-white"
+          }
+        `}
+      >
+        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+        </svg>
+        <span className="text-xs sm:text-sm font-medium">My Tasks</span>
+        <span className="px-1.5 py-0.5 bg-white/10 rounded-full text-xs">
+          {completedCount}/{todos.length}
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setIsOpen(false)}
+          />
+          <div className="relative w-full max-w-md bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-4 animate-slide-up">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-medium text-white">My Tasks</h3>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="p-1 text-white/50 hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="mb-4">
+              <HistoryPanel history={history} />
+            </div>
+            <TodoList
+              userTodos={userTodos}
+              onAddTodo={onAddTodo}
+              onUpdateTodo={onUpdateTodo}
+              onDeleteTodo={onDeleteTodo}
+              onReorderTodos={onReorderTodos}
+              onSetActiveTodo={onSetActiveTodo}
+              onSetVisibility={onSetVisibility}
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+

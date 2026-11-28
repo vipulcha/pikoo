@@ -30,14 +30,14 @@ import {
   addActivity,
   setSchedule,
 } from "./store.js";
-import { ChatMessage, UserTodos } from "./types.js";
+import { ChatMessage, UserTodos, getInitialTimerState } from "./types.js";
 import { track, logJoin, logVisitor, formatStay, markCrawler } from "./stats.js";
 import { setupLibraryHandlers } from "./library.js";
 import { log } from "./logger.js";
 import { withRoomLock } from "./room-lock.js";
 import { roomForUser, todosForUser } from "./views.js";
-import { createHash } from "crypto";
 import { socketEventLimiter, chatMessageLimiter } from "./rate-limit.js";
+import { DEV_ROOM_ID, DEV_NAME, DEV_AWAY_MS, hashSecret, isDevHostSecret, isReservedDevName, ensureDevRoom } from "./devRoom.js";
 import {
   sanitizeName,
   sanitizeMessage,
@@ -104,6 +104,8 @@ function rateLimited(socket: Socket, label?: string): boolean {
 // In host mode only the creator controls the timer, but only while they're in the room
 // (otherwise the room would be stuck if they leave). Rooms without a recorded host stay open.
 function canControl(room: RoomState, uniqueId: string): boolean {
+  // The work-with-dev room is the developer's session: only they ever control it
+  if (room.id === DEV_ROOM_ID) return !!room.hostId && room.hostId === uniqueId;
   if (room.settings.mode !== "host" || !room.hostId) return true;
   if (room.hostId === uniqueId) return true;
   return !room.participants.some(p => p.uniqueId === room.hostId);
@@ -128,8 +130,116 @@ async function emitTodos(io: Server, roomId: string, userTodos: RoomState["userT
   }
 }
 
-function hashSecret(secret: string): string {
-  return createHash("sha256").update(secret).digest("hex");
+// ============================================
+// Leave grace period
+// ============================================
+// A dropped connection (phone screen off, Wi-Fi blip, laptop lid) usually comes
+// back within a minute. The person stays listed that long, so the room doesn't
+// see them leave and rejoin; the leave is announced only if they don't return.
+
+const LEAVE_GRACE_MS = 60_000;
+
+interface PendingLeave {
+  roomId: string;
+  uniqueId: string;
+  name: string;
+  joinedAt: number;
+  leftAt: number;
+  timer: NodeJS.Timeout;
+}
+
+// Keyed by the dropped connection's socket id (its entry stays in room.participants meanwhile)
+const pendingLeaves = new Map<string, PendingLeave>();
+
+/** The same person coming back to the same room: stop their pending leave and return it */
+function takePendingLeave(roomId: string, uniqueId: string): (PendingLeave & { socketId: string }) | undefined {
+  for (const [socketId, p] of pendingLeaves) {
+    if (p.roomId === roomId && p.uniqueId === uniqueId) {
+      clearTimeout(p.timer);
+      pendingLeaves.delete(socketId);
+      return { ...p, socketId };
+    }
+  }
+  return undefined;
+}
+
+// Must be called while holding the room lock
+async function finishLeave(io: Server, roomId: string, socketId: string, uniqueId: string, name: string, joinedAt: number, leftAt: number): Promise<void> {
+  if (uniqueId && joinedAt) {
+    logVisitor(uniqueId, `🚪 left room ${roomId} after ${formatStay(leftAt - joinedAt)}`, name);
+  }
+  try {
+    const roomBefore = await getRoom(roomId);
+    const countBefore = roomBefore?.participants.length || 0;
+
+    const participants = await removeParticipant(roomId, socketId);
+    io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants });
+
+    if (participants.length < countBefore) {
+      await addActivity(roomId, "leave", uniqueId, name);
+      const updatedRoom = await getRoom(roomId);
+      if (updatedRoom) {
+        await emitRoomState(io, roomId, updatedRoom);
+      }
+    }
+
+    // The developer's last connection is gone: end the session unless they return soon
+    if (roomId === DEV_ROOM_ID && roomBefore?.devLive && uniqueId === roomBefore.hostId &&
+        !participants.some(p => p.uniqueId === uniqueId)) {
+      scheduleDevAwayCheck(io, DEV_AWAY_MS);
+    }
+  } catch (err) {
+    log.socket.error("Disconnect cleanup error", { error: String(err) });
+  }
+}
+
+// ============================================
+// Work-with-dev room: live sessions
+// ============================================
+
+let devAwayTimer: NodeJS.Timeout | null = null;
+// People (other than the developer) who joined during the current session, for the log line at the end
+const devSessionVisitors = new Set<string>();
+
+function cancelDevAwayCheck(): void {
+  if (devAwayTimer) clearTimeout(devAwayTimer);
+  devAwayTimer = null;
+}
+
+function scheduleDevAwayCheck(io: Server, delayMs: number): void {
+  cancelDevAwayCheck();
+  devAwayTimer = setTimeout(() => {
+    devAwayTimer = null;
+    withRoomLock(DEV_ROOM_ID, async () => {
+      const room = await getRoom(DEV_ROOM_ID);
+      if (!room?.devLive) return;
+      if (room.participants.some(p => p.uniqueId === room.hostId)) return;
+      await endDevLive(io, room, "developer left");
+    }).catch((err) => log.socket.error("Dev away check error", { error: String(err) }));
+  }, delayMs);
+  devAwayTimer.unref();
+}
+
+// Must be called while holding the dev room lock
+async function endDevLive(io: Server, room: RoomState, why: string): Promise<void> {
+  const since = room.devLive?.since ?? Date.now();
+  room.devLive = null;
+  // The next session starts clean: no chat, no leftover visitor task lists, timer back to the start
+  room.messages = [];
+  room.userTodos = room.hostId && room.userTodos[room.hostId] ? { [room.hostId]: room.userTodos[room.hostId] } : {};
+  room.timer = getInitialTimerState(room.settings);
+  await saveRoom(room);
+  scheduleAutoAdvance(io, DEV_ROOM_ID, room.timer);
+  cancelDevAwayCheck();
+  await emitRoomState(io, DEV_ROOM_ID, room);
+  log.server.info("Dev room session ended", { why, after: formatStay(Date.now() - since), visitors: devSessionVisitors.size });
+  devSessionVisitors.clear();
+}
+
+/** On startup: a session that was live before a restart ends unless the developer reconnects */
+export async function resumeDevRoom(io: Server): Promise<void> {
+  const room = await ensureDevRoom();
+  if (room?.devLive) scheduleDevAwayCheck(io, LEAVE_GRACE_MS + DEV_AWAY_MS);
 }
 
 // ============================================
@@ -195,6 +305,7 @@ async function cleanupStaleParticipants(io: Server, roomId: string): Promise<voi
 
     const verifiedStaleParticipants = room.participants.filter(p => {
       if (connectedSocketIds.has(p.id)) return false;
+      if (pendingLeaves.has(p.id)) return false; // dropped, but within its grace period
       const socket = io.sockets.sockets.get(p.id);
       if (socket && socket.connected) {
         log.socket.debug("Skipping removal — socket connected but not in room (race)", { socketId: p.id.slice(-6), name: p.name });
@@ -258,6 +369,8 @@ export function setupSocketHandlers(io: Server): void {
     // Register a handler that runs under its room's lock (see room-lock.ts)
     const on = <P>(event: string, handler: (payload: P) => Promise<void>) => {
       socket.on(event, (payload: P) => {
+        // Removed from the work-with-dev room: ignore anything else they send
+        if (socket.data.removed && event !== "disconnect") return;
         const label = currentUniqueId ? ACTION_LABEL[event]?.(payload) : null;
         if (label) logVisitor(currentUniqueId, `${label} in room ${currentRoomId}`, currentUserName);
         const roomId = event === SOCKET_EVENTS.JOIN_ROOM
@@ -274,7 +387,7 @@ export function setupSocketHandlers(io: Server): void {
       if (rateLimited(socket)) return;
 
       const roomId = sanitizeRoomId(payload?.roomId);
-      const name = sanitizeName(payload?.name) || "Anonymous";
+      let name = sanitizeName(payload?.name) || "Anonymous";
       const uniqueId = sanitizeUniqueId(payload?.uniqueId);
 
       if (!roomId || !uniqueId) {
@@ -283,7 +396,7 @@ export function setupSocketHandlers(io: Server): void {
       }
 
       try {
-        let room = await getRoom(roomId);
+        let room = roomId === DEV_ROOM_ID ? await ensureDevRoom() : await getRoom(roomId);
 
         if (!room) {
           socket.emit(SOCKET_EVENTS.ERROR, { message: "Room not found" });
@@ -299,12 +412,42 @@ export function setupSocketHandlers(io: Server): void {
           socket.emit(SOCKET_EVENTS.ERROR, { message: "Could not verify your identity for this room" });
           return;
         }
+
+        // Work-with-dev room: the developer can always come in (to go live); everyone
+        // else only while a session is live, unless the developer removed them
+        const isDevHost = roomId === DEV_ROOM_ID && isDevHostSecret(secret);
+        if (roomId === DEV_ROOM_ID) {
+          if (isDevHost) {
+            name = DEV_NAME;
+            // A leftover entry from this browser under an older id would block the fixed name
+            const stale = room.participants.filter(p => p.name === DEV_NAME && p.uniqueId !== uniqueId);
+            if (room.hostId !== uniqueId || room.settings.mode !== "host" || stale.length) {
+              room.hostId = uniqueId;
+              room.settings = { ...room.settings, mode: "host" };
+              room.participants = room.participants.filter(p => !stale.includes(p));
+              await saveRoom(room);
+            }
+            cancelDevAwayCheck();
+          } else if (room.devBlocked?.includes(uniqueId)) {
+            socket.emit(SOCKET_EVENTS.ERROR, { message: "You were removed from this session", code: "REMOVED" });
+            return;
+          } else if (!room.devLive) {
+            socket.emit(SOCKET_EVENTS.ERROR, { message: "The developer isn't live right now", code: "DEV_OFFLINE" });
+            return;
+          } else if (isReservedDevName(name)) {
+            socket.emit(SOCKET_EVENTS.ERROR, { message: "That name is reserved here, please pick another", code: "NAME_TAKEN" });
+            return;
+          }
+        }
+
         if (!knownHash && secret) {
           room.userSecrets = { ...room.userSecrets, [uniqueId]: hashSecret(secret) };
           await saveRoom(room);
         }
 
-        const result = await addParticipant(roomId, socket.id, uniqueId, name);
+        // Back within the grace period after a dropped connection: take over the old place quietly
+        const resumed = takePendingLeave(roomId, uniqueId);
+        const result = await addParticipant(roomId, socket.id, uniqueId, name, resumed?.socketId);
 
         if (!result.success) {
           socket.emit(SOCKET_EVENTS.ERROR, {
@@ -316,6 +459,8 @@ export function setupSocketHandlers(io: Server): void {
 
         socket.join(roomId);
         socket.data.uniqueId = uniqueId;
+        socket.data.devHost = isDevHost;
+        if (roomId === DEV_ROOM_ID && !isDevHost) devSessionVisitors.add(uniqueId);
         markCrawler(uniqueId, socket.handshake.headers["user-agent"]);
         currentRoomId = roomId;
         currentUserName = name;
@@ -343,10 +488,16 @@ export function setupSocketHandlers(io: Server): void {
           io.to(roomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants: room?.participants || [] });
         }
 
-        track("room_joins", uniqueId);
-        joinedAt = Date.now();
-        void logJoin(`room ${roomId}`, uniqueId, name);
-        log.socket.info("User joined room", { roomId, name, socketId: socket.id.slice(-6) });
+        if (resumed) {
+          // Same visit continuing: keep its start time, no new join in the stats or the visitor log
+          joinedAt = resumed.joinedAt;
+          log.socket.info("Reconnected within grace period", { roomId, name, awaySec: Math.round((Date.now() - resumed.leftAt) / 1000) });
+        } else {
+          track("room_joins", uniqueId);
+          joinedAt = Date.now();
+          void logJoin(`room ${roomId}`, uniqueId, name);
+          log.socket.info("User joined room", { roomId, name, socketId: socket.id.slice(-6) });
+        }
       } catch (err) {
         log.socket.error("Join room error", { error: String(err), roomId });
         socket.emit(SOCKET_EVENTS.ERROR, { message: "Failed to join room" });
@@ -393,6 +544,15 @@ export function setupSocketHandlers(io: Server): void {
 
       const name = sanitizeName(payload?.name);
       if (!name) return;
+
+      // Work-with-dev room: the developer keeps their fixed name; nobody else can take a lookalike
+      if (currentRoomId === DEV_ROOM_ID) {
+        if (socket.data.devHost) return;
+        if (isReservedDevName(name)) {
+          socket.emit(SOCKET_EVENTS.ERROR, { message: "That name is reserved here, please pick another", code: "NAME_TAKEN" });
+          return;
+        }
+      }
 
       try {
         const result = await updateParticipantName(
@@ -815,38 +975,118 @@ export function setupSocketHandlers(io: Server): void {
     });
 
     // ========================================
+    // Work-with-dev room (developer only)
+    // ========================================
+    const devHostIn = () => currentRoomId === DEV_ROOM_ID && socket.data.devHost === true;
+
+    on(SOCKET_EVENTS.DEV_GO_LIVE, async () => {
+      if (rateLimited(socket) || !devHostIn()) return;
+      try {
+        const room = await getRoom(DEV_ROOM_ID);
+        if (!room || room.devLive) return;
+        // A fresh session: empty chat and history
+        room.devLive = { since: Date.now() };
+        room.hostId = currentUniqueId;
+        room.settings = { ...room.settings, mode: "host" };
+        room.messages = [];
+        room.history = [];
+        await saveRoom(room);
+        devSessionVisitors.clear();
+        cancelDevAwayCheck();
+        await emitRoomState(io, DEV_ROOM_ID, room);
+        log.server.info("Dev room is live");
+      } catch (err) {
+        log.socket.error("Dev go live error", { error: String(err) });
+      }
+    });
+
+    on(SOCKET_EVENTS.DEV_END_LIVE, async () => {
+      if (rateLimited(socket) || !devHostIn()) return;
+      try {
+        const room = await getRoom(DEV_ROOM_ID);
+        if (room?.devLive) await endDevLive(io, room, "ended by the developer");
+      } catch (err) {
+        log.socket.error("Dev end live error", { error: String(err) });
+      }
+    });
+
+    on(SOCKET_EVENTS.DEV_DELETE_MESSAGE, async (payload: { messageId?: unknown }) => {
+      if (rateLimited(socket) || !devHostIn()) return;
+      const messageId = typeof payload?.messageId === "string" ? payload.messageId.slice(0, 120) : "";
+      if (!messageId) return;
+      try {
+        const room = await getRoom(DEV_ROOM_ID);
+        if (!room) return;
+        const before = room.messages.length;
+        room.messages = room.messages.filter(m => m.id !== messageId);
+        if (room.messages.length === before) return;
+        await saveRoom(room);
+        await emitRoomState(io, DEV_ROOM_ID, room);
+      } catch (err) {
+        log.socket.error("Dev delete message error", { error: String(err) });
+      }
+    });
+
+    // Removes someone for good: their messages and tasks go too, and they can't rejoin
+    on(SOCKET_EVENTS.DEV_REMOVE_PERSON, async (payload: { uniqueId?: unknown }) => {
+      if (rateLimited(socket) || !devHostIn()) return;
+      const target = sanitizeUniqueId(payload?.uniqueId);
+      if (!target || target === currentUniqueId) return;
+      try {
+        const room = await getRoom(DEV_ROOM_ID);
+        if (!room) return;
+        room.devBlocked = [...(room.devBlocked ?? []).filter(id => id !== target), target].slice(-500);
+        room.participants = room.participants.filter(p => p.uniqueId !== target);
+        room.messages = room.messages.filter(m => m.senderUniqueId !== target);
+        delete room.userTodos[target];
+        await saveRoom(room);
+        takePendingLeave(DEV_ROOM_ID, target);
+
+        for (const s of await io.in(DEV_ROOM_ID).fetchSockets()) {
+          if (s.data.uniqueId !== target) continue;
+          s.data.removed = true;
+          s.emit(SOCKET_EVENTS.ERROR, { message: "You were removed from this session", code: "REMOVED" });
+          s.leave(DEV_ROOM_ID);
+        }
+        io.to(DEV_ROOM_ID).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants: room.participants });
+        await emitRoomState(io, DEV_ROOM_ID, room);
+        logVisitor(target, "🚫 was removed from the work-with-dev room");
+      } catch (err) {
+        log.socket.error("Dev remove person error", { error: String(err) });
+      }
+    });
+
+    // ========================================
     // Disconnect
     // ========================================
     on("disconnect", async (reason: string) => {
-      if (currentRoomId && currentUniqueId && joinedAt) {
-        logVisitor(currentUniqueId, `🚪 left room ${currentRoomId} after ${formatStay(Date.now() - joinedAt)}`, currentUserName);
-      }
       log.socket.info("Client disconnected", {
         socketId: socket.id.slice(-6),
         reason,
         roomId: currentRoomId,
         user: currentUserName,
       });
+      if (!currentRoomId) return;
 
-      if (currentRoomId) {
-        try {
-          const roomBefore = await getRoom(currentRoomId);
-          const countBefore = roomBefore?.participants.length || 0;
+      const roomId = currentRoomId;
+      const uniqueId = currentUniqueId;
+      const name = currentUserName;
+      const leftAt = Date.now();
 
-          const participants = await removeParticipant(currentRoomId, socket.id);
-          io.to(currentRoomId).emit(SOCKET_EVENTS.PARTICIPANTS_UPDATE, { participants });
-
-          if (participants.length < countBefore) {
-            await addActivity(currentRoomId, "leave", currentUniqueId, currentUserName);
-            const updatedRoom = await getRoom(currentRoomId);
-            if (updatedRoom) {
-              await emitRoomState(io, currentRoomId, updatedRoom);
-            }
-          }
-        } catch (err) {
-          log.socket.error("Disconnect cleanup error", { error: String(err) });
-        }
+      // Left on purpose (the page closed the connection) or removed: no grace period
+      if (reason === "client namespace disconnect" || reason === "server namespace disconnect" || socket.data.removed || !uniqueId) {
+        await finishLeave(io, roomId, socket.id, uniqueId, name, joinedAt, leftAt);
+        return;
       }
+
+      const timer = setTimeout(() => {
+        if (!pendingLeaves.delete(socket.id)) return; // they came back
+        withRoomLock(roomId, () => finishLeave(io, roomId, socket.id, uniqueId, name, joinedAt, leftAt)).catch((err) => {
+          log.socket.error("Delayed leave error", { error: String(err), roomId });
+        });
+      }, LEAVE_GRACE_MS);
+      timer.unref();
+      pendingLeaves.set(socket.id, { roomId, uniqueId, name, joinedAt, leftAt, timer });
     });
   });
 }

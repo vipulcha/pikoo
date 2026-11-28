@@ -97,6 +97,8 @@ export interface RoomState {
   userSecrets?: Record<string, string>; // sha256 of each user's secret, binds a uniqueId to one browser (never sent to clients)
   schedule?: RoomSchedule | null;     // next/recurring session time
   weekly?: Record<string, Record<string, WeeklyEntry>>; // study-group leaderboard, last 2 ISO weeks
+  devLive?: { since: number } | null; // work-with-dev room only: set while the developer is live
+  devBlocked?: string[];              // work-with-dev room only: people the developer removed (never sent to clients)
 }
 
 // Default settings
@@ -156,6 +158,12 @@ export const SOCKET_EVENTS = {
   TODO_REORDER: "todo_reorder",
   TODO_SET_ACTIVE: "todo_set_active",
   TODO_SET_VISIBILITY: "todo_set_visibility",
+
+  // Work-with-dev room, developer only (Client -> Server)
+  DEV_GO_LIVE: "dev_go_live",
+  DEV_END_LIVE: "dev_end_live",
+  DEV_DELETE_MESSAGE: "dev_delete_message",
+  DEV_REMOVE_PERSON: "dev_remove_person",
 
   // Server -> Client
   ROOM_STATE: "room_state",

@@ -9,7 +9,8 @@ import dotenv from "dotenv";
 import { initRedis, createRoom, getRoom, addSuggestion, getSuggestions, flushRoomWrites } from "./store.js";
 import { track, readDailyStats, readTotals, logVisitor, markCrawler } from "./stats.js";
 import { LIBRARY_ROOMS, libraryCount, focusedThisWeek } from "./library.js";
-import { setupSocketHandlers } from "./socket.js";
+import { setupSocketHandlers, resumeDevRoom } from "./socket.js";
+import { devRoomStatus } from "./devRoom.js";
 import { RoomSettings, DEFAULT_SETTINGS } from "./types.js";
 import { log } from "./logger.js";
 import { roomCreateLimiter, restGetLimiter, connectionLimiter, suggestionLimiter } from "./rate-limit.js";
@@ -86,8 +87,11 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"],
     credentials: true,
   },
-  pingTimeout: 10000,
-  pingInterval: 5000,
+  // socket.io's defaults. Tighter values (5s/10s before) dropped people whose
+  // phone or background tab answered a ping a little late (most disconnects
+  // were "ping timeout"); leaves are announced after a grace period anyway.
+  pingTimeout: 20000,
+  pingInterval: 25000,
   maxHttpBufferSize: 1e5, // 100KB max per message (prevents payload abuse)
 });
 
@@ -102,6 +106,7 @@ io.use((socket, next) => {
 });
 
 setupSocketHandlers(io);
+resumeDevRoom(io).catch((err) => log.server.error("Dev room startup error", { error: String(err) }));
 
 // ============================================
 // Metrics tracking (in-memory, lightweight)
@@ -239,6 +244,22 @@ app.get("/library", async (req, res) => {
   })));
   res.set("Cache-Control", "public, max-age=15");
   res.json({ rooms });
+});
+
+// Public: whether the developer is live in the work-with-dev room, and how many people are there
+app.get("/dev-room", async (req, res) => {
+  const ip = getIp(req);
+  if (!restGetLimiter.consume(ip)) {
+    res.status(429).json({ error: "Too many requests" });
+    return;
+  }
+  try {
+    res.set("Cache-Control", "public, max-age=10");
+    res.json(await devRoomStatus());
+  } catch (err) {
+    log.server.error("Failed to get dev room status", { error: String(err) });
+    res.status(500).json({ error: "Failed to get dev room status" });
+  }
 });
 
 // Public: number of distinct people currently in a room (shown on the landing page)
