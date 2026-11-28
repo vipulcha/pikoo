@@ -163,10 +163,24 @@ function takePendingLeave(roomId: string, uniqueId: string): (PendingLeave & { s
   return undefined;
 }
 
+/**
+ * What the room's timer was doing when someone left, for the end of their leave line:
+ * " · mid-focus, 13m left", " · on a break" or " · timer paused". The dashboard reads
+ * the stay from the part before " · ".
+ */
+function leaveMoment(timer: TimerState | undefined, leftAt: number): string {
+  if (!timer) return "";
+  if (!timer.running) return " · timer paused";
+  if (timer.phase !== "focus") return " · on a break";
+  const leftMin = timer.phaseEndsAt ? Math.max(0, Math.round((timer.phaseEndsAt - leftAt) / 60_000)) : 0;
+  return ` · mid-focus, ${leftMin}m left`;
+}
+
 // Must be called while holding the room lock
-async function finishLeave(io: Server, roomId: string, socketId: string, uniqueId: string, name: string, joinedAt: number, leftAt: number): Promise<void> {
+// `moment` is leaveMoment() taken when the connection dropped, not after the grace period
+async function finishLeave(io: Server, roomId: string, socketId: string, uniqueId: string, name: string, joinedAt: number, leftAt: number, moment = ""): Promise<void> {
   if (uniqueId && joinedAt) {
-    logVisitor(uniqueId, `🚪 left room ${roomId} after ${formatStay(leftAt - joinedAt)}`, name);
+    logVisitor(uniqueId, `🚪 left room ${roomId} after ${formatStay(leftAt - joinedAt)}${moment}`, name);
   }
   try {
     const roomBefore = await getRoom(roomId);
@@ -293,6 +307,24 @@ async function advanceIfDue(io: Server, roomId: string): Promise<void> {
   }
   scheduleAutoAdvance(io, roomId, timer);
   log.socket.info("Phase auto-advanced", { roomId, from: phase, to: timer.phase });
+
+  // Usage trace, after the room is updated so it can never hold up the timer: one line
+  // per person who was there when a focus session ran to the end (people whose
+  // connection already dropped and are only in the leave grace period don't count)
+  if (phase === "focus") {
+    try {
+      const leaving = new Set([...pendingLeaves.values()].filter((p) => p.roomId === roomId).map((p) => p.uniqueId));
+      const seen = new Set<string>();
+      const min = Math.round((room.settings.focusSec + (room.timer.addedSec ?? 0)) / 60);
+      for (const p of room.participants) {
+        if (!p.uniqueId || seen.has(p.uniqueId) || leaving.has(p.uniqueId)) continue;
+        seen.add(p.uniqueId);
+        logVisitor(p.uniqueId, `🍅 finished a ${min}-min focus in room ${roomId}`, p.name);
+      }
+    } catch (err) {
+      log.socket.warn("Focus-finished trace failed", { error: String(err), roomId });
+    }
+  }
 }
 
 async function cleanupStaleParticipants(io: Server, roomId: string): Promise<void> {
@@ -1072,16 +1104,18 @@ export function setupSocketHandlers(io: Server): void {
       const uniqueId = currentUniqueId;
       const name = currentUserName;
       const leftAt = Date.now();
+      // What the timer was doing right now, for the leave line (written after the grace period)
+      const moment = leaveMoment((await getRoom(roomId).catch(() => null))?.timer, leftAt);
 
       // Left on purpose (the page closed the connection) or removed: no grace period
       if (reason === "client namespace disconnect" || reason === "server namespace disconnect" || socket.data.removed || !uniqueId) {
-        await finishLeave(io, roomId, socket.id, uniqueId, name, joinedAt, leftAt);
+        await finishLeave(io, roomId, socket.id, uniqueId, name, joinedAt, leftAt, moment);
         return;
       }
 
       const timer = setTimeout(() => {
         if (!pendingLeaves.delete(socket.id)) return; // they came back
-        withRoomLock(roomId, () => finishLeave(io, roomId, socket.id, uniqueId, name, joinedAt, leftAt)).catch((err) => {
+        withRoomLock(roomId, () => finishLeave(io, roomId, socket.id, uniqueId, name, joinedAt, leftAt, moment)).catch((err) => {
           log.socket.error("Delayed leave error", { error: String(err), roomId });
         });
       }, LEAVE_GRACE_MS);

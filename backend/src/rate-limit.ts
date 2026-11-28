@@ -75,6 +75,13 @@ export const suggestionLimiter = new TokenBucket({
   label: "suggestion",
 });
 
+// REST: idea votes — 20 per minute per IP
+export const ideaVoteLimiter = new TokenBucket({
+  maxTokens: 20,
+  refillRate: 20 / 60,
+  label: "idea-vote",
+});
+
 // REST: general GET — 60 requests per minute per IP
 export const restGetLimiter = new TokenBucket({
   maxTokens: 60,

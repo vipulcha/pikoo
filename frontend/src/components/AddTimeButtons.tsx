@@ -45,7 +45,7 @@ export function AddTimeButtons({ phase, onAdd, disabled = false }: AddTimeButton
   };
 
   return (
-    <div className="mt-5 flex items-center justify-center gap-2">
+    <div data-tip="addtime" className="mt-5 mx-auto w-fit rounded-full flex items-center justify-center gap-2">
       <button type="button" disabled={disabled} onClick={() => onAdd(5 * 60)} className={pill} title="Add 5 minutes">
         +5 min
       </button>

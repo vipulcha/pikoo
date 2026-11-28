@@ -11,6 +11,7 @@ import { SITE_SUMMARY } from "@/lib/site";
 import { homeGraph, jsonLd } from "@/lib/structured-data";
 import { librarySnapshot } from "@/lib/libraryCounts";
 import { DevLiveBadge } from "@/components/DevRoomBits";
+import { WhatsNewButton } from "@/components/WhatsNew";
 
 // Re-rendered every 30s so the silent-room list ships with real phases and headcounts
 export const revalidate = 30;
@@ -156,7 +157,10 @@ export default async function Home() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-8">
+      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 pt-16 pb-8 sm:py-8">
+        <div className="absolute top-4 right-4 z-20">
+          <WhatsNewButton />
+        </div>
         {/* Headline */}
         <div className="text-center mb-8 relative">
           {/* Soft dark halo so stars and planets behind the text don't hurt readability */}
