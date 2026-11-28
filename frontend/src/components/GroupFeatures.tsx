@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { RoomSchedule, ScheduleRepeat, WeeklyEntry } from "@/lib/types";
 import { REPEAT_LABEL, formatWhen, googleCalendarUrl, icsContent, isoWeekKey, nextOccurrence } from "@/lib/schedule";
 import { formatDuration } from "@/lib/hooks/useFocusStats";
+import { trace } from "@/lib/trace";
 
 const pill = "inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-xs font-medium transition-colors";
 
@@ -158,11 +159,11 @@ export function RoomMoreMenu({ onLeaderboard, onSchedule, onFeedback, onTheme, h
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => { if (!open) trace("click", { what: "more_menu" }); setOpen((o) => !o); }}
         aria-label="More"
         aria-expanded={open}
         aria-haspopup="menu"
-        className={`h-9 w-9 flex items-center justify-center rounded-full border transition-colors ${open ? "bg-white/20 border-white/20 text-white" : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10 hover:text-white"}`}
+        className={`relative h-9 w-9 flex items-center justify-center rounded-full border transition-colors ${open ? "bg-white/20 border-white/20 text-white" : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10 hover:text-white"}`}
       >
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
       </button>

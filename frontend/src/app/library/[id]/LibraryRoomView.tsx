@@ -294,7 +294,7 @@ export function LibraryRoomView({ room, initialNow, initialCount, focusedThisWee
           phase="break"
           onDismiss={() => setDismissedKey(finishedKey)}
           canEnableNotifications={getNotificationPermission() === "default"}
-          onEnableNotifications={() => { void requestNotificationPermission(); }}
+          onEnableNotifications={() => { void requestNotificationPermission("silent_room"); }}
         />
       )}
     </div>

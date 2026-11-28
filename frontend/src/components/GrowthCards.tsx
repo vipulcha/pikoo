@@ -33,20 +33,22 @@ export function InviteNudge({ roomId, onDismiss }: { roomId: string; onDismiss: 
       <button onClick={() => copy(roomUrl(roomId))} className={`${chip} bg-white/10 hover:bg-white/20 text-white`}>
         {copied ? "Copied!" : "Copy link"}
       </button>
-      <a href={whatsappUrl(roomId)} target="_blank" rel="noopener" className={`${chip} inline-flex items-center bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200`}>
+      <a href={whatsappUrl(roomId)} target="_blank" rel="noopener" onClick={() => trace("share", { how: "whatsapp", from: "invite_nudge" })} className={`${chip} inline-flex items-center bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200`}>
         WhatsApp
       </a>
-      <button onClick={onDismiss} className="w-7 h-7 rounded-full text-white/40 hover:text-white/80 hover:bg-white/10" aria-label="Dismiss">✕</button>
+      <button onClick={() => { trace("click", { what: "invite_nudge_dismiss" }); onDismiss(); }} className="w-7 h-7 rounded-full text-white/40 hover:text-white/80 hover:bg-white/10" aria-label="Dismiss">✕</button>
     </div>
   );
 }
 
 // Shown during the break after a focus session ran to the end
 export function SessionSummary({
-  shareUrl, stats, others, phase, onDismiss, canEnableNotifications, onEnableNotifications,
+  shareUrl, stats, others, phase, onDismiss, canEnableNotifications, onEnableNotifications, onInvite,
 }: {
   shareUrl: string; stats: FocusStats; others: number; phase: Phase; onDismiss: () => void;
   canEnableNotifications?: boolean; onEnableNotifications?: () => void;
+  /** "Invite a friend" opens the room's Share menu; without it, it's a WhatsApp link */
+  onInvite?: () => void;
 }) {
   const [sharing, setSharing] = useState(false);
   const [notifAsked, setNotifAsked] = useState(false);
@@ -75,10 +77,14 @@ export function SessionSummary({
 
   const accent = phase === "long_break" ? "text-blue-300" : "text-emerald-300";
 
+  // Phones and tablets: centered above the corner buttons. Desktop: lined up
+  // with the task column and lifted above the Feedback button, so it stays off
+  // the corner buttons and the timer controls. 320px wide like the column; from
+  // 1280px there's room for 384px, which keeps both buttons on one line.
   return (
     <div
       role="status"
-      className="fixed z-40 left-1/2 -translate-x-1/2 bottom-20 w-[calc(100%-2rem)] max-w-md sm:left-6 sm:translate-x-0 sm:bottom-6 sm:max-w-sm rounded-2xl border border-white/15 bg-black/80 backdrop-blur-md px-5 py-4 shadow-2xl animate-slide-up"
+      className="fixed z-40 left-1/2 -translate-x-1/2 bottom-20 w-[calc(100%-2rem)] max-w-md md:left-4 lg:left-8 md:translate-x-0 md:bottom-[4.5rem] md:w-80 xl:w-96 rounded-2xl border border-white/15 bg-black/80 backdrop-blur-md px-5 py-4 shadow-2xl animate-slide-up"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -99,15 +105,21 @@ export function SessionSummary({
           )}
           {others > 0 && <p className="text-sm text-white/45">with {others} other{others > 1 ? "s" : ""} in this room</p>}
         </div>
-        <button onClick={onDismiss} className="text-white/40 hover:text-white/80 -mt-1" aria-label="Dismiss">✕</button>
+        <button onClick={() => { trace("click", { what: "summary_dismiss" }); onDismiss(); }} className="text-white/40 hover:text-white/80 -mt-1" aria-label="Dismiss">✕</button>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <button onClick={share} disabled={sharing} className={`${btn} bg-white text-black hover:bg-white/85 disabled:opacity-60`}>
           {sharing ? "Preparing…" : "Share my progress"}
         </button>
-        <a href={whatsapp} target="_blank" rel="noopener" className={`${btn} inline-flex items-center bg-white/10 hover:bg-white/20 text-white`}>
-          Invite a friend
-        </a>
+        {onInvite ? (
+          <button onClick={() => { trace("click", { what: "summary_invite" }); onInvite(); }} className={`${btn} bg-white/10 hover:bg-white/20 text-white`}>
+            Invite a friend
+          </button>
+        ) : (
+          <a href={whatsapp} target="_blank" rel="noopener" onClick={() => trace("share", { how: "whatsapp", from: "summary" })} className={`${btn} inline-flex items-center bg-white/10 hover:bg-white/20 text-white`}>
+            Invite a friend
+          </a>
+        )}
       </div>
       {canEnableNotifications && !notifAsked && (
         <button

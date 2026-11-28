@@ -165,6 +165,7 @@ export function TodoList({
         {/* Visibility toggle with tooltip */}
         <div className="relative group/visibility">
           <button
+            data-tip="todo-eye"
             onClick={() => onSetVisibility(!isPublic)}
             className={`
               p-1.5 rounded-lg transition-all duration-200

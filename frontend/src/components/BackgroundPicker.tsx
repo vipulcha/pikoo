@@ -65,12 +65,12 @@ export function BackgroundPicker({ bg, open, setOpen }: { bg: BackgroundState; o
         title="Change background"
         aria-label="Theme"
         aria-expanded={open}
-        className={`hidden sm:flex h-9 px-4 shrink-0 rounded-full transition-all duration-200 items-center gap-2 text-sm font-medium ${open ? "bg-white/20 text-white" : "bg-white/5 border border-white/10 text-white/80 hover:text-white hover:bg-white/10"}`}
+        className={`hidden sm:flex h-9 px-3 lg:px-4 shrink-0 rounded-full transition-all duration-200 items-center gap-2 text-sm font-medium ${open ? "bg-white/20 text-white" : "bg-white/5 border border-white/10 text-white/80 hover:text-white hover:bg-white/10"}`}
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden>
           <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
         </svg>
-        <span>Theme</span>
+        <span className="hidden lg:inline">Theme</span>
       </button>
 
       {open && createPortal(

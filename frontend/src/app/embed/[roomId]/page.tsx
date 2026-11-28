@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { io, Socket } from "socket.io-client";
 import { PHASE_LABELS, SOCKET_EVENTS, TimerState, UserTodos } from "@/lib/types";
 import { serverNow, syncClock } from "@/lib/clock";
+import { DEV_ROOM_ID, DEV_PATH } from "@/lib/devRoom";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 
@@ -66,6 +67,8 @@ export default function EmbedTimer({ params }: { params: Promise<{ roomId: strin
   }, [timer?.running]);
 
   const host = typeof window !== "undefined" ? window.location.host : "";
+  // The work-with-dev room is joined from its own page, not /r/<id>
+  const joinPath = roomId === DEV_ROOM_ID ? DEV_PATH : `/r/${roomId}`;
   // The streamer created the room (from /obs), so the creator's picked task is "what I'm working on"
   const list = hostId ? todos[hostId] : undefined;
   const goal = list?.todos.find((t) => t.id === list.activeTodoId && !t.completed);
@@ -100,12 +103,12 @@ export default function EmbedTimer({ params }: { params: Promise<{ roomId: strin
           )}
           {showLink && (
             <a
-              href={`/r/${roomId}?ref=${transparent ? "obs" : "embed"}`}
+              href={`${joinPath}?ref=${transparent ? "obs" : "embed"}`}
               target="_blank"
               rel="noopener"
               className="mt-2 text-[clamp(0.65rem,3vw,0.9rem)] text-white/50 hover:text-white/80"
             >
-              Focus with us · {host}/r/{roomId}
+              Focus with us · {host}{joinPath}
             </a>
           )}
         </div>

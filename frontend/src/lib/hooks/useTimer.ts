@@ -7,6 +7,7 @@ import { connectSocket, disconnectSocket, getSocket } from "../socket";
 import { notifyRoomJoin } from "../audio";
 import { serverNow, syncClock } from "../clock";
 import { getUserSecret } from "@/components/NamePrompt";
+import { trace } from "../trace";
 
 interface UseTimerReturn {
   room: RoomState | null;
@@ -133,7 +134,20 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     const socket = connectSocket();
     socketRef.current = socket;
 
+    // Usage traces: time until the room's timer shows up, connection drops of 5s or
+    // more (reported once back, since nothing can be sent while offline), and the
+    // first few distinct error messages people are shown
+    const openedAt = Date.now();
+    let loadSent = false;
+    let downSince: number | null = null;
+    let downReason = "";
+    const errorsSent = new Set<string>();
+
     const handleConnect = () => {
+      if (downSince !== null && Date.now() - downSince >= 5000) {
+        trace("reconnect", { after: `${Math.round((Date.now() - downSince) / 1000)}s`, reason: downReason.replace(/ /g, "_") });
+      }
+      downSince = null;
       setIsConnected(true);
       setError(null);
       setNameTakenError(false);
@@ -146,6 +160,10 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
 
     const handleDisconnect = (reason: Socket.DisconnectReason) => {
       setIsConnected(false);
+      if (joinStatusRef.current === "joined" && reason !== "io client disconnect") {
+        downSince = Date.now();
+        downReason = reason;
+      }
       if (blockedRef.current) return;
       // Socket.IO doesn't auto-reconnect when the server closed the connection
       if (reason === "io server disconnect") {
@@ -154,6 +172,10 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     };
 
     const handleRoomState = (state: RoomState) => {
+      if (!loadSent) {
+        loadSent = true;
+        trace("room_ready", { ms: Date.now() - openedAt });
+      }
       if (joinStatusRef.current === "pending") {
         joinStatusRef.current = "joined";
         // Name was picked while the join was in flight; apply it now
@@ -299,6 +321,10 @@ export function useTimer(roomId: string, userName: string, uniqueId: string): Us
     };
 
     const handleError = ({ message, code }: { message: string; code?: string }) => {
+      if (!errorsSent.has(message) && errorsSent.size < 5) {
+        errorsSent.add(message);
+        trace("error", { where: "room", code, msg: String(message).slice(0, 80) });
+      }
       if (code && BLOCKING_ERRORS.has(code)) {
         blockedRef.current = true;
         setBlocked({ code, message });

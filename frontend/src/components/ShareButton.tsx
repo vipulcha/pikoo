@@ -7,6 +7,8 @@ interface ShareButtonProps {
   roomId: string;
   /** A page to share instead of the room link (no embed options then) */
   link?: string;
+  /** Bump to open the menu from elsewhere (a room tip's "Show me") */
+  openSignal?: number;
 }
 
 export const roomUrl = (roomId: string) => `${window.location.origin}/r/${roomId}`;
@@ -14,8 +16,13 @@ const inviteTextFor = (url: string) => `Focus with me on Pikoo (shared Pomodoro 
 export const inviteText = (roomId: string) => inviteTextFor(roomUrl(roomId));
 export const whatsappUrl = (roomId: string) => `https://wa.me/?text=${encodeURIComponent(inviteText(roomId))}`;
 
-export function ShareButton({ roomId, link }: ShareButtonProps) {
+export function ShareButton({ roomId, link, openSignal = 0 }: ShareButtonProps) {
   const [open, setOpen] = useState(false);
+  const [handledSignal, setHandledSignal] = useState(openSignal);
+  if (openSignal !== handledSignal) {
+    setHandledSignal(openSignal);
+    setOpen(true);
+  }
   const [copied, setCopied] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -51,7 +58,7 @@ export function ShareButton({ roomId, link }: ShareButtonProps) {
         aria-expanded={open}
         aria-haspopup="menu"
         className={`
-          h-9 flex items-center gap-2 px-3 sm:px-4 rounded-full text-sm font-medium transition-all duration-200
+          h-9 flex items-center gap-2 px-3 lg:px-4 rounded-full text-sm font-medium transition-all duration-200
           ${copied
             ? "bg-green-500/20 border border-green-500/50 text-green-300"
             : "bg-white/5 border border-white/10 hover:bg-white/10 text-white/80 hover:text-white"
@@ -61,7 +68,7 @@ export function ShareButton({ roomId, link }: ShareButtonProps) {
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
         </svg>
-        <span className="hidden sm:inline">{copied ? "Copied!" : "Share"}</span>
+        <span className="hidden lg:inline">{copied ? "Copied!" : "Share"}</span>
       </button>
 
       {open && (
