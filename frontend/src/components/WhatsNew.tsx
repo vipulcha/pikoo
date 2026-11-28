@@ -176,7 +176,7 @@ export function WhatsNewPanel({ open, onClose, where, roomId, name, onRoomAction
                     <button
                       onClick={() => toggleVote(id)}
                       aria-pressed={voted}
-                      aria-label={`${voted ? "Remove your vote for" : "Vote for"} ${idea.title}${count ? ` (${count} votes)` : ""}`}
+                      aria-label={`${voted ? "Remove your vote for" : "Vote for"} ${idea.title}${count ? ` (${count} ${count === 1 ? "vote" : "votes"})` : ""}`}
                       className={`shrink-0 h-9 min-w-[3.75rem] px-2.5 flex items-center justify-center gap-1.5 rounded-full border text-sm font-medium tabular-nums transition-colors ${
                         voted
                           ? "border-rose-400/60 bg-rose-500/20 text-rose-100"
