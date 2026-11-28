@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { RoomSchedule, ScheduleRepeat, WeeklyEntry } from "@/lib/types";
 import { REPEAT_LABEL, formatWhen, googleCalendarUrl, icsContent, isoWeekKey, nextOccurrence } from "@/lib/schedule";
 import { formatDuration } from "@/lib/hooks/useFocusStats";
+import { trace } from "@/lib/trace";
 
 const pill = "inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-xs font-medium transition-colors";
 
@@ -159,7 +160,7 @@ export function RoomMoreMenu({ onLeaderboard, onSchedule, onFeedback, onTheme, o
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => { if (!open) trace("click", { what: "more_menu" }); setOpen((o) => !o); }}
         aria-label="More"
         aria-expanded={open}
         aria-haspopup="menu"

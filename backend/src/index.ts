@@ -317,6 +317,10 @@ const TRACE_EVENTS: Record<string, string> = {
   auto_room: "➡️ sent straight into a room",
   background: "🖼️ picked background",
   tip: "💡 tip", whats_new: "✨ opened What's new",
+  dev_room: "🧑‍💻 dev room",
+  // Tab switched to the background (first time on a page) / back after a while
+  away: "🙈 switched away", back: "🔙 came back",
+  notify: "🔔 notifications", room_ready: "⚡ room loaded", reconnect: "🔌 reconnected",
 };
 const traceLimiter = new Map<string, { n: number; at: number }>();
 

@@ -2,6 +2,8 @@
 // Pikoo - Audio Utilities (Web Audio API)
 // ============================================
 
+import { trace } from "./trace";
+
 // Audio context singleton
 let audioContext: AudioContext | null = null;
 let noiseNode: AudioBufferSourceNode | null = null;
@@ -141,7 +143,8 @@ export function getNotificationPermission(): NotificationPermission | "unsupport
 }
 
 // Request notification permission
-export async function requestNotificationPermission(): Promise<NotificationPermission | "unsupported"> {
+// `where` says which button asked, for the usage trace of the answer
+export async function requestNotificationPermission(where?: string): Promise<NotificationPermission | "unsupported"> {
   if (typeof window === "undefined" || !("Notification" in window)) {
     return "unsupported";
   }
@@ -152,6 +155,7 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 
   if (Notification.permission !== "denied") {
     const permission = await Notification.requestPermission();
+    trace("notify", { result: permission, where });
     return permission;
   }
 

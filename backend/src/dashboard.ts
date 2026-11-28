@@ -44,6 +44,8 @@ interface VisitorSummary {
   tasksAdded: number;
   tasksDone: number;
   shares: number;
+  /** Focus sessions they were in the room for, start to end */
+  focusDone: number;
   inRoomNow?: string;
   lines: { t: number; msg: string }[];
 }
@@ -73,11 +75,32 @@ export interface DashboardData {
   tipsOff: number;
   /** People who opened the What's new panel in the last 7 days */
   whatsNewOpens: number;
+  journeys: Journeys;
+}
+
+/** How people move through Pikoo over the last 7 days (people only, not you) */
+interface Journeys {
+  /** How many people got to each step (each is a share of everyone, not of the step before) */
+  funnel: { step: string; people: number }[];
+  /** The first three pages people saw, most common first ("/ → /r/… → /") */
+  firstSteps: { path: string; people: number }[];
+  /** Buttons and panels (click events), by how many people used them */
+  clicks: { what: string; times: number; people: number }[];
+  /** What the timer was doing when people left a room */
+  leaves: { midFocus: number; onBreak: number; paused: number };
+  errors: { what: string; times: number; people: number }[];
+  reconnects: { times: number; people: number };
+  /** Opening a room until its timer showed up, in ms */
+  roomLoad: { median: number; p90: number; n: number } | null;
+  /** Share of time on room pages with Pikoo in a background tab (pages closed on a computer) */
+  background: { share: number; pages: number } | null;
+  notify: Record<string, number>;
 }
 
 const JOIN_RE = /joined (?:silent )?room (\S+)/;
 const TIP_RE = /^💡 tip (.*)$/;
-const LEAVE_RE = /left (?:silent )?room (\S+) after (.+)$/;
+// The stay ends before " · " (what the timer was doing, added 2026-11-28)
+const LEAVE_RE = /left (?:silent )?room (\S+) after (.+?)(?: · .*)?$/;
 
 /** "1h 2m", "15m 58s", "4s" → seconds */
 function staySec(s: string): number {
@@ -168,7 +191,7 @@ export async function dashboardData(io: Server, viewerUid: string | undefined, t
   for (const e of events) {
     let s = byVisitor.get(e.v);
     if (!s) {
-      s = { v: e.v, first: e.t, last: e.t, isNew: false, source: "direct", pages: 0, rooms: [], created: 0, roomSec: 0, longestSec: 0, messages: 0, tasksAdded: 0, tasksDone: 0, shares: 0, lines: [] };
+      s = { v: e.v, first: e.t, last: e.t, isNew: false, source: "direct", pages: 0, rooms: [], created: 0, roomSec: 0, longestSec: 0, messages: 0, tasksAdded: 0, tasksDone: 0, shares: 0, focusDone: 0, lines: [] };
       byVisitor.set(e.v, s);
     }
     s.last = e.t;
@@ -205,8 +228,9 @@ export async function dashboardData(io: Server, viewerUid: string | undefined, t
     if (m.startsWith("📝 added a task")) s.tasksAdded++;
     if (m.startsWith("✅")) s.tasksDone++;
     if (m.startsWith("📤")) s.shares++;
+    if (m.startsWith("🍅")) s.focusDone++;
     s.lines.push({ t: e.t, msg: m });
-    if (s.lines.length > 25) s.lines.shift();
+    if (s.lines.length > 40) s.lines.shift();
   }
 
   for (const s of byVisitor.values()) s.inRoomNow = roomOf.get(s.v);
@@ -260,5 +284,101 @@ export async function dashboardData(io: Server, viewerUid: string | undefined, t
   return {
     now, rooms, library, dev, visitors, days: dayRows, sources, suggestions: await cachedSuggestions(), latest,
     ideas, tips, tipsOff: tipsOff.size, whatsNewOpens: whatsNew.size,
+    journeys: journeys(events, localDay),
+  };
+}
+
+const ROOM_PATH = /^\/(?:r\/|work-with-dev|library\/)/;
+/** Private room codes become "…" so paths can be grouped */
+const normPath = (p: string) => p.replace(/^\/(r|embed)\/[^/]+/, "/$1/…");
+const seconds = (s: string | undefined) => (s ? parseInt(s, 10) : NaN);
+
+function countBy(map: Map<string, { times: number; people: Set<string> }>, key: string, v: string): void {
+  const row = map.get(key) ?? { times: 0, people: new Set<string>() };
+  row.times++;
+  row.people.add(v);
+  map.set(key, row);
+}
+const ranked = (map: Map<string, { times: number; people: Set<string> }>, top: number) =>
+  [...map.entries()].map(([k, r]) => ({ k, times: r.times, people: r.people.size }))
+    .sort((a, b) => b.people - a.people || b.times - a.times).slice(0, top);
+
+function journeys(events: ActivityEvent[], localDay: (t: number) => string): Journeys {
+  const per = new Map<string, { pages: string[]; openedRoom: boolean; joined: boolean; started: boolean; focused: boolean; days: Set<string> }>();
+  const clicks = new Map<string, { times: number; people: Set<string> }>();
+  const errors = new Map<string, { times: number; people: Set<string> }>();
+  const leaves = { midFocus: 0, onBreak: 0, paused: 0 };
+  const reconnectPeople = new Set<string>();
+  let reconnects = 0;
+  const loads: number[] = [];
+  let seenSec = 0, stayedSec = 0, closedPages = 0;
+  const notify: Record<string, number> = {};
+
+  for (const e of events) {
+    const m = e.msg;
+    let p = per.get(e.v);
+    if (!p) per.set(e.v, (p = { pages: [], openedRoom: false, joined: false, started: false, focused: false, days: new Set() }));
+    p.days.add(localDay(e.t));
+
+    if (m.startsWith("👀 opened")) {
+      const path = prop(m, "path");
+      if (path) {
+        if (ROOM_PATH.test(path)) p.openedRoom = true;
+        const n = normPath(path);
+        if (p.pages.length < 3 && p.pages[p.pages.length - 1] !== n) p.pages.push(n);
+      }
+    }
+    if (JOIN_RE.test(m)) p.joined = true;
+    if (m.startsWith("▶️ started the timer") || (m.startsWith("⏱️ solo timer") && prop(m, "action") === "start")) p.started = true;
+    if (m.startsWith("🍅")) p.focused = true;
+    if (m.startsWith("🖱️ clicked")) {
+      const what = prop(m, "what") ?? "?";
+      countBy(clicks, what === "settings_close" ? `settings_close_${prop(m, "changed") ?? "?"}` : what, e.v);
+    }
+    if (m.startsWith("⚠️ saw an error")) countBy(errors, `${prop(m, "where") ?? "?"}: ${m.match(/msg=(.*)$/)?.[1] ?? ""}`, e.v);
+    if (m.startsWith("🔌 reconnected")) { reconnects++; reconnectPeople.add(e.v); }
+    if (m.startsWith("⚡ room loaded")) {
+      const ms = Number(prop(m, "ms"));
+      if (Number.isFinite(ms) && ms >= 0 && ms < 120_000) loads.push(ms);
+    }
+    if (m.startsWith("👋 left") && ROOM_PATH.test(prop(m, "path") ?? "")) {
+      const after = seconds(prop(m, "after"));
+      const seen = seconds(prop(m, "seen"));
+      if (after > 0 && seen >= 0 && seen <= after) { stayedSec += after; seenSec += seen; closedPages++; }
+    }
+    if (m.startsWith("🔔 notifications")) {
+      const r = prop(m, "result") ?? "?";
+      notify[r] = (notify[r] ?? 0) + 1;
+    }
+    if (m.startsWith("🚪 left room")) {
+      if (m.includes(" · mid-focus")) leaves.midFocus++;
+      else if (m.includes(" · on a break")) leaves.onBreak++;
+      else if (m.includes(" · timer paused")) leaves.paused++;
+    }
+  }
+
+  const people = [...per.values()];
+  const count = (f: (p: (typeof people)[number]) => boolean) => people.filter(f).length;
+  const firstSteps = new Map<string, number>();
+  for (const p of people) if (p.pages.length) firstSteps.set(p.pages.join(" → "), (firstSteps.get(p.pages.join(" → ")) ?? 0) + 1);
+  loads.sort((a, b) => a - b);
+
+  return {
+    funnel: [
+      { step: "Visited Pikoo", people: people.length },
+      { step: "Opened a room", people: count((p) => p.openedRoom || p.joined) },
+      { step: "Joined a room", people: count((p) => p.joined) },
+      { step: "Started a timer", people: count((p) => p.started) },
+      { step: "Finished a focus session", people: count((p) => p.focused) },
+      { step: "Came back on another day", people: count((p) => p.days.size > 1) },
+    ],
+    firstSteps: [...firstSteps.entries()].map(([path, n]) => ({ path, people: n })).sort((a, b) => b.people - a.people).slice(0, 8),
+    clicks: ranked(clicks, 20).map(({ k, ...r }) => ({ what: k, ...r })),
+    leaves,
+    errors: ranked(errors, 8).map(({ k, ...r }) => ({ what: k, ...r })),
+    reconnects: { times: reconnects, people: reconnectPeople.size },
+    roomLoad: loads.length ? { median: loads[Math.floor(loads.length / 2)], p90: loads[Math.min(loads.length - 1, Math.floor(loads.length * 0.9))], n: loads.length } : null,
+    background: stayedSec > 0 ? { share: Math.round((1 - seenSec / stayedSec) * 100) / 100, pages: closedPages } : null,
+    notify,
   };
 }

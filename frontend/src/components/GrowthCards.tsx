@@ -33,10 +33,10 @@ export function InviteNudge({ roomId, onDismiss }: { roomId: string; onDismiss: 
       <button onClick={() => copy(roomUrl(roomId))} className={`${chip} bg-white/10 hover:bg-white/20 text-white`}>
         {copied ? "Copied!" : "Copy link"}
       </button>
-      <a href={whatsappUrl(roomId)} target="_blank" rel="noopener" className={`${chip} inline-flex items-center bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200`}>
+      <a href={whatsappUrl(roomId)} target="_blank" rel="noopener" onClick={() => trace("share", { how: "whatsapp", from: "invite_nudge" })} className={`${chip} inline-flex items-center bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200`}>
         WhatsApp
       </a>
-      <button onClick={onDismiss} className="w-7 h-7 rounded-full text-white/40 hover:text-white/80 hover:bg-white/10" aria-label="Dismiss">✕</button>
+      <button onClick={() => { trace("click", { what: "invite_nudge_dismiss" }); onDismiss(); }} className="w-7 h-7 rounded-full text-white/40 hover:text-white/80 hover:bg-white/10" aria-label="Dismiss">✕</button>
     </div>
   );
 }
@@ -103,13 +103,13 @@ export function SessionSummary({
           )}
           {others > 0 && <p className="text-sm text-white/45">with {others} other{others > 1 ? "s" : ""} in this room</p>}
         </div>
-        <button onClick={onDismiss} className="text-white/40 hover:text-white/80 -mt-1" aria-label="Dismiss">✕</button>
+        <button onClick={() => { trace("click", { what: "summary_dismiss" }); onDismiss(); }} className="text-white/40 hover:text-white/80 -mt-1" aria-label="Dismiss">✕</button>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <button onClick={share} disabled={sharing} className={`${btn} bg-white text-black hover:bg-white/85 disabled:opacity-60`}>
           {sharing ? "Preparing…" : "Share my progress"}
         </button>
-        <a href={whatsapp} target="_blank" rel="noopener" className={`${btn} inline-flex items-center bg-white/10 hover:bg-white/20 text-white`}>
+        <a href={whatsapp} target="_blank" rel="noopener" onClick={() => trace("share", { how: "whatsapp", from: "summary" })} className={`${btn} inline-flex items-center bg-white/10 hover:bg-white/20 text-white`}>
           Invite a friend
         </a>
       </div>

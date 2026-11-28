@@ -43,6 +43,7 @@ interface VisitorSummary {
   tasksAdded: number;
   tasksDone: number;
   shares: number;
+  focusDone?: number;
   inRoomNow?: string;
   lines: { t: number; msg: string }[];
 }
@@ -63,12 +64,49 @@ interface DashboardData {
   tips: { id: string; shown: number; clicked: number }[];
   tipsOff: number;
   whatsNewOpens: number;
+  journeys?: Journeys;
+}
+interface Journeys {
+  funnel: { step: string; people: number }[];
+  firstSteps: { path: string; people: number }[];
+  clicks: { what: string; times: number; people: number }[];
+  leaves: { midFocus: number; onBreak: number; paused: number };
+  errors: { what: string; times: number; people: number }[];
+  reconnects: { times: number; people: number };
+  roomLoad: { median: number; p90: number; n: number } | null;
+  background: { share: number; pages: number } | null;
+  notify: Record<string, number>;
 }
 
 const TIP_LABELS: Record<string, string> = {
   autostart: "Auto-start", space: "Space to start/pause", addtime: "+5 min", schedule: "Schedule a session",
   leaderboard: "Leaderboard", privacy: "Private tasks", music: "Music", theme: "Background",
   notify: "Notifications", embed: "Notion / stream timer", silent: "Silent rooms",
+};
+
+// Click events (what=…) in plain words; anything new shows its raw name
+const CLICK_LABELS: Record<string, string> = {
+  settings_open: "Opened timer settings",
+  settings_close_no: "Closed timer settings without a change",
+  settings_close_yes: "Closed timer settings after a change",
+  chat_open: "Opened chat",
+  more_menu: "Opened the ⋯ menu",
+  leaderboard: "Opened the leaderboard (menu)",
+  schedule: "Opened the schedule",
+  feedback_button: "Opened Feedback",
+  background_button: "Opened backgrounds",
+  music_button: "Opened music",
+  share_menu: "Opened Share",
+  tasks_panel: "Opened tasks (phone)",
+  invite_nudge_dismiss: "Closed the invite nudge",
+  summary_dismiss: "Closed the Session done card",
+  session_prompt_skip: "Skipped picking a task",
+  whats_new_idea: "Share an idea (What's new)",
+  whats_new_try: "Try it (What's new)",
+  dev_live_badge: "Clicked the dev room live badge",
+  empty_invite: "Invite from an empty silent room",
+  empty_dev_room: "Dev room from an empty silent room",
+  empty_solo_timer: "Solo timer from an empty silent room",
 };
 
 // ---- formatting
@@ -334,6 +372,8 @@ export function DashboardView() {
           </Card>
         </div>
 
+        {data.journeys && <JourneyCards j={data.journeys} />}
+
         {/* Visitors */}
         <Card title="Visitors, last 7 days" note="Newest first. Bots and your own visits are left out.">
           {data.visitors.length === 0 ? (
@@ -345,6 +385,103 @@ export function DashboardView() {
           )}
         </Card>
       </main>
+    </div>
+  );
+}
+
+const pct = (n: number, of: number) => (of > 0 ? Math.round((n / of) * 100) : 0);
+const secsLabel = (ms: number) => (ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`);
+
+function JourneyCards({ j }: { j: Journeys }) {
+  const visitors = j.funnel[0]?.people ?? 0;
+  const left = j.leaves.midFocus + j.leaves.onBreak + j.leaves.paused;
+  const notify = Object.entries(j.notify);
+  return (
+    <>
+      <Card title="Journeys, last 7 days" note="People only, not you. Each step is a share of everyone who visited. Finished focus sessions and the stats on the right are counted from Nov 28.">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div>
+            <ul className="space-y-2.5">
+              {j.funnel.map((f) => (
+                <li key={f.step} className="text-xs" title={`${f.step}: ${f.people} of ${visitors} (${pct(f.people, visitors)}%)`}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-white/75">{f.step}</span>
+                    <span className="shrink-0 tabular-nums text-white/85">{f.people}<span className="ml-1.5 text-white/35">{pct(f.people, visitors)}%</span></span>
+                  </div>
+                  <div className="mt-1 h-1.5 rounded-full bg-white/5">
+                    {f.people > 0 && <div className="h-full rounded-full bg-rose-500" style={{ width: `${pct(f.people, visitors)}%` }} />}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <h3 className="mt-5 text-xs font-medium text-white/60">First pages people see</h3>
+            {j.firstSteps.length === 0 ? <p className="mt-1 text-xs text-white/40">Nothing yet.</p> : (
+              <ul className="mt-1.5 space-y-1 text-xs">
+                {j.firstSteps.map((s) => (
+                  <li key={s.path} className="flex justify-between gap-3">
+                    <span className="font-mono text-white/70 break-all">{s.path}</span>
+                    <span className="shrink-0 tabular-nums text-white/85">{s.people}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <dl className="grid grid-cols-2 gap-3 content-start text-xs">
+            <Stat label="Left a room mid-focus" value={left ? `${j.leaves.midFocus} of ${left}` : "–"} note={left ? `${j.leaves.onBreak} on a break, ${j.leaves.paused} while paused` : "No room leaves yet"} />
+            <Stat label="Pikoo in a background tab" value={j.background ? `${Math.round(j.background.share * 100)}%` : "–"} note={j.background ? `of time on room pages, from ${j.background.pages} closed on a computer` : "Needs a few closed room pages"} />
+            <Stat label="Room load time" value={j.roomLoad ? secsLabel(j.roomLoad.median) : "–"} note={j.roomLoad ? `median of ${j.roomLoad.n}; slowest 10% over ${secsLabel(j.roomLoad.p90)}` : "No rooms opened yet"} />
+            <Stat label="Lost connection (5 s+)" value={String(j.reconnects.times)} note={`${j.reconnects.people} ${j.reconnects.people === 1 ? "person" : "people"}`} />
+            <Stat label="Notifications asked" value={String(notify.reduce((n, [, c]) => n + c, 0))} note={notify.length ? notify.map(([r, c]) => `${c} ${r}`).join(", ") : "Nobody was asked yet"} />
+          </dl>
+        </div>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card title="Buttons and panels, last 7 days" note="By how many people used each one.">
+          {j.clicks.length === 0 ? <p className="text-sm text-white/40">No clicks yet.</p> : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-white/40 text-left">
+                  <th className="font-normal pb-1.5">Button or panel</th>
+                  <th className="font-normal pb-1.5 text-right">People</th>
+                  <th className="font-normal pb-1.5 text-right">Times</th>
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {j.clicks.map((c) => (
+                  <tr key={c.what} className="border-t border-white/5">
+                    <td className="py-1.5 text-white/75">{CLICK_LABELS[c.what] ?? c.what}</td>
+                    <td className="py-1.5 text-right text-white/75">{c.people}</td>
+                    <td className="py-1.5 text-right text-white/45">{c.times}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+        <Card title="Errors people saw, last 7 days" note="Room messages (like a full room) and JavaScript errors, the first few per page.">
+          {j.errors.length === 0 ? <p className="text-sm text-white/40">None.</p> : (
+            <ul className="space-y-1.5 text-xs">
+              {j.errors.map((e) => (
+                <li key={e.what} className="flex justify-between gap-3">
+                  <span className="font-mono text-white/70 break-all">{e.what}</span>
+                  <span className="shrink-0 tabular-nums text-white/85">{e.people} <span className="text-white/35">({e.times}×)</span></span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+    </>
+  );
+}
+
+function Stat({ label, value, note }: { label: string; value: string; note: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2.5">
+      <dt className="text-white/45">{label}</dt>
+      <dd className="mt-0.5 text-lg font-semibold tabular-nums text-white/90">{value}</dd>
+      <dd className="text-white/40">{note}</dd>
     </div>
   );
 }
@@ -456,6 +593,7 @@ function VisitorRow({ s, now }: { s: VisitorSummary; now: number }) {
     s.messages ? `${s.messages} message${s.messages > 1 ? "s" : ""}` : null,
     s.tasksAdded ? `${s.tasksAdded} task${s.tasksAdded > 1 ? "s" : ""}${s.tasksDone ? `, ${s.tasksDone} done` : ""}` : null,
     s.shares ? `shared ${s.shares}×` : null,
+    s.focusDone ? `finished ${s.focusDone} focus session${s.focusDone > 1 ? "s" : ""}` : null,
   ].filter(Boolean);
   return (
     <li className={`rounded-xl border px-3 py-2.5 ${s.inRoomNow ? "border-rose-400/40 bg-rose-500/[0.06]" : "border-white/10 bg-white/[0.02]"}`}>

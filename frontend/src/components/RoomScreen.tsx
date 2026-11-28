@@ -54,6 +54,7 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [nameError, setNameError] = useState<string | undefined>(undefined);
   const [showSettings, setShowSettings] = useState(false);
+  const settingsAtOpen = useRef(""); // the timer settings when the panel opened, for the usage trace
   const bg = useBackground();
   const [showTheme, setShowTheme] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -138,6 +139,7 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
       // Opening chat - mark all messages as read
       setLastReadMessageId(latestMessageId);
     }
+    if (!isChatOpen) trace("click", { what: "chat_open" });
     setIsChatOpen(!isChatOpen);
   };
 
@@ -386,9 +388,22 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
     desktop: window.matchMedia("(hover: hover) and (pointer: fine)").matches,
     dev: !!dev,
   };
+  // Timer settings: trace opening it, and on closing whether anything changed
+  const setSettingsOpen = (open: boolean, via = "button") => {
+    const current = JSON.stringify(settings);
+    if (open && !showSettings) {
+      settingsAtOpen.current = current;
+      trace("click", { what: "settings_open", via });
+    }
+    if (!open && showSettings) trace("click", { what: "settings_close", changed: settingsAtOpen.current === current ? "no" : "yes" });
+    setShowSettings(open);
+  };
+  // The ⋯ menu and other second ways into a panel, for the usage trace
+  const via = (what: string, from: string, fn: () => void) => () => { trace("click", { what, via: from }); fn(); };
+
   const handleTipAction = (id: TipId) => {
     switch (id) {
-      case "autostart": setShowSettings(true); spotlight("autostart", 150); break;
+      case "autostart": setSettingsOpen(true, "tip"); spotlight("autostart", 150); break;
       case "addtime": spotlight("addtime"); break;
       case "schedule": setShowSchedule(true); break;
       case "leaderboard": setShowLeaderboard(true); break;
@@ -399,7 +414,7 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
         break;
       case "music": setMusicSignal((n) => n + 1); break;
       case "theme": setShowTheme(true); break;
-      case "notify": void requestNotificationPermission(); break;
+      case "notify": void requestNotificationPermission("tip"); break;
       case "embed": setShareSignal((n) => n + 1); break;
       case "silent": window.open("/library", "_blank", "noopener"); break;
     }
@@ -451,7 +466,7 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
           <BackgroundPicker bg={bg} open={showTheme} setOpen={setShowTheme} />
           {/* Settings button */}
           <button
-            onClick={() => setShowSettings(!showSettings)}
+            onClick={() => setSettingsOpen(!showSettings)}
             disabled={controlsLocked}
             title={controlsLocked ? "Only the host can change timer settings" : "Timer settings"}
             className={`
@@ -470,10 +485,10 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
             <span className="hidden sm:inline">Timer</span>
           </button>
           <RoomMoreMenu
-            onLeaderboard={() => setShowLeaderboard(true)}
-            onSchedule={controlsLocked ? undefined : () => setShowSchedule(true)}
-            onFeedback={() => setShowSuggest(true)}
-            onTheme={() => setShowTheme(true)}
+            onLeaderboard={via("leaderboard", "menu", () => setShowLeaderboard(true))}
+            onSchedule={controlsLocked ? undefined : via("schedule", "menu", () => setShowSchedule(true))}
+            onFeedback={via("feedback_button", "menu", () => setShowSuggest(true))}
+            onTheme={via("background_button", "menu", () => setShowTheme(true))}
             onWhatsNew={() => setShowWhatsNew(true)}
             whatsNewUnread={whatsNewUnread}
             hasSchedule={!!room?.schedule}
@@ -513,7 +528,7 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-medium text-white">Timer Settings</h3>
               <button
-                onClick={() => setShowSettings(false)}
+                onClick={() => setSettingsOpen(false)}
                 className="text-white/50 hover:text-white transition-colors"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -618,7 +633,7 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
                 roomUrl={shareLink}
                 roomName={dev ? "Work with the developer of Pikoo" : roomId}
                 canEdit={!controlsLocked}
-                onEdit={() => setShowSchedule(true)}
+                onEdit={via("schedule", "chip", () => setShowSchedule(true))}
               />
             </div>
             {controlsLocked && (
@@ -634,7 +649,7 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
                 phase={timer.phase}
                 onDismiss={() => setDismissedSummaryId(finishedId)}
                 canEnableNotifications={getNotificationPermission() === "default"}
-                onEnableNotifications={() => { void requestNotificationPermission(); }}
+                onEnableNotifications={() => { void requestNotificationPermission("summary"); }}
               />
             ) : (
               !dev && !inviteDismissed &&
@@ -772,7 +787,7 @@ function MobileTodoPanel({
   return (
     <>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => { if (!isOpen) trace("click", { what: "tasks_panel" }); setIsOpen(!isOpen); }}
         className={`
           flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl
           backdrop-blur-xl border transition-all duration-300

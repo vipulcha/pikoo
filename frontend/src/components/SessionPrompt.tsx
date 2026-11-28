@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { TodoItem, UserTodos } from "@/lib/types";
+import { trace } from "@/lib/trace";
 
 interface SessionPromptProps {
   isVisible: boolean;
@@ -42,6 +43,7 @@ export function SessionPrompt({
   };
 
   const handleSkip = () => {
+    trace("click", { what: "session_prompt_skip" });
     setIsAnimating(false);
     setTimeout(onDismiss, 200);
   };
