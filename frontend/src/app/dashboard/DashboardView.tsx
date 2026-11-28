@@ -16,7 +16,7 @@ const ALERTS_KEY = "pikoo:dashboard-alerts";
 interface RoomNow {
   id: string;
   isDev: boolean;
-  people: { v: string; name: string; you: boolean; bot: boolean }[];
+  people: { v: string; name: string; you: boolean; bot: boolean; unconfirmed?: boolean }[];
   viewers: number;
   phase: string;
   running: boolean;
@@ -51,6 +51,8 @@ interface DayRow { day: string; visitors: number; joined: number; roomHours: num
 interface Suggestion { text: string; name?: string; roomId?: string; createdAt: number }
 interface LatestEvent { t: number; v: string; name?: string; msg: string; joined: boolean }
 interface DashboardData {
+  /** Visitors left out because nothing showed they're a person, by where they came from */
+  unconfirmed?: { people: number; sources: { source: string; people: number }[] };
   now: number;
   rooms: RoomNow[];
   library: { id: string; name: string; count: number }[];
@@ -145,6 +147,10 @@ export function DashboardView() {
   });
   const alertsRef = useRef(alertsOn);
   const seen = useRef<{ eventT: number; suggestionT: number } | null>(null);
+  // Joins already alerted (or already there on the first load). A join shows up only
+  // once its visitor is confirmed as a person, which can be after later events, so
+  // new joins are found by key rather than by time.
+  const alertedJoins = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     void isDevBrowser().then(setAllowed);
@@ -164,9 +170,15 @@ export function DashboardView() {
       // Alerts for what's new since the last poll (nothing on the first load)
       const newestEvent = d.latest[0]?.t ?? 0;
       const newestSuggestion = d.suggestions[0]?.createdAt ?? 0;
+      const joinKey = (e: LatestEvent) => `${e.v}-${e.t}`;
+      const joinsNow = d.latest.filter((e) => e.joined);
+      if (alertedJoins.current && alertsRef.current) {
+        const joins = joinsNow.filter((e) => !alertedJoins.current!.has(joinKey(e)) && d.now - e.t < 15 * 60_000).slice(0, 3);
+        for (const e of joins) void notifyActivity(`${who(e)} joined a room`, e.msg.replace(/^\S+\s/, ""), `pikoo-dash-${joinKey(e)}`);
+      }
+      alertedJoins.current ??= new Set();
+      for (const e of joinsNow) alertedJoins.current.add(joinKey(e));
       if (seen.current && alertsRef.current) {
-        const joins = d.latest.filter((e) => e.t > seen.current!.eventT && e.joined).slice(0, 3);
-        for (const e of joins) void notifyActivity(`${who(e)} joined a room`, e.msg.replace(/^\S+\s/, ""), `pikoo-dash-${e.v}-${e.t}`);
         const fresh = d.suggestions.filter((s) => s.createdAt > seen.current!.suggestionT).slice(0, 3);
         for (const s of fresh) void notifyActivity("New suggestion", s.text.slice(0, 140), `pikoo-dash-s-${s.createdAt}`);
       }
@@ -190,7 +202,7 @@ export function DashboardView() {
   }, [allowed, load]);
 
   // Tab title shows how many people are in rooms (you excluded)
-  const peopleNow = data ? data.rooms.reduce((n, r) => n + r.people.filter((p) => !p.you && !p.bot).length, 0) + data.library.reduce((n, l) => n + l.count, 0) : 0;
+  const peopleNow = data ? data.rooms.reduce((n, r) => n + r.people.filter((p) => !p.you && !p.bot && !p.unconfirmed).length, 0) + data.library.reduce((n, l) => n + l.count, 0) : 0;
   useEffect(() => {
     if (data) document.title = `${peopleNow ? `(${peopleNow}) ` : ""}Dashboard · Pikoo`;
   }, [data, peopleNow]);
@@ -281,6 +293,7 @@ export function DashboardView() {
                           {p.name}
                           {p.you && <span className="text-white/35"> (you)</span>}
                           {p.bot && <span className="text-white/35"> (bot)</span>}
+                          {!p.bot && p.unconfirmed && <span className="text-white/35" title="Hasn't tapped, typed or stayed 2 minutes yet"> (not confirmed yet)</span>}
                         </span>
                       ))}
                       {r.viewers > 0 && <span className="text-white/35"> · {r.viewers} overlay{r.viewers > 1 ? "s" : ""}</span>}
@@ -379,7 +392,13 @@ export function DashboardView() {
         {data.journeys && <JourneyCards j={data.journeys} />}
 
         {/* Visitors */}
-        <Card title="Visitors, last 7 days" note="Newest first. Bots and your own visits are left out.">
+        <Card title="Visitors, last 7 days" note="Newest first. People only: someone counts once they tap, click, type or scroll, or stay 2 minutes. Bots and your own visits are left out.">
+          {!!data.unconfirmed?.people && (
+            <p className="mb-3 text-xs text-white/45">
+              Also {data.unconfirmed.people} {data.unconfirmed.people === 1 ? "visit" : "visits"} that never interacted (link checkers, quick looks), left out:{" "}
+              {data.unconfirmed.sources.map((s) => `${s.source} ${s.people}`).join(", ")}
+            </p>
+          )}
           {data.visitors.length === 0 ? (
             <p className="text-sm text-white/40">No visitors yet.</p>
           ) : (

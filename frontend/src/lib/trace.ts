@@ -12,10 +12,12 @@ export function trace(event: string, props: Record<string, string | number | und
     const uid = getUserId();
     if (!uid) return;
     const clean = Object.fromEntries(Object.entries(props).filter(([, v]) => v !== undefined && v !== ""));
+    // Browsers driven by automation software say so; the backend counts them as bots
+    const auto = typeof navigator !== "undefined" && navigator.webdriver === true ? true : undefined;
     void fetch(`${BACKEND_URL}/events`, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ uid, event, props: clean }),
+      body: JSON.stringify({ uid, event, props: clean, auto }),
       keepalive: true,
       mode: "no-cors",
     }).catch(() => {});
