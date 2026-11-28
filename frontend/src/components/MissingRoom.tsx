@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createRoom } from "@/lib/api";
-import { resolveRoom, roomNameProblem, toRoomName } from "@/lib/roomNames";
+import { resolveRoom, roomExists, roomNameProblem, toRoomName } from "@/lib/roomNames";
 import { getUserId } from "@/components/NamePrompt";
 import { StarField } from "@/components/RoomBackground";
 import { trace } from "@/lib/trace";
@@ -18,9 +18,11 @@ interface MissingRoomProps {
   reserved?: readonly string[];
 }
 
-// A typed room name or a room link that didn't lead to a room. Looks the name up
-// (exact, then lowercase, then as a room name) and goes there if it exists;
-// otherwise offers to create a room with that name in one click.
+// A typed room name or a room link that didn't lead to a room.
+// - Typed name (pikoo…/<name>): looked up exact, then lowercase, then as a room
+//   name; goes there if found, otherwise offers to create it in one click.
+// - Room link (/r/<code>): only the exact code is checked again (an /r/ link must
+//   never land in a different room); if it exists now, the page reloads into it.
 export function MissingRoom({ name, short, reserved = [] }: MissingRoomProps) {
   const router = useRouter();
   const [state, setState] = useState<"checking" | "missing" | "offline">("checking");
@@ -37,9 +39,14 @@ export function MissingRoom({ name, short, reserved = [] }: MissingRoomProps) {
   useEffect(() => {
     let cancelled = false;
     setTimeout(() => { if (!cancelled) setHost(window.location.host); }, 0);
-    resolveRoom(name).then(({ id, failed }) => {
+    const lookup = short
+      ? resolveRoom(name)
+      : roomExists(name).then((found) => ({ id: found ? name : null, failed: found === null }));
+    lookup.then(({ id, failed }) => {
       if (cancelled) return;
-      if (short) trace("short_link", { name: name.slice(0, 40), found: id ? "yes" : failed ? "offline" : "no" });
+      const found = id ? "yes" : failed ? "offline" : "no";
+      if (short) trace("short_link", { name: name.slice(0, 40), found });
+      else trace("missing_room", { code: name.slice(0, 40), found });
       if (id && (short || id !== name)) router.replace(`/r/${id}`);
       else if (id) window.location.reload(); // created a moment ago: join it
       else setState(failed ? "offline" : "missing");

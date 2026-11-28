@@ -95,6 +95,8 @@ interface Journeys {
   /** Share of time on room pages with Pikoo in a background tab (pages closed on a computer) */
   background: { share: number; pages: number } | null;
   notify: Record<string, number>;
+  /** Typed room names (pikoo…/<name>), /r/ links with no room and missing pages, and what happened next */
+  links: { link: string; kind: "name" | "room" | "page"; people: number; times: number; outcome: "found" | "created" | "nothing" | "offline" }[];
 }
 
 const JOIN_RE = /joined (?:silent )?room (\S+)/;
@@ -313,6 +315,16 @@ function journeys(events: ActivityEvent[], localDay: (t: number) => string): Jou
   const loads: number[] = [];
   let seenSec = 0, stayedSec = 0, closedPages = 0;
   const notify: Record<string, number> = {};
+  const links = new Map<string, { kind: "name" | "room" | "page"; people: Set<string>; times: number; found: boolean; offline: boolean; slug: string }>();
+  const created = new Set<string>(); // room ids created in the window
+  const link = (key: string, kind: "name" | "room" | "page", v: string, found: string | undefined, slug: string) => {
+    const row = links.get(key) ?? { kind, people: new Set<string>(), times: 0, found: false, offline: false, slug };
+    row.people.add(v);
+    row.times++;
+    if (found === "yes") row.found = true;
+    if (found === "offline") row.offline = true;
+    links.set(key, row);
+  };
 
   for (const e of events) {
     const m = e.msg;
@@ -350,6 +362,17 @@ function journeys(events: ActivityEvent[], localDay: (t: number) => string): Jou
       const r = prop(m, "result") ?? "?";
       notify[r] = (notify[r] ?? 0) + 1;
     }
+    if (m.startsWith("🔤 typed a room name")) {
+      const name = m.match(/ name=(.*?) found=/)?.[1] ?? prop(m, "name") ?? "?";
+      link(`/${name}`, "name", e.v, prop(m, "found"), toName(name));
+    }
+    if (m.startsWith("🚫 opened a room link with no room")) {
+      const code = prop(m, "code") ?? "?";
+      link(`/r/${code}`, "room", e.v, prop(m, "found"), code);
+    }
+    if (m.startsWith("❓ opened a page that doesn't exist")) link(prop(m, "path") ?? "?", "page", e.v, undefined, "");
+    const made = m.match(/^🏠 created room (\S+)/);
+    if (made) created.add(made[1]);
     if (m.startsWith("🚪 left room")) {
       if (m.includes(" · mid-focus")) leaves.midFocus++;
       else if (m.includes(" · on a break")) leaves.onBreak++;
@@ -380,5 +403,16 @@ function journeys(events: ActivityEvent[], localDay: (t: number) => string): Jou
     roomLoad: loads.length ? { median: loads[Math.floor(loads.length / 2)], p90: loads[Math.min(loads.length - 1, Math.floor(loads.length * 0.9))], n: loads.length } : null,
     background: stayedSec > 0 ? { share: Math.round((1 - seenSec / stayedSec) * 100) / 100, pages: closedPages } : null,
     notify,
+    links: [...links.entries()]
+      .map(([k, r]) => ({
+        link: k, kind: r.kind, people: r.people.size, times: r.times,
+        outcome: r.found ? "found" as const : r.slug && created.has(r.slug) ? "created" as const : r.offline ? "offline" as const : "nothing" as const,
+      }))
+      .sort((a, b) => b.people - a.people || b.times - a.times)
+      .slice(0, 20),
   };
 }
+
+/** Same as the frontend's toRoomName: "Night Owls" → "night-owls" */
+const toName = (raw: string) =>
+  raw.toLowerCase().replace(/[\s_]+/g, "-").replace(/[^a-z0-9-]/g, "").replace(/-{2,}/g, "-").slice(0, 32);

@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { trace } from "@/lib/trace";
 import { MissingRoom } from "@/components/MissingRoom";
 
 export function NotFoundView({ reserved }: { reserved: string[] }) {
@@ -12,7 +14,12 @@ export function NotFoundView({ reserved }: { reserved: string[] }) {
     try { word = decodeURIComponent(parts[0]).trim(); } catch { word = null; }
   }
   if (word && /^[\w -]{1,40}$/.test(word)) return <MissingRoom key={word} name={word} short reserved={reserved} />;
+  return <PageNotFound path={pathname} />;
+}
 
+function PageNotFound({ path }: { path: string }) {
+  // Logged so dead links show up on the dashboard
+  useEffect(() => { trace("not_found", { path: path.slice(0, 80) }); }, [path]);
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-4 text-center">
       <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Page not found</h1>

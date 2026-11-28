@@ -76,6 +76,7 @@ interface Journeys {
   roomLoad: { median: number; p90: number; n: number } | null;
   background: { share: number; pages: number } | null;
   notify: Record<string, number>;
+  links?: { link: string; kind: "name" | "room" | "page"; people: number; times: number; outcome: "found" | "created" | "nothing" | "offline" }[];
 }
 
 const TIP_LABELS: Record<string, string> = {
@@ -437,6 +438,33 @@ function JourneyCards({ j }: { j: Journeys }) {
             <Stat label="Notifications asked" value={String(notify.reduce((n, [, c]) => n + c, 0))} note={notify.length ? notify.map(([r, c]) => `${c} ${r}`).join(", ") : "Nobody was asked yet"} />
           </dl>
         </div>
+      </Card>
+
+      <Card title="Links people opened that led nowhere, last 7 days" note="Room names typed after the address (pikoo…/name), /r/ links with no room, and missing pages, with what happened next. Bots are left out.">
+        {!j.links?.length ? <p className="text-sm text-white/40">None yet.</p> : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-white/40 text-left">
+                <th className="font-normal pb-1.5">Link</th>
+                <th className="font-normal pb-1.5">Kind</th>
+                <th className="font-normal pb-1.5">Then</th>
+                <th className="font-normal pb-1.5 text-right">People</th>
+              </tr>
+            </thead>
+            <tbody>
+              {j.links.map((l) => (
+                <tr key={l.link} className="border-t border-white/5">
+                  <td className="py-1.5 pr-3 font-mono text-white/80 break-all">{l.link}</td>
+                  <td className="py-1.5 pr-3 text-white/50 whitespace-nowrap">{l.kind === "name" ? "typed name" : l.kind === "room" ? "room link" : "page"}</td>
+                  <td className={`py-1.5 pr-3 whitespace-nowrap ${l.outcome === "nothing" ? "text-amber-200/90" : "text-white/60"}`}>
+                    {l.outcome === "found" ? "went to the room" : l.outcome === "created" ? "room created" : l.outcome === "offline" ? "couldn't check" : l.kind === "page" ? "page not found" : "no room"}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums text-white/85">{l.people} <span className="text-white/35">({l.times}×)</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
