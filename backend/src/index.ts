@@ -316,7 +316,7 @@ const TRACE_EVENTS: Record<string, string> = {
   solo_timer: "⏱️ solo timer", obs: "🎥 OBS builder", intro: "📖 silent-room intro", hint: "💡 music hint", error: "⚠️ saw an error",
   auto_room: "➡️ sent straight into a room",
   background: "🖼️ picked background",
-  tip: "💡 tip", whats_new: "✨ opened What's new",
+  tip: "💡 tip", whats_new: "✨ opened Features",
   dev_room: "🧑‍💻 dev room",
   // Tab switched to the background (first time on a page) / back after a while
   away: "🙈 switched away", back: "🔙 came back",
@@ -343,7 +343,7 @@ app.post("/events", express.text({ type: "*/*", limit: "2kb" }), (req, res) => {
   logVisitor(uid, `${label}${props ? ` ${props}` : ""}`);
 });
 
-// "Most wanted features" in the What's new panel: vote counts for everyone, plus
+// "Most wanted features" in the Features panel: vote counts for everyone, plus
 // which ideas this browser voted for (x-pikoo-uid, optional)
 app.get("/ideas", async (req, res) => {
   if (!restGetLimiter.consume(getIp(req))) {

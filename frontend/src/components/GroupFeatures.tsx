@@ -141,9 +141,8 @@ export function ScheduleDialog({ open, schedule, onSave, onClear, onClose }: {
 // ---------------------------------------------------------------------------
 
 // "⋯" menu in the room header for the less-used group features
-export function RoomMoreMenu({ onLeaderboard, onSchedule, onFeedback, onTheme, onWhatsNew, whatsNewUnread = false, hasSchedule }: {
-  onLeaderboard: () => void; onSchedule?: () => void; onFeedback: () => void; onTheme?: () => void;
-  onWhatsNew?: () => void; whatsNewUnread?: boolean; hasSchedule: boolean;
+export function RoomMoreMenu({ onLeaderboard, onSchedule, onFeedback, onTheme, hasSchedule }: {
+  onLeaderboard: () => void; onSchedule?: () => void; onFeedback: () => void; onTheme?: () => void; hasSchedule: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -167,12 +166,6 @@ export function RoomMoreMenu({ onLeaderboard, onSchedule, onFeedback, onTheme, o
         className={`relative h-9 w-9 flex items-center justify-center rounded-full border transition-colors ${open ? "bg-white/20 border-white/20 text-white" : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10 hover:text-white"}`}
       >
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
-        {whatsNewUnread && onWhatsNew && !open && (
-          <>
-            <span aria-hidden className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-rose-400 ring-2 ring-black" />
-            <span className="sr-only">(new updates)</span>
-          </>
-        )}
       </button>
       {open && (
         <div role="menu" className="absolute right-0 mt-2 w-64 p-1.5 rounded-xl bg-neutral-900/95 backdrop-blur-md border border-white/10 shadow-2xl z-50 text-sm animate-fade-in">
@@ -185,12 +178,6 @@ export function RoomMoreMenu({ onLeaderboard, onSchedule, onFeedback, onTheme, o
             <button role="menuitem" className={item} onClick={pick(onSchedule)}><span aria-hidden>📅</span>{hasSchedule ? "Edit session schedule" : "Schedule a session"}</button>
           )}
           <div className="my-1 h-px bg-white/10" />
-          {onWhatsNew && (
-            <button role="menuitem" className={item} onClick={pick(onWhatsNew)}>
-              <span aria-hidden>✨</span>What&apos;s new
-              {whatsNewUnread && <span aria-hidden className="ml-auto w-2 h-2 rounded-full bg-rose-400" />}
-            </button>
-          )}
           <button role="menuitem" className={`${item} text-white/70`} onClick={pick(onFeedback)}><span aria-hidden>💡</span>Suggestion or bug</button>
         </div>
       )}

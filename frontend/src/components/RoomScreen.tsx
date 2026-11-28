@@ -30,7 +30,7 @@ import { serverNow } from "@/lib/clock";
 import { trace } from "@/lib/trace";
 import { DevHostBar, DevLiveChip } from "@/components/DevRoomBits";
 import { RoomTips } from "@/components/RoomTips";
-import { WhatsNewPanel, useWhatsNewUnread } from "@/components/WhatsNew";
+import { WhatsNewPanel, useWhatsNewUnread, SparklesIcon, UnreadDot } from "@/components/WhatsNew";
 import { spotlight, type TipContext, type TipId } from "@/lib/tips";
 
 /** Set for the work-with-dev room (/work-with-dev) */
@@ -437,6 +437,16 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
           </svg>
           <span className="hidden sm:inline">Feedback</span>
         </button>
+        {/* Phones: the header is full, so Features sits here (from tablet width it's in the header) */}
+        <button
+          onClick={() => { trace("click", { what: "features_button", via: "corner" }); setShowWhatsNew(true); }}
+          title="Features"
+          aria-label={whatsNewUnread ? "Features (new updates)" : "Features"}
+          className="sm:hidden relative h-10 w-10 rounded-full bg-black/40 backdrop-blur-md border border-white/15 text-white/75 hover:text-white hover:bg-black/60 flex items-center justify-center transition-colors"
+        >
+          <SparklesIcon className="w-5 h-5" />
+          {whatsNewUnread && <UnreadDot className="absolute -top-0.5 -right-0.5" />}
+        </button>
       </div>
 
       {/* Header */}
@@ -471,7 +481,7 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
             title={controlsLocked ? "Only the host can change timer settings" : "Timer settings"}
             className={`
               disabled:opacity-40 disabled:cursor-not-allowed
-              h-9 px-3 sm:px-4 rounded-full transition-all duration-200 flex items-center gap-2
+              h-9 px-3 lg:px-4 rounded-full transition-all duration-200 flex items-center gap-2
               text-sm font-medium
               ${showSettings
                 ? "bg-white/20 text-white"
@@ -482,15 +492,23 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="hidden sm:inline">Timer</span>
+            <span className="hidden lg:inline">Timer</span>
+          </button>
+          <button
+            onClick={() => { trace("click", { what: "features_button", via: "header" }); setShowWhatsNew(true); }}
+            title="Features: vote on what's next and see what's new"
+            aria-label={whatsNewUnread ? "Features (new updates)" : "Features"}
+            className="hidden sm:flex relative h-9 px-3 lg:px-4 shrink-0 rounded-full items-center gap-2 text-sm font-medium bg-white/5 border border-white/10 text-white/80 hover:text-white hover:bg-white/10 transition-all duration-200"
+          >
+            <SparklesIcon />
+            <span className="hidden lg:inline">Features</span>
+            {whatsNewUnread && <UnreadDot className="absolute -top-0.5 -right-0.5" />}
           </button>
           <RoomMoreMenu
             onLeaderboard={via("leaderboard", "menu", () => setShowLeaderboard(true))}
             onSchedule={controlsLocked ? undefined : via("schedule", "menu", () => setShowSchedule(true))}
             onFeedback={via("feedback_button", "menu", () => setShowSuggest(true))}
             onTheme={via("background_button", "menu", () => setShowTheme(true))}
-            onWhatsNew={() => setShowWhatsNew(true)}
-            whatsNewUnread={whatsNewUnread}
             hasSchedule={!!room?.schedule}
           />
         </div>

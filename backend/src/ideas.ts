@@ -1,5 +1,5 @@
 // ============================================
-// "Most wanted features" votes (the What's new panel)
+// "Most wanted features" votes (the Features panel)
 // ============================================
 // One vote per browser per idea. Stored as a Redis set per idea holding a hash
 // of the browser id (never the id itself), so a vote can be taken back and a

@@ -73,7 +73,7 @@ export interface DashboardData {
   /** Room tips over the last 7 days: times shown, "Show me" clicks, people who turned tips off */
   tips: { id: string; shown: number; clicked: number }[];
   tipsOff: number;
-  /** People who opened the What's new panel in the last 7 days */
+  /** People who opened the Features panel in the last 7 days */
   whatsNewOpens: number;
   journeys: Journeys;
 }
@@ -258,12 +258,12 @@ export async function dashboardData(io: Server, viewerUid: string | undefined, t
   }
   const sources = [...sourceMap.entries()].map(([source, r]) => ({ source, ...r })).sort((a, b) => b.visitors - a.visitors);
 
-  // Room tips and the What's new panel
+  // Room tips and the Features panel
   const tipMap = new Map<string, { shown: number; clicked: number }>();
   const tipsOff = new Set<string>();
   const whatsNew = new Set<string>();
   for (const e of events) {
-    if (e.msg.startsWith("✨ opened What's new")) whatsNew.add(e.v);
+    if (e.msg.startsWith("✨ opened Features") || e.msg.startsWith("✨ opened What's new")) whatsNew.add(e.v);
     const tip = e.msg.match(TIP_RE);
     if (!tip) continue;
     const id = prop(tip[1], "id");

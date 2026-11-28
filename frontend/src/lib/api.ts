@@ -118,7 +118,7 @@ export function describePreview(p: RoomPreview | null): { title: string; subtitl
   };
 }
 
-// "Most wanted features" votes in the What's new panel
+// "Most wanted features" votes in the Features panel
 export interface IdeaVotes {
   counts: Record<string, number>;
   mine: string[];

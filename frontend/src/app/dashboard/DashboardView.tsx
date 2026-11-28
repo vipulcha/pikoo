@@ -101,8 +101,10 @@ const CLICK_LABELS: Record<string, string> = {
   invite_nudge_dismiss: "Closed the invite nudge",
   summary_dismiss: "Closed the Session done card",
   session_prompt_skip: "Skipped picking a task",
-  whats_new_idea: "Share an idea (What's new)",
-  whats_new_try: "Try it (What's new)",
+  features_button: "Opened Features",
+  features_more: "Show more (Features)",
+  whats_new_idea: "Share an idea (Features)",
+  whats_new_try: "Try it (Features)",
   dev_live_badge: "Clicked the dev room live badge",
   empty_invite: "Invite from an empty silent room",
   empty_dev_room: "Dev room from an empty silent room",
@@ -337,8 +339,8 @@ export function DashboardView() {
         </Card>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          {/* What's new votes */}
-          <Card title="Most wanted features" note={`Votes from the What's new panel, all time. Opened by ${data.whatsNewOpens ?? 0} ${(data.whatsNewOpens ?? 0) === 1 ? "person" : "people"} in the last 7 days.`}>
+          {/* Features panel votes */}
+          <Card title="Most wanted features" note={`Votes from the Features panel, all time. Opened by ${data.whatsNewOpens ?? 0} ${(data.whatsNewOpens ?? 0) === 1 ? "person" : "people"} in the last 7 days.`}>
             <IdeaVotes ideas={data.ideas ?? {}} />
           </Card>
 

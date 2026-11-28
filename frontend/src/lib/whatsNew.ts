@@ -1,4 +1,4 @@
-// Content for the What's new panel. Add a line to SHIPPED (newest first) whenever
+// Content for the Features panel (its "What's new" list). Add a line to SHIPPED (newest first) whenever
 // something people can notice ships; developer-only changes don't go here.
 // A new first entry turns the unread dot back on for everyone.
 
