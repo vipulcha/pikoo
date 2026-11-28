@@ -75,10 +75,14 @@ export function SessionSummary({
 
   const accent = phase === "long_break" ? "text-blue-300" : "text-emerald-300";
 
+  // Phones and tablets: centered above the corner buttons. Desktop: lined up
+  // with the task column and lifted above the Feedback button, so it stays off
+  // the corner buttons and the timer controls. 320px wide like the column; from
+  // 1280px there's room for 384px, which keeps both buttons on one line.
   return (
     <div
       role="status"
-      className="fixed z-40 left-1/2 -translate-x-1/2 bottom-20 w-[calc(100%-2rem)] max-w-md sm:left-6 sm:translate-x-0 sm:bottom-6 sm:max-w-sm rounded-2xl border border-white/15 bg-black/80 backdrop-blur-md px-5 py-4 shadow-2xl animate-slide-up"
+      className="fixed z-40 left-1/2 -translate-x-1/2 bottom-20 w-[calc(100%-2rem)] max-w-md md:left-4 lg:left-8 md:translate-x-0 md:bottom-[4.5rem] md:w-80 xl:w-96 rounded-2xl border border-white/15 bg-black/80 backdrop-blur-md px-5 py-4 shadow-2xl animate-slide-up"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
