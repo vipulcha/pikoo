@@ -17,8 +17,14 @@ const STORAGE_KEY_SOUND = "pikoo_sound";
 const STORAGE_KEY_VOLUME = "pikoo_volume";
 const STORAGE_KEY_HINT = "pikoo:music-hint-seen";
 
-export function AudioPlayer() {
+/** openSignal: bump it to open the menu from elsewhere (a room tip's "Show me") */
+export function AudioPlayer({ openSignal = 0 }: { openSignal?: number } = {}) {
   const [isOpen, setIsOpen] = useState(false);
+  const [handledSignal, setHandledSignal] = useState(openSignal);
+  if (openSignal !== handledSignal) {
+    setHandledSignal(openSignal);
+    setIsOpen(true);
+  }
   const [currentSound, setCurrentSound] = useState<SoundId>("off");
   const [volume, setVolume] = useState(0.5);
   const [isLoading, setIsLoading] = useState(false);

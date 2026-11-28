@@ -29,6 +29,10 @@ import Link from "next/link";
 import { serverNow } from "@/lib/clock";
 import { trace } from "@/lib/trace";
 import { DevHostBar, DevLiveChip } from "@/components/DevRoomBits";
+import { RoomTips } from "@/components/RoomTips";
+import { WhatsNewPanel, useWhatsNewUnread } from "@/components/WhatsNew";
+import { MissingRoom } from "@/components/MissingRoom";
+import { spotlight, type TipContext, type TipId } from "@/lib/tips";
 
 /** Set for the work-with-dev room (/work-with-dev) */
 export interface DevRoomOptions {
@@ -65,6 +69,12 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showSuggest, setShowSuggest] = useState(false);
   const [dismissedSummaryId, setDismissedSummaryId] = useState<string | null>(null);
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [whatsNewUnread] = useWhatsNewUnread();
+  // Bumped to open a menu that keeps its own open state (from a tip's "Show me")
+  const [musicSignal, setMusicSignal] = useState(0);
+  const [shareSignal, setShareSignal] = useState(0);
+  const [tasksSignal, setTasksSignal] = useState(0);
   const processedTransitionRef = useRef<string | null>(null); // Track processed transitions to avoid duplicates
 
   // Check for saved name and get uniqueId on mount
@@ -291,6 +301,11 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
     };
   }, [room?.timer?.running, room?.timer?.phase, room?.timer?.phaseEndsAt, room?.timer?.remainingSecWhenPaused]);
 
+  // The link doesn't lead to a room: look the name up, or offer to create it
+  if (!dev && blocked?.code === "ROOM_NOT_FOUND") {
+    return <MissingRoom name={roomId} short={false} />;
+  }
+
   // Show name prompt only for errors (name taken) - otherwise WelcomePrompt handles it
   if (showNamePrompt && nameError) {
     return (
@@ -364,6 +379,38 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
     actions.start();
   };
 
+  // Tips: only in breaks and while paused, never during a running focus block
+  const showSummary = !!finishedId && finishedId !== dismissedSummaryId && timer.phase !== "focus" && (focusStats.lastSessionSec ?? 0) >= 60;
+  // ...and not while the "Session done" card (its own call to action) is up
+  const tipsVisible = (!timer.running || timer.phase !== "focus") && !showWelcomePrompt && !showSessionPrompt && !showSummary;
+  const tipCtx: TipContext = {
+    canControl: !controlsLocked,
+    autoStart: !!settings.autoStart,
+    hasSchedule: !!room.schedule,
+    tasksVisible: !!myTodos && myTodos.isPublic !== false && myTodos.todos.length > 0,
+    notify: getNotificationPermission(),
+    desktop: window.matchMedia("(hover: hover) and (pointer: fine)").matches,
+    dev: !!dev,
+  };
+  const handleTipAction = (id: TipId) => {
+    switch (id) {
+      case "autostart": setShowSettings(true); spotlight("autostart", 150); break;
+      case "addtime": spotlight("addtime"); break;
+      case "schedule": setShowSchedule(true); break;
+      case "leaderboard": setShowLeaderboard(true); break;
+      case "privacy":
+        // The task list is on screen from tablet width up; on phones it opens as a sheet
+        if (window.matchMedia("(min-width: 768px)").matches) spotlight("todo-eye");
+        else { setTasksSignal((n) => n + 1); spotlight("todo-eye", 300); }
+        break;
+      case "music": setMusicSignal((n) => n + 1); break;
+      case "theme": setShowTheme(true); break;
+      case "notify": void requestNotificationPermission(); break;
+      case "embed": setShareSignal((n) => n + 1); break;
+      case "silent": window.open("/library", "_blank", "noopener"); break;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black text-white flex flex-col relative overflow-hidden">
       <RoomBackground bg={bg} />
@@ -405,8 +452,8 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
             onRemove={dev?.isHost ? (id) => actions.removePerson(id) : undefined}
             myId={uniqueId}
           />
-          <ShareButton roomId={roomId} link={dev ? shareLink : undefined} />
-          <AudioPlayer />
+          <ShareButton roomId={roomId} link={dev ? shareLink : undefined} openSignal={shareSignal} />
+          <AudioPlayer openSignal={musicSignal} />
           <BackgroundPicker bg={bg} open={showTheme} setOpen={setShowTheme} />
           {/* Settings button */}
           <button
@@ -433,6 +480,8 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
             onSchedule={controlsLocked ? undefined : () => setShowSchedule(true)}
             onFeedback={() => setShowSuggest(true)}
             onTheme={() => setShowTheme(true)}
+            onWhatsNew={() => setShowWhatsNew(true)}
+            whatsNewUnread={whatsNewUnread}
             hasSchedule={!!room?.schedule}
           />
         </div>
@@ -495,6 +544,7 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
               <button
                 type="button"
                 role="switch"
+                data-tip="autostart"
                 aria-checked={!!settings.autoStart}
                 onClick={() => actions.updateSettings({ autoStart: !settings.autoStart })}
                 className={`
@@ -519,7 +569,8 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
       )}
 
       {/* Main content */}
-      <main className="flex-1 flex items-center justify-center px-4 [@media(min-height:900px)]:-mt-16 relative z-10">
+      {/* Bottom padding keeps the room clear of the corner buttons and the tip line, which sit fixed at the bottom */}
+      <main className="flex-1 flex items-center justify-center px-4 pb-24 sm:pb-20 [@media(min-height:900px)]:-mt-16 relative z-10">
         {/* Todo List - Left side. z-20 keeps it clickable if the timer ever overlaps it */}
         <div className="absolute left-2 sm:left-4 lg:left-8 top-1/2 -translate-y-1/2 hidden md:block z-20">
           <div className="flex flex-col gap-2">
@@ -581,7 +632,7 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
                 {dev ? "The developer runs the timer. Say hi in the chat during breaks" : `Only ${host?.name} (host) can control the timer`}
               </p>
             )}
-            {finishedId && finishedId !== dismissedSummaryId && timer.phase !== "focus" && (focusStats.lastSessionSec ?? 0) >= 60 ? (
+            {showSummary ? (
               <SessionSummary
                 shareUrl={shareLink}
                 stats={focusStats}
@@ -603,6 +654,7 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
           {/* Mobile Todo Toggle - shows todo panel for mobile */}
           <div className="mt-6 sm:mt-8 md:hidden">
             <MobileTodoPanel
+              openSignal={tasksSignal}
               userTodos={myTodos}
               history={room?.history || []}
               onAddTodo={actions.addTodo}
@@ -631,6 +683,15 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
         onClose={() => setShowLeaderboard(false)}
       />
       <SuggestionButton roomId={roomId} name={userName} open={showSuggest} onClose={() => setShowSuggest(false)} />
+      <WhatsNewPanel
+        open={showWhatsNew}
+        onClose={() => setShowWhatsNew(false)}
+        where="room"
+        roomId={roomId}
+        name={userName}
+        onRoomAction={(a) => (a === "theme" ? setShowTheme(true) : setMusicSignal((n) => n + 1))}
+      />
+      <RoomTips visible={tipsVisible} ctx={tipCtx} onAction={handleTipAction} />
 
       {/* Chat Panel */}
       <ChatPanel
@@ -684,6 +745,7 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
 
 // Mobile Todo Panel Component
 function MobileTodoPanel({
+  openSignal = 0,
   userTodos,
   history,
   onAddTodo,
@@ -693,6 +755,8 @@ function MobileTodoPanel({
   onSetActiveTodo,
   onSetVisibility,
 }: {
+  /** Bump to open the sheet from elsewhere (a room tip's "Show me") */
+  openSignal?: number;
   userTodos: import("@/lib/types").UserTodos | null;
   history: import("@/lib/types").ActivityLog[];
   onAddTodo: (text: string) => void;
@@ -703,6 +767,11 @@ function MobileTodoPanel({
   onSetVisibility: (isPublic: boolean) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [handledSignal, setHandledSignal] = useState(openSignal);
+  if (openSignal !== handledSignal) {
+    setHandledSignal(openSignal);
+    setIsOpen(true);
+  }
   const todos = userTodos?.todos || [];
   const completedCount = todos.filter(t => t.completed).length;
 

@@ -90,7 +90,12 @@ function clamp(value: number, min: number, max: number): number {
 
 // Custom room links (/r/<slug>): 3-32 chars, lowercase letters, digits and
 // single hyphens, starting and ending with a letter or digit
-const RESERVED_SLUGS = new Set(["new", "create", "admin", "api", "embed", "library", "timer", "settings", "pikoo", "help", "about"]);
+// Also the site's own top-level pages, since a room name works as pikoo…/<name>
+// too (the frontend also keeps guide page names out, see lib/roomNames.ts)
+const RESERVED_SLUGS = new Set([
+  "new", "create", "admin", "api", "embed", "library", "timer", "settings", "pikoo", "help", "about",
+  "dashboard", "obs", "work-with-dev", "icon", "apple-icon", "opengraph-image", "manifest", "robots", "sitemap", "llms",
+]);
 
 export function sanitizeRoomSlug(raw: unknown): { slug: string } | { error: string } | null {
   if (raw === undefined || raw === null || raw === "") return null;

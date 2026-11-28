@@ -7,6 +7,8 @@ interface ShareButtonProps {
   roomId: string;
   /** A page to share instead of the room link (no embed options then) */
   link?: string;
+  /** Bump to open the menu from elsewhere (a room tip's "Show me") */
+  openSignal?: number;
 }
 
 export const roomUrl = (roomId: string) => `${window.location.origin}/r/${roomId}`;
@@ -14,8 +16,13 @@ const inviteTextFor = (url: string) => `Focus with me on Pikoo (shared Pomodoro 
 export const inviteText = (roomId: string) => inviteTextFor(roomUrl(roomId));
 export const whatsappUrl = (roomId: string) => `https://wa.me/?text=${encodeURIComponent(inviteText(roomId))}`;
 
-export function ShareButton({ roomId, link }: ShareButtonProps) {
+export function ShareButton({ roomId, link, openSignal = 0 }: ShareButtonProps) {
   const [open, setOpen] = useState(false);
+  const [handledSignal, setHandledSignal] = useState(openSignal);
+  if (openSignal !== handledSignal) {
+    setHandledSignal(openSignal);
+    setOpen(true);
+  }
   const [copied, setCopied] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 

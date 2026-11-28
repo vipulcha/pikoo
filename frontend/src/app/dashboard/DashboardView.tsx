@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isDevBrowser } from "@/components/DevRoomBits";
 import { getUserId, getUserSecret } from "@/components/NamePrompt";
 import { DEV_PATH, sinceLabel } from "@/lib/devRoom";
+import { IDEAS } from "@/lib/whatsNew";
 import { getNotificationPermission, notifyActivity, requestNotificationPermission } from "@/lib/audio";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
@@ -58,7 +59,17 @@ interface DashboardData {
   sources: { source: string; visitors: number; joined: number }[];
   suggestions: Suggestion[];
   latest: LatestEvent[];
+  ideas: Record<string, number>;
+  tips: { id: string; shown: number; clicked: number }[];
+  tipsOff: number;
+  whatsNewOpens: number;
 }
+
+const TIP_LABELS: Record<string, string> = {
+  autostart: "Auto-start", space: "Space to start/pause", addtime: "+5 min", schedule: "Schedule a session",
+  leaderboard: "Leaderboard", privacy: "Private tasks", music: "Music", theme: "Background",
+  notify: "Notifications", embed: "Notion / stream timer", silent: "Silent rooms",
+};
 
 // ---- formatting
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -287,6 +298,42 @@ export function DashboardView() {
           )}
         </Card>
 
+        <div className="grid gap-4 lg:grid-cols-2">
+          {/* What's new votes */}
+          <Card title="Most wanted features" note={`Votes from the What's new panel, all time. Opened by ${data.whatsNewOpens ?? 0} ${(data.whatsNewOpens ?? 0) === 1 ? "person" : "people"} in the last 7 days.`}>
+            <IdeaVotes ideas={data.ideas ?? {}} />
+          </Card>
+
+          {/* Room tips */}
+          <Card title="Room tips, last 7 days" note={`How often each tip was shown and how often "Show me" was clicked. ${data.tipsOff ?? 0} turned tips off.`}>
+            {!data.tips?.length ? (
+              <p className="text-sm text-white/40">No tips shown yet.</p>
+            ) : (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-white/40 text-left">
+                    <th className="font-normal pb-1.5">Tip</th>
+                    <th className="font-normal pb-1.5 text-right">Shown</th>
+                    <th className="font-normal pb-1.5 text-right">Clicked</th>
+                  </tr>
+                </thead>
+                <tbody className="tabular-nums">
+                  {data.tips.map((t) => (
+                    <tr key={t.id} className="border-t border-white/5">
+                      <td className="py-1.5 text-white/75">{TIP_LABELS[t.id] ?? t.id}</td>
+                      <td className="py-1.5 text-right text-white/75">{t.shown}</td>
+                      <td className="py-1.5 text-right text-white/75">
+                        {t.clicked}
+                        {t.shown > 0 && <span className="ml-1.5 text-white/35">{Math.round((t.clicked / t.shown) * 100)}%</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+        </div>
+
         {/* Visitors */}
         <Card title="Visitors, last 7 days" note="Newest first. Bots and your own visits are left out.">
           {data.visitors.length === 0 ? (
@@ -299,6 +346,26 @@ export function DashboardView() {
         </Card>
       </main>
     </div>
+  );
+}
+
+function IdeaVotes({ ideas }: { ideas: Record<string, number> }) {
+  const rows = IDEAS.map((i) => ({ ...i, votes: ideas[i.id] ?? 0 })).sort((a, b) => b.votes - a.votes);
+  const max = Math.max(1, ...rows.map((r) => r.votes));
+  return (
+    <ul className="space-y-2.5">
+      {rows.map((r) => (
+        <li key={r.id} className="text-xs" title={`${r.title}: ${r.votes} ${r.votes === 1 ? "vote" : "votes"}`}>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-white/75 truncate"><span aria-hidden>{r.emoji} </span>{r.title}</span>
+            <span className="shrink-0 tabular-nums text-white/85">{r.votes}</span>
+          </div>
+          <div className="mt-1 h-1.5 rounded-full bg-white/5">
+            {r.votes > 0 && <div className="h-full rounded-full bg-rose-500" style={{ width: `${(r.votes / max) * 100}%` }} />}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 

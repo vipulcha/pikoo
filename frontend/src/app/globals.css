@@ -269,3 +269,14 @@ input[type="range"]::-webkit-slider-thumb:active {
   100% { transform: translateY(-260px) scale(1.1); opacity: 0; }
 }
 .animate-float-up { animation: float-up 2.5s ease-out forwards; }
+
+/* "Show me" from a room tip: a pulsing ring around the control it points at */
+@keyframes tip-spotlight {
+  0%, 100% { outline-color: rgba(251, 113, 133, 0); }
+  50% { outline-color: rgba(251, 113, 133, 0.95); }
+}
+.tip-spotlight {
+  outline: 2px solid rgba(251, 113, 133, 0);
+  outline-offset: 4px;
+  animation: tip-spotlight 0.9s ease-in-out 4;
+}

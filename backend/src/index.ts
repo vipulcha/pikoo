@@ -7,15 +7,16 @@ import { nanoid } from "nanoid";
 import dotenv from "dotenv";
 
 import { initRedis, createRoom, getRoom, addSuggestion, getSuggestions, flushRoomWrites } from "./store.js";
-import { track, readDailyStats, readTotals, logVisitor, markCrawler } from "./stats.js";
+import { track, readDailyStats, readTotals, logVisitor, markCrawler, isCrawler } from "./stats.js";
 import { LIBRARY_ROOMS, libraryCount, focusedThisWeek } from "./library.js";
 import { setupSocketHandlers, resumeDevRoom } from "./socket.js";
 import { devRoomStatus, isDevHostSecret } from "./devRoom.js";
 import { loadActivity } from "./activity.js";
 import { dashboardData, forgetSuggestionCache } from "./dashboard.js";
+import { isIdeaId, voteIdea, ideaVotes } from "./ideas.js";
 import { RoomSettings, DEFAULT_SETTINGS } from "./types.js";
 import { log } from "./logger.js";
-import { roomCreateLimiter, restGetLimiter, connectionLimiter, suggestionLimiter } from "./rate-limit.js";
+import { roomCreateLimiter, restGetLimiter, connectionLimiter, suggestionLimiter, ideaVoteLimiter } from "./rate-limit.js";
 import { roomForUser } from "./views.js";
 import { sanitizeSettings, sanitizeSuggestion, sanitizeName, sanitizeRoomId, sanitizeUniqueId, sanitizeRoomSlug } from "./sanitize.js";
 
@@ -315,6 +316,7 @@ const TRACE_EVENTS: Record<string, string> = {
   solo_timer: "⏱️ solo timer", obs: "🎥 OBS builder", intro: "📖 silent-room intro", hint: "💡 music hint", error: "⚠️ saw an error",
   auto_room: "➡️ sent straight into a room",
   background: "🖼️ picked background",
+  tip: "💡 tip", whats_new: "✨ opened What's new", short_link: "🔤 typed a room name",
 };
 const traceLimiter = new Map<string, { n: number; at: number }>();
 
@@ -335,6 +337,54 @@ app.post("/events", express.text({ type: "*/*", limit: "2kb" }), (req, res) => {
     .map(([k, v]) => `${k}=${String(v).replace(/[\r\n]/g, " ").slice(0, 80)}`).join(" ") : "";
   markCrawler(uid, req.get("user-agent"));
   logVisitor(uid, `${label}${props ? ` ${props}` : ""}`);
+});
+
+// "Most wanted features" in the What's new panel: vote counts for everyone, plus
+// which ideas this browser voted for (x-pikoo-uid, optional)
+app.get("/ideas", async (req, res) => {
+  if (!restGetLimiter.consume(getIp(req))) {
+    res.status(429).json({ error: "Too many requests" });
+    return;
+  }
+  try {
+    res.set("Cache-Control", "no-store");
+    res.json(await ideaVotes(sanitizeUniqueId(req.get("x-pikoo-uid")) ?? undefined));
+  } catch (err) {
+    log.server.error("Failed to read idea votes", { error: String(err) });
+    res.status(500).json({ error: "Failed to read votes" });
+  }
+});
+
+// One vote per browser per idea; { on: false } takes it back
+app.post("/ideas/:id/vote", async (req, res) => {
+  if (!ideaVoteLimiter.consume(getIp(req))) {
+    res.status(429).json({ error: "Too many votes, please wait a bit" });
+    return;
+  }
+  const { id } = req.params;
+  const uid = sanitizeUniqueId(req.body?.uid);
+  if (!isIdeaId(id)) {
+    res.status(404).json({ error: "Unknown idea" });
+    return;
+  }
+  if (!uid || !/^[A-Za-z0-9_-]{8,64}$/.test(uid)) {
+    res.status(400).json({ error: "Missing browser id" });
+    return;
+  }
+  try {
+    markCrawler(uid, req.get("user-agent"));
+    if (isCrawler(uid)) {
+      res.json({ count: (await ideaVotes()).counts[id] });
+      return;
+    }
+    const on = req.body?.on !== false;
+    const { count, changed } = await voteIdea(id, uid, on);
+    if (changed) logVisitor(uid, on ? `👍 voted for ${id}` : `↩️ took back their vote for ${id}`);
+    res.json({ count });
+  } catch (err) {
+    log.server.error("Failed to save idea vote", { error: String(err) });
+    res.status(500).json({ error: "Couldn't save your vote" });
+  }
 });
 
 app.post("/suggestions", async (req, res) => {

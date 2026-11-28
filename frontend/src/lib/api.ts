@@ -117,3 +117,26 @@ export function describePreview(p: RoomPreview | null): { title: string; subtitl
     subtitle: `${who} · ${p.focusMin} min focus / ${p.breakMin} min break · free, no sign-up`,
   };
 }
+
+// "Most wanted features" votes in the What's new panel
+export interface IdeaVotes {
+  counts: Record<string, number>;
+  mine: string[];
+}
+
+export async function getIdeaVotes(uid: string): Promise<IdeaVotes> {
+  const res = await fetch(`${BACKEND_URL}/ideas`, { headers: uid ? { "x-pikoo-uid": uid } : {}, cache: "no-store" });
+  if (!res.ok) throw new Error("Couldn't load votes");
+  return res.json();
+}
+
+export async function voteIdea(id: string, uid: string, on: boolean): Promise<number> {
+  const res = await fetch(`${BACKEND_URL}/ideas/${id}/vote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uid, on }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || "Couldn't save your vote");
+  return Number(data?.count ?? 0);
+}

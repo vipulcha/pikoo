@@ -11,6 +11,7 @@ import { activitySince, ActivityEvent, ACTIVITY_KEEP_MS } from "./activity.js";
 import { visitorId, isCrawler } from "./stats.js";
 import { LIBRARY_ROOMS, libraryCount } from "./library.js";
 import { DEV_ROOM_ID, devRoomStatus, DevRoomStatus } from "./devRoom.js";
+import { ideaVotes, IdeaId } from "./ideas.js";
 
 interface RoomNow {
   id: string;
@@ -65,9 +66,17 @@ export interface DashboardData {
   sources: { source: string; visitors: number; joined: number }[];
   suggestions: Suggestion[];
   latest: (ActivityEvent & { joined: boolean })[];
+  /** "Most wanted features" votes, all time */
+  ideas: Record<IdeaId, number>;
+  /** Room tips over the last 7 days: times shown, "Show me" clicks, people who turned tips off */
+  tips: { id: string; shown: number; clicked: number }[];
+  tipsOff: number;
+  /** People who opened the What's new panel in the last 7 days */
+  whatsNewOpens: number;
 }
 
 const JOIN_RE = /joined (?:silent )?room (\S+)/;
+const TIP_RE = /^💡 tip (.*)$/;
 const LEAVE_RE = /left (?:silent )?room (\S+) after (.+)$/;
 
 /** "1h 2m", "15m 58s", "4s" → seconds */
@@ -225,8 +234,31 @@ export async function dashboardData(io: Server, viewerUid: string | undefined, t
   }
   const sources = [...sourceMap.entries()].map(([source, r]) => ({ source, ...r })).sort((a, b) => b.visitors - a.visitors);
 
+  // Room tips and the What's new panel
+  const tipMap = new Map<string, { shown: number; clicked: number }>();
+  const tipsOff = new Set<string>();
+  const whatsNew = new Set<string>();
+  for (const e of events) {
+    if (e.msg.startsWith("✨ opened What's new")) whatsNew.add(e.v);
+    const tip = e.msg.match(TIP_RE);
+    if (!tip) continue;
+    const id = prop(tip[1], "id");
+    const act = prop(tip[1], "act");
+    if (act === "off") { tipsOff.add(e.v); continue; }
+    if (!id) continue;
+    const row = tipMap.get(id) ?? { shown: 0, clicked: 0 };
+    if (act === "shown") row.shown++;
+    if (act === "click") row.clicked++;
+    tipMap.set(id, row);
+  }
+  const tips = [...tipMap.entries()].map(([id, r]) => ({ id, ...r })).sort((a, b) => b.clicked - a.clicked || b.shown - a.shown);
+
   // Newest events first, for alerts and the "just now" strip
   const latest = events.slice(-60).reverse().map((e) => ({ ...e, joined: JOIN_RE.test(e.msg) }));
 
-  return { now, rooms, library, dev, visitors, days: dayRows, sources, suggestions: await cachedSuggestions(), latest };
+  const { counts: ideas } = await ideaVotes();
+  return {
+    now, rooms, library, dev, visitors, days: dayRows, sources, suggestions: await cachedSuggestions(), latest,
+    ideas, tips, tipsOff: tipsOff.size, whatsNewOpens: whatsNew.size,
+  };
 }
