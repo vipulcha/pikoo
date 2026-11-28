@@ -10,7 +10,9 @@ import { initRedis, createRoom, getRoom, addSuggestion, getSuggestions, flushRoo
 import { track, readDailyStats, readTotals, logVisitor, markCrawler } from "./stats.js";
 import { LIBRARY_ROOMS, libraryCount, focusedThisWeek } from "./library.js";
 import { setupSocketHandlers, resumeDevRoom } from "./socket.js";
-import { devRoomStatus } from "./devRoom.js";
+import { devRoomStatus, isDevHostSecret } from "./devRoom.js";
+import { loadActivity } from "./activity.js";
+import { dashboardData, forgetSuggestionCache } from "./dashboard.js";
 import { RoomSettings, DEFAULT_SETTINGS } from "./types.js";
 import { log } from "./logger.js";
 import { roomCreateLimiter, restGetLimiter, connectionLimiter, suggestionLimiter } from "./rate-limit.js";
@@ -66,6 +68,7 @@ app.set("trust proxy", 1);
 // Redis
 // ============================================
 initRedis();
+loadActivity().catch((err) => log.server.error("Activity load error", { error: String(err) }));
 
 // ============================================
 // Socket.IO
@@ -262,6 +265,27 @@ app.get("/dev-room", async (req, res) => {
   }
 });
 
+// The developer's dashboard: only for the browser whose room secret matches (404 otherwise)
+app.get("/dashboard", async (req, res) => {
+  const ip = getIp(req);
+  if (!restGetLimiter.consume(ip)) {
+    res.status(429).json({ error: "Too many requests" });
+    return;
+  }
+  if (!isDevHostSecret(req.get("x-pikoo-secret"))) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  try {
+    const tz = Math.max(-840, Math.min(840, Math.round(Number(req.query.tz) || 0)));
+    res.set("Cache-Control", "no-store");
+    res.json(await dashboardData(io, sanitizeUniqueId(req.get("x-pikoo-uid")) ?? undefined, tz));
+  } catch (err) {
+    log.server.error("Failed to build dashboard", { error: String(err) });
+    res.status(500).json({ error: "Failed to build dashboard" });
+  }
+});
+
 // Public: number of distinct people currently in a room (shown on the landing page)
 app.get("/stats", async (req, res) => {
   const ip = getIp(req);
@@ -335,6 +359,7 @@ app.post("/suggestions", async (req, res) => {
       roomId,
       createdAt: Date.now(),
     });
+    forgetSuggestionCache();
     // The text goes in the log too, so new suggestions show up without the
     // debug endpoint
     log.server.info("Suggestion received", { roomId, text });

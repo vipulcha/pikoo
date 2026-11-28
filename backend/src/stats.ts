@@ -8,6 +8,7 @@
 import { createHash } from "node:crypto";
 import { getRedis } from "./store.js";
 import { log } from "./logger.js";
+import { recordActivity } from "./activity.js";
 
 export type StatEvent =
   | "rooms_created"
@@ -117,9 +118,11 @@ export async function isNewVisitor(uniqueId: string | undefined): Promise<boolea
 // or [v3f9a2c Riya], so a visitor's whole visit can be read top to bottom in
 // the logs (search the tag). The tag is a hash of the random browser id: no
 // names beyond what people type into rooms, no IPs.
+export const visitorId = (uniqueId: string | undefined): string =>
+  uniqueId ? "v" + createHash("sha256").update(uniqueId).digest("hex").slice(0, 6) : "v??????";
+
 export function visitorTag(uniqueId: string | undefined, name?: string): string {
-  const tag = uniqueId ? "v" + createHash("sha256").update(uniqueId).digest("hex").slice(0, 6) : "v??????";
-  return `[${tag}${name && name !== "Anonymous" ? ` ${name}` : ""}]`;
+  return `[${visitorId(uniqueId)}${name && name !== "Anonymous" ? ` ${name}` : ""}]`;
 }
 
 // Search engines and link-preview bots run our JS and fire trace events too.
@@ -160,7 +163,10 @@ export const isCrawler = (uniqueId: string | undefined): boolean => !!uniqueId &
 export function logVisitor(uniqueId: string | undefined, msg: string, name?: string): void {
   const bot = uniqueId ? crawlerIds.get(uniqueId) : undefined;
   if (bot) log.crawlers.info(`🤖 ${bot} ${visitorTag(uniqueId, name)} ${msg}`);
-  else log.visitors.info(`${visitorTag(uniqueId, name)} ${msg}`);
+  else {
+    log.visitors.info(`${visitorTag(uniqueId, name)} ${msg}`);
+    recordActivity(visitorId(uniqueId), name, msg);
+  }
 }
 
 export function formatStay(ms: number): string {
