@@ -274,3 +274,9 @@ export async function notifyRoomJoin(name: string): Promise<void> {
 // Legacy function names for backwards compatibility
 export const playFocusEndSound = notifyFocusEnd;
 export const playBreakEndSound = notifyBreakEnd;
+
+// Developer dashboard alerts (someone joined a room, a suggestion arrived)
+export async function notifyActivity(title: string, body: string, tag: string): Promise<void> {
+  showNotification(title, body, tag);
+  await playChime([587.33, 880], "sine", 0.12); // D5, A5
+}

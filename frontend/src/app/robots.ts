@@ -14,8 +14,8 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       // Rooms and embeds are crawlable so chat apps can build link previews; they
       // stay out of search indexes via noindex (meta tag + X-Robots-Tag header)
-      { userAgent: "*", allow: "/" },
-      { userAgent: AI_CRAWLERS, allow: "/" },
+      { userAgent: "*", allow: "/", disallow: "/dashboard" },
+      { userAgent: AI_CRAWLERS, allow: "/", disallow: "/dashboard" },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,
   };
