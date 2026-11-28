@@ -1,32 +1,64 @@
 "use client";
 
 import { trace } from "@/lib/trace";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRoom } from "@/lib/api";
 import { RoomSettings, DEFAULT_SETTINGS } from "@/lib/types";
 import { getUserId } from "@/components/NamePrompt";
+import { roomExists, roomNameProblem, toRoomName } from "@/lib/roomNames";
 
-export function CreateRoomPanel() {
+type NameStatus = "idle" | "checking" | "free" | "taken" | "unknown";
+
+export function CreateRoomPanel({ reserved = [] }: { reserved?: string[] }) {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<RoomSettings>(DEFAULT_SETTINGS);
   const [slug, setSlug] = useState("");
+  const [status, setStatus] = useState<NameStatus>("idle");
+  const [host, setHost] = useState("");
 
-  // The room asks for a name on arrival, so creating a room needs no prompt here
+  const name = slug.replace(/^-+|-+$/g, "");
+  const problem = name ? roomNameProblem(name, reserved) : null;
+
+  useEffect(() => {
+    const t = setTimeout(() => setHost(window.location.host), 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Is the name free? Checked once typing pauses
+  useEffect(() => {
+    if (!name || problem) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      setStatus("checking");
+      const exists = await roomExists(name, ctrl.signal);
+      if (!ctrl.signal.aborted) setStatus(exists === null ? "unknown" : exists ? "taken" : "free");
+    }, 400);
+    return () => { clearTimeout(t); ctrl.abort(); setStatus("idle"); };
+  }, [name, problem]);
+
+  // The room asks for a person's name on arrival, so creating a room needs no prompt here
   const handleCreateRoom = async () => {
+    if (name && problem) {
+      setError(problem);
+      return;
+    }
+    if (name && status === "taken") return;
     setIsCreating(true);
     setError(null);
-    trace("create_room", { custom: showSettings ? "yes" : "no", slug: slug || undefined });
+    trace("create_room", { custom: showSettings ? "yes" : "no", slug: name || undefined });
     try {
-      const { roomId } = await createRoom(settings, getUserId(), slug.replace(/^-+|-+$/g, "") || undefined);
+      const { roomId } = await createRoom(settings, getUserId(), name || undefined);
       router.push(`/r/${roomId}`);
     } catch (err) {
       console.error("Failed to create room:", err);
-      trace("error", { where: "create_room", msg: err instanceof Error ? err.message : "unknown" });
-      setError(err instanceof Error ? err.message : "Couldn't create a room. Please try again.");
+      const msg = err instanceof Error ? err.message : "";
+      trace("error", { where: "create_room", msg: msg || "unknown" });
+      if (name && /taken/i.test(msg)) setStatus("taken");
+      else setError(msg || "Couldn't create a room. Please try again.");
       setIsCreating(false);
     }
   };
@@ -110,24 +142,6 @@ export function CreateRoomPanel() {
               </div>
 
               <div>
-                <label htmlFor="room-slug" className="block text-xs sm:text-sm text-white/60 mb-1.5 sm:mb-2">
-                  Custom link <span className="text-white/35">(optional, great for a study group)</span>
-                </label>
-                <div className="flex items-center rounded-lg sm:rounded-xl border border-white/10 bg-white/5 focus-within:border-rose-500/50 px-3">
-                  <span className="text-sm text-white/35 font-mono">/r/</span>
-                  <input
-                    id="room-slug"
-                    value={slug}
-                    onChange={(e) => { setSlug(e.target.value.toLowerCase().replace(/[\s_]+/g, "-").replace(/[^a-z0-9-]/g, "").replace(/-{2,}/g, "-").slice(0, 32)); setError(null); }}
-                    placeholder="physics-group"
-                    className="flex-1 bg-transparent py-2 text-sm font-mono outline-none placeholder:text-white/20"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                </div>
-              </div>
-
-              <div>
                 <label className="block text-xs sm:text-sm text-white/60 mb-2 sm:mb-3">Control Mode</label>
                 <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <button
@@ -163,9 +177,53 @@ export function CreateRoomPanel() {
         ) : null}
 
         <div className="space-y-4">
+          {/* Optional room name: gives the room a link anyone can type */}
+          <div id="name-your-room" className="scroll-mt-24 text-left">
+            <label htmlFor="room-name" className="sr-only">Name your room (optional)</label>
+            <div className={`flex items-center h-11 rounded-full border bg-white/5 px-4 transition-colors focus-within:border-rose-400/60 ${
+              name && (problem || status === "taken") ? "border-amber-300/40" : "border-white/15"
+            }`}>
+              <svg className="w-4 h-4 shrink-0 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+              </svg>
+              <input
+                id="room-name"
+                value={slug}
+                onChange={(e) => { setSlug(toRoomName(e.target.value)); setError(null); }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleCreateRoom(); }}
+                placeholder="Name your room (optional)"
+                className="flex-1 min-w-0 bg-transparent pl-2.5 text-sm text-white outline-none placeholder:text-white/40"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                enterKeyHint="go"
+                aria-describedby="room-name-status"
+              />
+            </div>
+            <p id="room-name-status" aria-live="polite" className="mt-1.5 px-4 min-h-[1.25rem] text-xs text-white/45 truncate">
+              {!name ? (
+                "Get a link anyone can type, like study-buddies"
+              ) : problem ? (
+                <span className="text-amber-200/90">{problem}</span>
+              ) : status === "taken" ? (
+                <span className="text-amber-200/90">
+                  Already taken.{" "}
+                  <button type="button" onClick={() => router.push(`/r/${name}`)} className="underline underline-offset-2 hover:text-white">Join it</button>
+                  {" "}or pick another name.
+                </span>
+              ) : (
+                <>
+                  <span className="font-mono text-white/70">{host || "pikoo"}/{name}</span>
+                  {status === "free" && <span className="text-emerald-300"> · available</span>}
+                  {status === "checking" && <span> · checking…</span>}
+                </>
+              )}
+            </p>
+          </div>
+
           <button
             onClick={handleCreateRoom}
-            disabled={isCreating}
+            disabled={isCreating || (!!name && status === "taken")}
             className={`
               w-full py-3 px-6 sm:py-4 sm:px-8 rounded-full font-semibold text-base sm:text-lg
               bg-gradient-to-r from-rose-500 to-pink-500 
@@ -186,6 +244,8 @@ export function CreateRoomPanel() {
                 </svg>
                 Creating...
               </span>
+            ) : name && !problem && status !== "taken" ? (
+              <span className="block truncate">Create &ldquo;{name}&rdquo;</span>
             ) : (
               "Create focus room"
             )}

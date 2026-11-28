@@ -3,12 +3,14 @@
 import { trace } from "@/lib/trace";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toRoomName } from "@/lib/roomNames";
 
-// Accepts a full room link (https://<site>/r/abc123) or just the code (abc123)
+// Accepts a full room link (https://<site>/r/abc123), a typed-name link
+// (<site>/study-buddies), or just the code or name (abc123, Study Buddies)
 function parseRoomId(input: string): string | null {
   const trimmed = input.trim();
-  const match = trimmed.match(/\/r\/([A-Za-z0-9_-]+)/);
-  const roomId = match ? match[1] : trimmed;
+  const match = trimmed.match(/\/r\/([A-Za-z0-9_-]+)/) ?? trimmed.match(/^(?:https?:\/\/)?[^/\s]*[.:][^/\s]*\/([A-Za-z0-9_-]+)\/?(?:[?#].*)?$/);
+  const roomId = match ? match[1] : trimmed.includes(" ") ? toRoomName(trimmed) : trimmed;
   return /^[A-Za-z0-9_-]{1,40}$/.test(roomId) ? roomId : null;
 }
 
@@ -22,7 +24,7 @@ export function JoinRoomForm() {
     const roomId = parseRoomId(value);
     trace("join_form", { input: value.trim().slice(0, 80), ok: roomId ? "yes" : "no" });
     if (!roomId) {
-      setError("That doesn't look like a room link or code");
+      setError("That doesn't look like a room link, code or name");
       return;
     }
     router.push(`/r/${roomId}`);
@@ -38,8 +40,8 @@ export function JoinRoomForm() {
             setValue(e.target.value);
             setError(null);
           }}
-          placeholder="Paste a room link or code"
-          aria-label="Room link or code"
+          placeholder="Room link, code or name"
+          aria-label="Room link, code or name"
           className="flex-1 min-w-0 px-4 py-2.5 bg-white/5 border border-white/10 rounded-full text-sm text-white placeholder-white/35 focus:outline-none focus:border-white/30 transition-colors"
         />
         <button

@@ -191,7 +191,7 @@ export default async function Home() {
               Your own timer, shared by link. Everyone stays in sync, with goals, chat and music. Great for friends, study groups and teams.
             </p>
             <div className="mt-6">
-              <CreateRoomPanel />
+              <CreateRoomPanel reserved={GUIDES.map((g) => g.slug)} />
             </div>
             <ol className="mt-6 hidden sm:grid grid-cols-3 gap-2 text-center">
               {STEPS.map((step, i) => (

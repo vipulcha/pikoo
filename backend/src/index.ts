@@ -315,6 +315,7 @@ const TRACE_EVENTS: Record<string, string> = {
   solo_timer: "⏱️ solo timer", obs: "🎥 OBS builder", intro: "📖 silent-room intro", hint: "💡 music hint", error: "⚠️ saw an error",
   auto_room: "➡️ sent straight into a room",
   background: "🖼️ picked background",
+  short_link: "🔤 typed a room name",
 };
 const traceLimiter = new Map<string, { n: number; at: number }>();
 
