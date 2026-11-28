@@ -300,19 +300,6 @@ async function advanceIfDue(io: Server, roomId: string): Promise<void> {
   });
   if (!timer) return;
 
-  // One line per person who was there when a focus session ran to the end
-  // (people whose connection already dropped and are only in the leave grace period don't count)
-  if (phase === "focus") {
-    const leaving = new Set([...pendingLeaves.values()].filter((p) => p.roomId === roomId).map((p) => p.uniqueId));
-    const seen = new Set<string>();
-    const min = Math.round((room.settings.focusSec + (room.timer.addedSec ?? 0)) / 60);
-    for (const p of room.participants) {
-      if (!p.uniqueId || seen.has(p.uniqueId) || leaving.has(p.uniqueId)) continue;
-      seen.add(p.uniqueId);
-      logVisitor(p.uniqueId, `🍅 finished a ${min}-min focus in room ${roomId}`, p.name);
-    }
-  }
-
   io.to(roomId).emit(SOCKET_EVENTS.TIMER_UPDATE, { timer });
   const updatedRoom = await getRoom(roomId);
   if (updatedRoom) {
@@ -320,6 +307,24 @@ async function advanceIfDue(io: Server, roomId: string): Promise<void> {
   }
   scheduleAutoAdvance(io, roomId, timer);
   log.socket.info("Phase auto-advanced", { roomId, from: phase, to: timer.phase });
+
+  // Usage trace, after the room is updated so it can never hold up the timer: one line
+  // per person who was there when a focus session ran to the end (people whose
+  // connection already dropped and are only in the leave grace period don't count)
+  if (phase === "focus") {
+    try {
+      const leaving = new Set([...pendingLeaves.values()].filter((p) => p.roomId === roomId).map((p) => p.uniqueId));
+      const seen = new Set<string>();
+      const min = Math.round((room.settings.focusSec + (room.timer.addedSec ?? 0)) / 60);
+      for (const p of room.participants) {
+        if (!p.uniqueId || seen.has(p.uniqueId) || leaving.has(p.uniqueId)) continue;
+        seen.add(p.uniqueId);
+        logVisitor(p.uniqueId, `🍅 finished a ${min}-min focus in room ${roomId}`, p.name);
+      }
+    } catch (err) {
+      log.socket.warn("Focus-finished trace failed", { error: String(err), roomId });
+    }
+  }
 }
 
 async function cleanupStaleParticipants(io: Server, roomId: string): Promise<void> {
