@@ -7,7 +7,7 @@ import { nanoid } from "nanoid";
 import dotenv from "dotenv";
 
 import { initRedis, createRoom, getRoom, addSuggestion, getSuggestions, flushRoomWrites } from "./store.js";
-import { track, readDailyStats, readTotals, logVisitor, markCrawler, isCrawler } from "./stats.js";
+import { track, readDailyStats, readTotals, logVisitor, markCrawler, markAutomated, isCrawler } from "./stats.js";
 import { LIBRARY_ROOMS, libraryCount, focusedThisWeek } from "./library.js";
 import { setupSocketHandlers, resumeDevRoom } from "./socket.js";
 import { devRoomStatus, isDevHostSecret } from "./devRoom.js";
@@ -321,6 +321,8 @@ const TRACE_EVENTS: Record<string, string> = {
   // Tab switched to the background (first time on a page) / back after a while
   away: "🙈 switched away", back: "🔙 came back",
   notify: "🔔 notifications", room_ready: "⚡ room loaded", reconnect: "🔌 reconnected",
+  // First real tap, click, key or scroll wheel in a browser tab: a person, not a link checker
+  human: "✋ interacted",
   short_link: "🔤 typed a room name",
   // Links that led nowhere: an /r/ code with no room, any other missing page
   missing_room: "🚫 opened a room link with no room", not_found: "❓ opened a page that doesn't exist",
@@ -334,7 +336,7 @@ app.post("/events", express.text({ type: "*/*", limit: "2kb" }), (req, res) => {
   const b = traceLimiter.get(ip);
   if (b && now - b.at < 60_000) { if (++b.n > 60) return; } else traceLimiter.set(ip, { n: 1, at: now });
   if (traceLimiter.size > 5000) traceLimiter.clear();
-  let body: { uid?: unknown; event?: unknown; props?: unknown };
+  let body: { uid?: unknown; event?: unknown; props?: unknown; auto?: unknown };
   try { body = typeof req.body === "string" ? JSON.parse(req.body) : req.body; } catch { return; }
   const label = typeof body?.event === "string" ? TRACE_EVENTS[body.event] : undefined;
   const uid = typeof body?.uid === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(body.uid) ? body.uid : undefined;
@@ -342,6 +344,7 @@ app.post("/events", express.text({ type: "*/*", limit: "2kb" }), (req, res) => {
   const props = body.props && typeof body.props === "object" ? Object.entries(body.props as Record<string, unknown>).slice(0, 6)
     .filter(([k, v]) => /^[a-z_]{1,20}$/.test(k) && (typeof v === "string" || typeof v === "number") && String(v).length > 0)
     .map(([k, v]) => `${k}=${String(v).replace(/[\r\n]/g, " ").slice(0, 80)}`).join(" ") : "";
+  if (body.auto === true) markAutomated(uid);
   markCrawler(uid, req.get("user-agent"));
   logVisitor(uid, `${label}${props ? ` ${props}` : ""}`);
 });

@@ -160,6 +160,13 @@ export function markCrawler(uniqueId: string | undefined, ua: string | undefined
 
 export const isCrawler = (uniqueId: string | undefined): boolean => !!uniqueId && crawlerIds.has(uniqueId);
 
+/** A browser that reports it's driven by automation (navigator.webdriver): a bot, whatever its user agent */
+export function markAutomated(uniqueId: string | undefined): void {
+  if (!uniqueId) return;
+  if (crawlerIds.size > 5000) crawlerIds.clear();
+  crawlerIds.set(uniqueId, "automated");
+}
+
 export function logVisitor(uniqueId: string | undefined, msg: string, name?: string): void {
   const bot = uniqueId ? crawlerIds.get(uniqueId) : undefined;
   if (bot) log.crawlers.info(`🤖 ${bot} ${visitorTag(uniqueId, name)} ${msg}`);

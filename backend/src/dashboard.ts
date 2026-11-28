@@ -16,7 +16,7 @@ import { ideaVotes, IdeaId } from "./ideas.js";
 interface RoomNow {
   id: string;
   isDev: boolean;
-  people: { v: string; name: string; you: boolean; bot: boolean }[];
+  people: { v: string; name: string; you: boolean; bot: boolean; unconfirmed: boolean }[];
   viewers: number; // stream overlays / embeds
   phase: string;
   running: boolean;
@@ -68,6 +68,8 @@ export interface DashboardData {
   sources: { source: string; visitors: number; joined: number }[];
   suggestions: Suggestion[];
   latest: (ActivityEvent & { joined: boolean })[];
+  /** Visitors left out because nothing showed they're a person (see confirmedPeople), by where they came from */
+  unconfirmed: { people: number; sources: { source: string; people: number }[] };
   /** "Most wanted features" votes, all time */
   ideas: Record<IdeaId, number>;
   /** Room tips over the last 7 days: times shown, "Show me" clicks, people who turned tips off */
@@ -118,6 +120,30 @@ const site = (host: string) => host.replace(/^(?:www|l|lm|m|out)\./, "");
 
 let suggestionCache: { at: number; list: Suggestion[] } | null = null;
 /** Called when a suggestion is saved, so the next refresh shows it */
+// Is this visitor a person? Link checkers (Facebook opens every shared link in a
+// few browsers for a few seconds) run our page like anyone else, often with an
+// up-to-date user agent. What they don't do is touch anything or stay. So once the
+// "✋ interacted" event exists, a visitor first seen after it started counts only if
+// they tapped, clicked, typed or scrolled, or stayed 2 minutes or more in a room or
+// on a page. Visitors first seen before that keep the old rule (bot user agents are
+// left out when the line is logged).
+const PERSON_STAY_SEC = 120;
+export function confirmedPeople(events: ActivityEvent[]): (v: string) => boolean {
+  const since = events.find((e) => e.msg.startsWith("✋ interacted"))?.t;
+  if (since === undefined) return () => true;
+  const firstSeen = new Map<string, number>();
+  const confirmed = new Set<string>();
+  for (const e of events) {
+    if (!firstSeen.has(e.v)) firstSeen.set(e.v, e.t);
+    const m = e.msg;
+    if (m.startsWith("✋ interacted")) confirmed.add(e.v);
+    const leave = m.match(LEAVE_RE);
+    if (leave && staySec(leave[2]) >= PERSON_STAY_SEC) confirmed.add(e.v);
+    if (m.startsWith("👋 left path=") && parseInt(prop(m, "seen") ?? "0", 10) >= PERSON_STAY_SEC) confirmed.add(e.v);
+  }
+  return (v) => confirmed.has(v) || (firstSeen.get(v) ?? Infinity) < since;
+}
+
 export const forgetSuggestionCache = () => { suggestionCache = null; };
 async function cachedSuggestions(): Promise<Suggestion[]> {
   if (!suggestionCache || Date.now() - suggestionCache.at > 20_000) {
@@ -136,6 +162,10 @@ export async function dashboardData(io: Server, viewerUid: string | undefined, t
   if (viewerUid) mine.add(visitorId(viewerUid));
   if (devRoom?.hostId) mine.add(visitorId(devRoom.hostId));
 
+  // Every visit except the developer's, and which visitors are confirmed people
+  const all = activitySince(now - ACTIVITY_KEEP_MS).filter((e) => !mine.has(e.v));
+  const isPerson = confirmedPeople(all);
+
   // ---- Rooms with anyone in them right now
   const adapter = io.of("/").adapter;
   const rooms: RoomNow[] = [];
@@ -149,7 +179,7 @@ export async function dashboardData(io: Server, viewerUid: string | undefined, t
       if (seen.has(p.uniqueId)) continue;
       seen.add(p.uniqueId);
       const v = visitorId(p.uniqueId);
-      people.push({ v, name: p.name, you: mine.has(v), bot: isCrawler(p.uniqueId) });
+      people.push({ v, name: p.name, you: mine.has(v), bot: isCrawler(p.uniqueId), unconfirmed: !mine.has(v) && !isPerson(v) });
     }
     let viewers = 0;
     for (const id of sids) if (io.sockets.sockets.get(id)?.data.spectator) viewers++;
@@ -179,7 +209,18 @@ export async function dashboardData(io: Server, viewerUid: string | undefined, t
   }
 
   // ---- Visitors over the last 7 days
-  const events = activitySince(now - ACTIVITY_KEEP_MS).filter((e) => !mine.has(e.v));
+  const events = all.filter((e) => isPerson(e.v));
+  const unconfirmedSource = new Map<string, string>();
+  for (const e of all) {
+    if (isPerson(e.v)) continue;
+    const had = unconfirmedSource.get(e.v);
+    if (had && had !== "direct") continue;
+    const utm = prop(e.msg, "utm");
+    const from = prop(e.msg, "from");
+    unconfirmedSource.set(e.v, utm ?? (from && from !== "direct" ? site(from) : had ?? "direct"));
+  }
+  const unconfirmedBySource = new Map<string, number>();
+  for (const src of unconfirmedSource.values()) unconfirmedBySource.set(src, (unconfirmedBySource.get(src) ?? 0) + 1);
   const byVisitor = new Map<string, VisitorSummary>();
   const localDay = (t: number) => new Date(t - tzOffsetMin * 60_000).toISOString().slice(0, 10);
   const days = new Map<string, { visitors: Set<string>; joined: Set<string>; roomSec: number; roomsCreated: number }>();
@@ -285,6 +326,10 @@ export async function dashboardData(io: Server, viewerUid: string | undefined, t
   const { counts: ideas } = await ideaVotes();
   return {
     now, rooms, library, dev, visitors, days: dayRows, sources, suggestions: await cachedSuggestions(), latest,
+    unconfirmed: {
+      people: unconfirmedSource.size,
+      sources: [...unconfirmedBySource.entries()].map(([source, n]) => ({ source, people: n })).sort((a, b) => b.people - a.people).slice(0, 6),
+    },
     ideas, tips, tipsOff: tipsOff.size, whatsNewOpens: whatsNew.size,
     journeys: journeys(events, localDay),
   };

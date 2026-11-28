@@ -9,6 +9,9 @@ const secs = (ms: number) => `${Math.round(ms / 1000)}s`;
 const BACK_MIN_MS = 60_000;
 const MAX_BACK_LINES = 5;
 const MAX_ERRORS = 3;
+const HUMAN_KEY = "pikoo_human_sent";
+// Real input only: link checkers load pages but never tap, click, type or scroll
+const HUMAN_INPUTS = ["pointerdown", "keydown", "touchstart", "wheel"] as const;
 
 // Logs each page view (with where the visitor came from on the first one), the
 // first time the tab goes to the background ("switched away", which on phones
@@ -77,6 +80,25 @@ export function TraceView() {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [pathname]);
+
+  // The first real tap, click, key press or scroll wheel in this tab tells the
+  // dashboard this visitor is a person (sent once per tab session)
+  useEffect(() => {
+    let sent = false;
+    try { sent = sessionStorage.getItem(HUMAN_KEY) === "1"; } catch { /* storage blocked: once per page load */ }
+    if (sent) return;
+    const start = Date.now();
+    const onInput = (e: Event) => {
+      if (!e.isTrusted || sent) return;
+      sent = true;
+      try { sessionStorage.setItem(HUMAN_KEY, "1"); } catch { /* storage blocked */ }
+      trace("human", { via: e.type, after: secs(Date.now() - start) });
+      stop();
+    };
+    const stop = () => HUMAN_INPUTS.forEach((t) => window.removeEventListener(t, onInput, true));
+    HUMAN_INPUTS.forEach((t) => window.addEventListener(t, onInput, { capture: true, passive: true }));
+    return stop;
+  }, []);
 
   // JavaScript errors: the first few distinct ones per page load, our own code only
   useEffect(() => {
