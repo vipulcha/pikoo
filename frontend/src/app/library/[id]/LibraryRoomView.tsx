@@ -12,6 +12,8 @@ import { LibraryRoom, LIBRARY_REACTIONS, librarySchedule, displayedLibraryCount,
 import { serverNow, syncClock } from "@/lib/clock";
 import { useFocusCounter } from "@/lib/hooks/useFocusStats";
 import { notifyFocusEnd, notifyBreakEnd, getNotificationPermission, requestNotificationPermission } from "@/lib/audio";
+import { useDevStatus } from "@/components/DevRoomBits";
+import { DEV_PATH } from "@/lib/devRoom";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
@@ -129,6 +131,9 @@ export function LibraryRoomView({ room, initialNow, initialCount, focusedThisWee
   // alone (bring someone, or run your own timer from now)
   const shown = count === null || now === null ? null : displayedLibraryCount(room.id, count, now);
   const alone = joined && shown !== null && shown <= 1;
+  // Checked only while the room is empty: if the developer is live, that's company
+  const dev = useDevStatus(60_000, alone);
+  const devLive = alone && !!dev?.live;
   const invite = async () => {
     trace("click", { what: "empty_invite", room: room.id });
     if (navigator.share) {
@@ -202,15 +207,37 @@ export function LibraryRoomView({ room, initialNow, initialCount, focusedThisWee
             >
               ×
             </button>
-            <p className="text-sm font-medium text-white/85">It&apos;s just you right now</p>
-            <p className="mt-1.5 text-xs leading-relaxed text-white/50">
-              {focusedThisWeek >= FOCUSED_SHOWN_FROM && `${focusedThisWeek} people focused here this week. `}
-              The timer keeps running for anyone who drops in. Bring a friend, or start your own timer now.
-            </p>
-            <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-center">
-              <button onClick={invite} className="h-10 px-4 rounded-full bg-rose-500 hover:bg-rose-400 text-sm font-medium whitespace-nowrap">
-                {inviteCopied ? "Link copied" : "Invite a friend"}
-              </button>
+            {devLive ? (
+              <>
+                <p className="px-6 text-sm font-medium text-white/85">It&apos;s quiet here, but Pikoo&apos;s developer is live</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-white/50">
+                  Work alongside them on the same timer, and chat in the breaks.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-white/85">It&apos;s just you right now</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-white/50">
+                  {focusedThisWeek >= FOCUSED_SHOWN_FROM && `${focusedThisWeek} people focused here this week. `}
+                  The timer keeps running for anyone who drops in. Bring a friend, or start your own timer now.
+                </p>
+              </>
+            )}
+            <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap gap-2 justify-center">
+              {devLive ? (
+                <Link
+                  href={DEV_PATH}
+                  onClick={() => trace("click", { what: "empty_dev_room", room: room.id })}
+                  className="h-10 px-4 rounded-full bg-rose-500 hover:bg-rose-400 text-sm font-medium whitespace-nowrap flex items-center justify-center gap-2"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                  Join the developer
+                </Link>
+              ) : (
+                <button onClick={invite} className="h-10 px-4 rounded-full bg-rose-500 hover:bg-rose-400 text-sm font-medium whitespace-nowrap">
+                  {inviteCopied ? "Link copied" : "Invite a friend"}
+                </button>
+              )}
               {soloTimerSlug && (
                 <Link
                   href={`/timer/${soloTimerSlug}?start=1`}

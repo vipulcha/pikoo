@@ -517,7 +517,9 @@ export async function addParticipant(
   roomId: string,
   socketId: string,
   uniqueId: string,
-  participantName: string
+  participantName: string,
+  /** A dropped connection of the same person, still listed during its grace period: take over its place without a join entry */
+  replaceSocketId?: string
 ): Promise<AddParticipantResult> {
   const room = await getRoom(roomId);
   if (!room) return { success: false, error: "Room not found", participants: [] };
@@ -539,6 +541,14 @@ export async function addParticipant(
       error: "Name already taken in this room",
       participants: room.participants
     };
+  }
+
+  const previous = replaceSocketId ? room.participants.find(p => p.id === replaceSocketId && p.uniqueId === uniqueId) : undefined;
+  if (previous) {
+    previous.id = socketId;
+    previous.name = participantName;
+    await saveRoom(room);
+    return { success: true, participants: room.participants };
   }
 
   // Add the participant (same user can have multiple tabs)

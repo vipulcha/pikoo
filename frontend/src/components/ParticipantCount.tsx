@@ -7,6 +7,11 @@ interface ParticipantCountProps {
   participants: Participant[];
   isConnected: boolean;
   hostId?: string | null;  // Only set in host mode
+  /** Badge next to the host's name (default "host") */
+  hostLabel?: string;
+  /** Lets the viewer remove other people (work-with-dev room, developer only) */
+  onRemove?: (uniqueId: string) => void;
+  myId?: string;
 }
 
 interface GroupedParticipant {
@@ -15,8 +20,9 @@ interface GroupedParticipant {
   connectionCount: number;
 }
 
-export function ParticipantCount({ participants, isConnected, hostId }: ParticipantCountProps) {
+export function ParticipantCount({ participants, isConnected, hostId, hostLabel = "host", onRemove, myId }: ParticipantCountProps) {
   const [showList, setShowList] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -107,7 +113,25 @@ export function ParticipantCount({ participants, isConnected, hostId }: Particip
                 </span>
                 <span className="flex items-center gap-1">
                   {hostId && participant.uniqueId === hostId && (
-                    <span className="text-xs text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded">host</span>
+                    <span className="text-xs text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded">{hostLabel}</span>
+                  )}
+                  {onRemove && participant.uniqueId !== myId && participant.uniqueId !== hostId && (
+                    confirmRemove === participant.uniqueId ? (
+                      <button
+                        onClick={() => { onRemove(participant.uniqueId); setConfirmRemove(null); }}
+                        className="text-xs text-white bg-red-500/80 hover:bg-red-500 px-1.5 py-0.5 rounded"
+                      >
+                        Remove?
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmRemove(participant.uniqueId)}
+                        title="Remove from the session (they can't rejoin)"
+                        className="text-xs text-white/40 hover:text-red-300 px-1.5 py-0.5 rounded hover:bg-white/5"
+                      >
+                        Remove
+                      </button>
+                    )
                   )}
                   {participant.connectionCount > 1 && (
                     <span className="text-xs text-white/40 bg-white/5 px-1.5 py-0.5 rounded">

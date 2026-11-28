@@ -96,6 +96,7 @@ export interface RoomState {
   history: ActivityLog[];
   schedule?: RoomSchedule | null;     // next/recurring session time
   weekly?: Record<string, Record<string, WeeklyEntry>>; // study-group leaderboard, last 2 ISO weeks
+  devLive?: { since: number } | null; // work-with-dev room only: set while the developer is live
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {
@@ -128,6 +129,12 @@ export const SOCKET_EVENTS = {
   TODO_REORDER: "todo_reorder",
   TODO_SET_ACTIVE: "todo_set_active",
   TODO_SET_VISIBILITY: "todo_set_visibility",
+
+  // Work-with-dev room, developer only
+  DEV_GO_LIVE: "dev_go_live",
+  DEV_END_LIVE: "dev_end_live",
+  DEV_DELETE_MESSAGE: "dev_delete_message",
+  DEV_REMOVE_PERSON: "dev_remove_person",
 
   ROOM_STATE: "room_state",
   TIMER_UPDATE: "timer_update",
