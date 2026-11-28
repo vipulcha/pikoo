@@ -15,6 +15,13 @@ export interface ShippedItem {
 
 export const SHIPPED: ShippedItem[] = [
   {
+    id: "named-rooms",
+    date: "2026-11-28",
+    title: "Name your room",
+    desc: "Give your room a name and get a link anyone can type, like pikoo…/study-buddies. Capitals don't matter.",
+    href: "/#name-your-room",
+  },
+  {
     id: "work-with-dev",
     date: "2026-11-28",
     title: "Work with the developer",

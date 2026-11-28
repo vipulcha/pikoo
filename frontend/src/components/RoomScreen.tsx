@@ -29,6 +29,7 @@ import Link from "next/link";
 import { serverNow } from "@/lib/clock";
 import { trace } from "@/lib/trace";
 import { DevHostBar, DevLiveChip } from "@/components/DevRoomBits";
+import { MissingRoom } from "@/components/MissingRoom";
 import { RoomTips } from "@/components/RoomTips";
 import { WhatsNewPanel, useWhatsNewUnread, SparklesIcon, UnreadDot } from "@/components/WhatsNew";
 import { spotlight, type TipContext, type TipId } from "@/lib/tips";
@@ -301,6 +302,11 @@ export function RoomScreen({ roomId, dev }: RoomScreenProps) {
       document.title = originalTitle;
     };
   }, [room?.timer?.running, room?.timer?.phase, room?.timer?.phaseEndsAt, room?.timer?.remainingSecWhenPaused]);
+
+  // The link doesn't lead to a room: look the name up, or offer to create it
+  if (!dev && blocked?.code === "ROOM_NOT_FOUND") {
+    return <MissingRoom name={roomId} short={false} />;
+  }
 
   // Show name prompt only for errors (name taken) - otherwise WelcomePrompt handles it
   if (showNamePrompt && nameError) {

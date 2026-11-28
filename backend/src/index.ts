@@ -321,6 +321,9 @@ const TRACE_EVENTS: Record<string, string> = {
   // Tab switched to the background (first time on a page) / back after a while
   away: "🙈 switched away", back: "🔙 came back",
   notify: "🔔 notifications", room_ready: "⚡ room loaded", reconnect: "🔌 reconnected",
+  short_link: "🔤 typed a room name",
+  // Links that led nowhere: an /r/ code with no room, any other missing page
+  missing_room: "🚫 opened a room link with no room", not_found: "❓ opened a page that doesn't exist",
 };
 const traceLimiter = new Map<string, { n: number; at: number }>();
 

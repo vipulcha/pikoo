@@ -416,7 +416,7 @@ export const GUIDES: Guide[] = [
       "Cuckoo (cuckoo.team) is a productivity timer for remote teams: you make a link and everyone on it sees the same timer. When we checked on 19 November 2026, its site said the service had been suspended by its owner. Pikoo works the same way. Create a room with your team's name, share the link, and everyone runs on one synced timer. It's free, with no sign-up.",
     stepsHeading: "Move your team over",
     steps: [
-      { name: "Pick your team's link", text: "On the Pikoo homepage, press Customize timer and type your team's name under Custom link, for example design-team. If you used a name on Cuckoo, you can keep it as long as nobody has taken it here." },
+      { name: "Pick your team's link", text: "On the Pikoo homepage, type your team's name under Name your room, for example design-team. If you used a name on Cuckoo, you can keep it as long as nobody has taken it here." },
       { name: "Set the rhythm", text: "Choose focus, break and long break lengths. Pick host mode if one person should run the timer for everyone." },
       { name: "Share the new link", text: "Post the room link (it ends in /r/your-team-name) in your team channel, or pin it, so everyone lands in the same room." },
       { name: "Start a sprint", text: "Press play. Everyone in the room sees the same countdown, and breaks start at the same moment for the whole team." },
@@ -453,7 +453,7 @@ export const GUIDES: Guide[] = [
     ],
     faqs: [
       { q: "Is Cuckoo shut down?", a: "When we checked on 19 November 2026, cuckoo.team showed the message \"This service has been suspended by its owner.\" We're not connected to Cuckoo and don't know whether it will come back." },
-      { q: "Can I keep my team's link name?", a: "Yes, if it's free on Pikoo. Type it under Custom link when you create the room, and the room lives at /r/your-team-name." },
+      { q: "Can I keep my team's link name?", a: "Yes, if it's free on Pikoo. Type it under Name your room when you create the room, and your team can join by typing /your-team-name after the Pikoo address (the /r/your-team-name link works too)." },
       { q: "Is Pikoo free?", a: "Yes. Pikoo is free, with no account, trial or download." },
       { q: "Can one person control the timer for the team?", a: "Yes. Choose host mode when creating the room and only the host can start, pause, skip or add time." },
       { q: "Is Pikoo made by the people behind Cuckoo?", a: "No. Pikoo is an independent open-source project and isn't affiliated with Cuckoo." },

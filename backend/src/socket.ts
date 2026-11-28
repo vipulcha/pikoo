@@ -431,7 +431,7 @@ export function setupSocketHandlers(io: Server): void {
         let room = roomId === DEV_ROOM_ID ? await ensureDevRoom() : await getRoom(roomId);
 
         if (!room) {
-          socket.emit(SOCKET_EVENTS.ERROR, { message: "Room not found" });
+          socket.emit(SOCKET_EVENTS.ERROR, { message: "Room not found", code: "ROOM_NOT_FOUND" });
           return;
         }
 
@@ -555,7 +555,7 @@ export function setupSocketHandlers(io: Server): void {
       try {
         const room = await getRoom(roomId);
         if (!room) {
-          socket.emit(SOCKET_EVENTS.ERROR, { message: "Room not found" });
+          socket.emit(SOCKET_EVENTS.ERROR, { message: "Room not found", code: "ROOM_NOT_FOUND" });
           return;
         }
         socket.join(roomId);
